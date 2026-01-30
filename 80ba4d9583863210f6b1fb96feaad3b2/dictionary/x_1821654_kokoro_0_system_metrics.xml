@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="d125723c837a3210f6b1fb96feaad36f" label="System Metrics" max_length="40" name="x_1821654_kokoro_0_system_metrics" type="collection">
+        <element label="Health score" max_length="40" name="health_score" type="integer"/>
+        <element label="Timestamp" mandatory="true" max_length="40" name="timestamp" type="glide_date_time"/>
+        <element label="Metric data" mandatory="true" max_length="8000" name="metric_data" type="string"/>
+        <element choice="3" label="Metric Type" mandatory="true" max_length="40" name="metric_type" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="System Health" value="system_health"/>
+                <element inactive_on_update="false" label="Wish Processing" value="wish_processing"/>
+                <element inactive_on_update="false" label="SLA Performance" value="sla_performance"/>
+                <element inactive_on_update="false" label="Volunteer Load" value="volunteer_load"/>
+            </choice>
+        </element>
+        <index name="index">
+            <element name="metric_type"/>
+        </index>
+        <index name="index2">
+            <element name="timestamp"/>
+        </index>
+    </element>
+</database>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_index">
+    <sys_index action="INSERT_OR_UPDATE">
+        <access_method>btree</access_method>
+        <col_name_string>metric_type</col_name_string>
+        <index_col_name element="metric_type" name="x_1821654_kokoro_0_system_metrics">c2967abc837a3210f6b1fb96feaad315</index_col_name>
+        <logical_table_name>x_1821654_kokoro_0_system_metrics</logical_table_name>
+        <sys_class_name>sys_index</sys_class_name>
+        <sys_created_by>system</sys_created_by>
+        <sys_created_on>2026-01-30 07:11:33</sys_created_on>
+        <sys_id>94a77a3083ba3210f6b1fb96feaad308</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>x_1821654_kokoro_0_system_metrics</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_index_x_1821654_kokoro_0_system_metrics_metric_type</sys_update_name>
+        <sys_updated_by>system</sys_updated_by>
+        <sys_updated_on>2026-01-30 07:11:33</sys_updated_on>
+        <table display_value="System Metrics" name="x_1821654_kokoro_0_system_metrics">d125723c837a3210f6b1fb96feaad36f</table>
+        <unique_index>false</unique_index>
+    </sys_index>
+</record_update>

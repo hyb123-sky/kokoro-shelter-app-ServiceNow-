@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="8fe7327083ba3210f6b1fb96feaad3e9" label="Audit Log" max_length="40" name="x_1821654_kokoro_0_audit_log" type="collection">
+        <element label="New value" max_length="1000" name="new_value" type="string"/>
+        <element label="Field name" max_length="100" name="field_name" type="string"/>
+        <element label="reason" max_length="500" name="reason" type="string"/>
+        <element label="Table name" mandatory="true" max_length="100" name="table_name" type="string"/>
+        <element label="User" mandatory="true" max_length="40" name="user" reference="sys_user" type="reference"/>
+        <element label="timestamp" mandatory="true" max_length="40" name="timestamp" type="glide_date_time"/>
+        <element label="Record ID" mandatory="true" max_length="32" name="record_id" type="string"/>
+        <element label="Session ID" max_length="100" name="session_id" type="string"/>
+        <element label="Old value" max_length="1000" name="old_value" type="string"/>
+        <element label="IP address" max_length="50" name="ip_address" type="string"/>
+        <element choice="3" label="Action" mandatory="true" max_length="40" name="action" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="sla_attach"/>
+                <element inactive_on_update="false" label="sla_breach"/>
+                <element inactive_on_update="false" label="create"/>
+                <element inactive_on_update="false" label="state_change"/>
+                <element inactive_on_update="false" label="update"/>
+                <element inactive_on_update="false" label="delete"/>
+                <element inactive_on_update="false" label="assign"/>
+            </choice>
+        </element>
+        <index name="index">
+            <element name="timestamp"/>
+            <element name="user"/>
+            <element name="record_id"/>
+        </index>
+    </element>
+</database>
