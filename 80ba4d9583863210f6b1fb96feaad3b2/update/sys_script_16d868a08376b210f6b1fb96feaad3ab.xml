@@ -1,0 +1,286 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update sys_domain="global" table="sys_script">
+    <sys_script action="INSERT_OR_UPDATE">
+        <abort_action>false</abort_action>
+        <access>package_private</access>
+        <action_delete>false</action_delete>
+        <action_insert>false</action_insert>
+        <action_query>false</action_query>
+        <action_update>true</action_update>
+        <active>true</active>
+        <add_message>false</add_message>
+        <advanced>true</advanced>
+        <change_fields>false</change_fields>
+        <client_callable>false</client_callable>
+        <collection>x_1821654_kokoro_0_silent_wish</collection>
+        <condition/>
+        <description/>
+        <execute_function>false</execute_function>
+        <filter_condition table="x_1821654_kokoro_0_silent_wish">stateVALCHANGES^EQ<item endquery="false" field="state" goto="false" newquery="false" operator="VALCHANGES" or="false" value=""/>
+            <item endquery="true" field="" goto="false" newquery="false" operator="=" or="false" value=""/>
+        </filter_condition>
+        <is_rest>false</is_rest>
+        <message/>
+        <name>Kokoro - State Transition Actions</name>
+        <order>200</order>
+        <priority>100</priority>
+        <rest_method/>
+        <rest_method_text/>
+        <rest_service/>
+        <rest_service_text/>
+        <rest_variables/>
+        <role_conditions/>
+        <script><![CDATA[(function executeRule(current, previous /*null when insert*/) {
+
+    // ============================================================
+    // 1. 安全检查与递归防止
+    // ============================================================
+    
+    // 如果状态没有变化，直接退出（双重保险，虽然Filter已经设置了）
+    if (!current.state.changes()) {
+        return;
+    }
+
+    // 防止递归触发：如果是由脚本更新且已经在处理中，则跳过
+    // 注意：在 'after' 规则中，通常不需要 setWorkflow(false) 除非你在这里进行了 current.update()
+    if (current.operation() === 'update' && current.sys_id.changes()) {
+        return;
+    }
+
+    // ============================================================
+    // 2. 初始化变量
+    // ============================================================
+    var oldState = parseInt(previous.state);
+    var newState = parseInt(current.state);
+
+    gs.info('[Kokoro State Transition] ' + current.number + 
+            ' transitioning from ' + oldState + ' to ' + newState);
+
+    // ============================================================
+    // 3. 状态机逻辑路由 (Switch Case)
+    // ============================================================
+    try {
+        switch (newState) {
+            
+            case 10: // Submitted (提交)
+                handleSubmitted(current);
+                break;
+                
+            case 11: // Assigned (已分配)
+                handleAssigned(current, oldState, previous);
+                break;
+                
+            case 2: // In Progress (处理中)
+                handleInProgress(current, oldState);
+                break;
+                
+            case 6: // On Hold (挂起/暂停)
+                handleOnHold(current);
+                break;
+                
+            case 4: // Completed (完成)
+                handleCompleted(current, previous);
+                break;
+                
+            case 5: // Cancelled (取消)
+                handleCancelled(current, previous);
+                break;
+        }
+        
+    } catch (e) {
+        gs.error('[Kokoro State Transition] Error processing ' + current.number + ': ' + e.message);
+    }
+
+    // ============================================================
+    // 4. 状态处理函数定义
+    // ============================================================
+
+    /**
+     * 处理 Submitted (10)
+     * 动作：创建SLA，尝试自动分配
+     */
+    function handleSubmitted(current) {
+        gs.info('[Kokoro] Processing SUBMITTED state for ' + current.number);
+        
+        // 1. 附加 SLA
+        try {
+            var slaEngine = new x_1821654_kokoro_0.KokoroSLAEngine();
+            var slaResult = slaEngine.attachSLA(current.getUniqueValue());
+            
+            if (slaResult.success) {
+                gs.info('[Kokoro] SLA attached to ' + current.number);
+            } else {
+                gs.warn('[Kokoro] SLA attach failed for ' + current.number + ': ' + slaResult.reason);
+            }
+        } catch (e) {
+            gs.error('[Kokoro] SLA attach error for ' + current.number + ': ' + e.message);
+        }
+        
+        // 2. 如果未分配，尝试自动分配
+        if (current.assigned_to.nil()) {
+            try {
+                var assignEngine = new x_1821654_kokoro_0.KokoroAutoAssignment();
+                var assignResult = assignEngine.autoAssign(current.getUniqueValue());
+                
+                if (assignResult.success) {
+                    gs.info('[Kokoro] Auto-assigned ' + current.number + ' to ' + assignResult.volunteer_name);
+                } else {
+                    gs.info('[Kokoro] No auto-assignment for ' + current.number + ': ' + assignResult.reason);
+                }
+            } catch (e) {
+                gs.error('[Kokoro] Auto-assign error for ' + current.number + ': ' + e.message);
+            }
+        }
+    }
+
+    /**
+     * 处理 Assigned (11)
+     * 动作：推进SLA阶段，更新志愿者任务计数
+     */
+    function handleAssigned(current, oldState, previous) {
+        gs.info('[Kokoro] Processing ASSIGNED state for ' + current.number);
+        
+        // 1. 如果是从 Submitted 转来，推进 SLA 阶段 (Response -> Resolution)
+        if (oldState === 10) {
+            try {
+                var slaEngine = new x_1821654_kokoro_0.KokoroSLAEngine();
+                slaEngine.advanceSLAStage(current.getUniqueValue());
+                gs.info('[Kokoro] SLA stage advanced for ' + current.number);
+            } catch (e) {
+                gs.error('[Kokoro] SLA stage advance error: ' + e.message);
+            }
+        }
+        
+        // 2. 更新志愿者任务计数
+        if (current.assigned_to.changes() && !current.assigned_to.nil()) {
+            try {
+                var assignEngine = new x_1821654_kokoro_0.KokoroAutoAssignment();
+                
+                // 增加新志愿者的计数 (+1)
+                assignEngine._updateVolunteerTaskCount(current.getValue('assigned_to'), 1);
+                gs.info('[Kokoro] Task count incremented for new assignee');
+                
+                // 减少前一个志愿者的计数 (-1)
+                if (previous.assigned_to && !previous.assigned_to.nil()) {
+                    assignEngine._updateVolunteerTaskCount(previous.getValue('assigned_to'), -1);
+                    gs.info('[Kokoro] Task count decremented for previous assignee');
+                }
+                
+            } catch (e) {
+                gs.error('[Kokoro] Task count update error: ' + e.message);
+            }
+        }
+    }
+
+    /**
+     * 处理 In Progress (2)
+     * 动作：恢复SLA计时
+     */
+    function handleInProgress(current, oldState) {
+        gs.info('[Kokoro] Processing IN_PROGRESS state for ' + current.number);
+        
+        // 如果从 On Hold (6) 恢复，恢复 SLA 计时
+        if (oldState === 6) {
+            try {
+                var slaEngine = new x_1821654_kokoro_0.KokoroSLAEngine();
+                slaEngine.resumeSLA(current.getUniqueValue());
+                gs.info('[Kokoro] SLA resumed for ' + current.number);
+            } catch (e) {
+                gs.error('[Kokoro] SLA resume error: ' + e.message);
+            }
+        }
+    }
+
+    /**
+     * 处理 On Hold (6)
+     * 动作：暂停SLA计时
+     */
+    function handleOnHold(current) {
+        gs.info('[Kokoro] Processing ON_HOLD state for ' + current.number);
+        
+        try {
+            var slaEngine = new x_1821654_kokoro_0.KokoroSLAEngine();
+            slaEngine.pauseSLA(current.getUniqueValue());
+            gs.info('[Kokoro] SLA paused for ' + current.number);
+        } catch (e) {
+            gs.error('[Kokoro] SLA pause error: ' + e.message);
+        }
+    }
+
+    /**
+     * 处理 Completed (4)
+     * 动作：完成SLA，释放志愿者资源
+     */
+    function handleCompleted(current, previous) {
+        gs.info('[Kokoro] Processing COMPLETED state for ' + current.number);
+        
+        // 1. 完成 SLA
+        try {
+            var slaEngine = new x_1821654_kokoro_0.KokoroSLAEngine();
+            slaEngine.completeSLA(current.getUniqueValue());
+            gs.info('[Kokoro] SLA completed for ' + current.number);
+        } catch (e) {
+            gs.error('[Kokoro] SLA complete error: ' + e.message);
+        }
+        
+        // 2. 减少志愿者任务计数 (释放资源)
+        if (previous.assigned_to && !previous.assigned_to.nil()) {
+            try {
+                var assignEngine = new x_1821654_kokoro_0.KokoroAutoAssignment();
+                assignEngine.onTaskCompleted(current.getUniqueValue()); 
+                // 注意：确保 AutoAssignment 脚本中有 onTaskCompleted 或使用 _updateVolunteerTaskCount(-1)
+                gs.info('[Kokoro] Volunteer task count decremented');
+            } catch (e) {
+                gs.error('[Kokoro] Task count update error: ' + e.message);
+            }
+        }
+    }
+
+    /**
+     * 处理 Cancelled (5)
+     * 动作：取消SLA，释放志愿者资源
+     */
+    function handleCancelled(current, previous) {
+        gs.info('[Kokoro] Processing CANCELLED state for ' + current.number);
+        
+        // 1. 取消 SLA
+        try {
+            var slaEngine = new x_1821654_kokoro_0.KokoroSLAEngine();
+            slaEngine.cancelSLA(current.getUniqueValue());
+            gs.info('[Kokoro] SLA cancelled for ' + current.number);
+        } catch (e) {
+            gs.error('[Kokoro] SLA cancel error: ' + e.message);
+        }
+        
+        // 2. 减少志愿者任务计数 (释放资源)
+        if (previous.assigned_to && !previous.assigned_to.nil()) {
+            try {
+                var assignEngine = new x_1821654_kokoro_0.KokoroAutoAssignment();
+                assignEngine.onTaskCompleted(current.getUniqueValue());
+                gs.info('[Kokoro] Volunteer task count decremented');
+            } catch (e) {
+                gs.error('[Kokoro] Task count update error: ' + e.message);
+            }
+        }
+    }
+
+})(current, previous);]]></script>
+        <sys_class_name>sys_script</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-29 02:14:20</sys_created_on>
+        <sys_domain>global</sys_domain>
+        <sys_domain_path>/</sys_domain_path>
+        <sys_id>16d868a08376b210f6b1fb96feaad3ab</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Kokoro - State Transition Actions</sys_name>
+        <sys_overrides/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_script_16d868a08376b210f6b1fb96feaad3ab</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-29 02:14:20</sys_updated_on>
+        <template/>
+        <when>after</when>
+    </sys_script>
+    <sys_translated_text action="delete_multiple" query="documentkey=16d868a08376b210f6b1fb96feaad3ab"/>
+</record_update>

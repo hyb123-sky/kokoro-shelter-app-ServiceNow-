@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sysauto_script">
+    <sysauto_script action="INSERT_OR_UPDATE">
+        <active>true</active>
+        <advanced>true</advanced>
+        <business_calendar/>
+        <condition/>
+        <conditional>false</conditional>
+        <entered_run_end/>
+        <entered_run_start/>
+        <entered_time>1970-01-01 00:00:00</entered_time>
+        <max_drift/>
+        <name>Kokoro Watchdog</name>
+        <offset/>
+        <offset_type>0</offset_type>
+        <repeat_every/>
+        <run_as display_value="System Administrator">6816f79cc0a8016401c5a33be04be441</run_as>
+        <run_as_tz/>
+        <run_dayofmonth>1</run_dayofmonth>
+        <run_dayofweek>1</run_dayofweek>
+        <run_daysofweek/>
+        <run_end/>
+        <run_month>1</run_month>
+        <run_period>1970-01-01 00:15:00</run_period>
+        <run_start>2026-01-22 01:52:53</run_start>
+        <run_time>1970-01-01 08:00:00</run_time>
+        <run_type>periodically</run_type>
+        <run_weekinmonth>1</run_weekinmonth>
+        <script><![CDATA[// ==========================================
+// Kokoro Watchdog - 自动化生命监测脚本 (修正版)
+// ==========================================
+
+// 1. 使用正确的长表名
+var gr = new GlideRecord('x_1821654_kokoro_0_x_1821654_kokoro_0_heartbeat');
+gr.addQuery('u_status', 'Safe');
+
+// 2. 核心算法：找出 "最后更新时间" 在 "24小时之前" 的记录
+// encodedQuery 是最高效的查询方式
+gr.addEncodedQuery('sys_updated_onRELATIVELT@hour@ago@24'); 
+
+gr.query();
+
+gs.info("[Kokoro Watchdog] 启动扫描... 发现 " + gr.getRowCount() + " 个超时目标。");
+
+while (gr.next()) {
+    // 3. 找到超时用户了！开始处理
+    var userName = gr.u_user.getDisplayValue() || "Guest";
+    gs.info("[Kokoro Watchdog] 警告: 用户 " + userName + " 心跳超时。正在升级状态...");
+
+    // 4. 修改状态为 Warning (预警)
+    gr.setValue('u_status', 'Warning');
+    gr.update();
+
+    // 5. 发射神经信号 (Trigger Event)
+    // 请确保 Event Registry 里的 Table 也是选的这张长名字的表，否则事件也会断开
+    gs.eventQueue('x_1821654_kokoro.heartbeat_timeout', gr, gr.u_user, gr.u_last_message);
+}]]></script>
+        <sys_class_name>sysauto_script</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-22 01:56:21</sys_created_on>
+        <sys_id>e6f1ac9683e27210f6b1fb96feaad36b</sys_id>
+        <sys_mod_count>3</sys_mod_count>
+        <sys_name>Kokoro Watchdog</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sysauto_script_e6f1ac9683e27210f6b1fb96feaad36b</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-22 03:59:50</sys_updated_on>
+        <time_zone/>
+        <upgrade_safe>false</upgrade_safe>
+    </sysauto_script>
+</record_update>

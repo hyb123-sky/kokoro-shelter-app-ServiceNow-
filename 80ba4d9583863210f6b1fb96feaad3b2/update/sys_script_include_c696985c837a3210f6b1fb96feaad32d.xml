@@ -1,0 +1,592 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_script_include">
+    <sys_script_include action="INSERT_OR_UPDATE">
+        <access>package_private</access>
+        <active>true</active>
+        <api_name>x_1821654_kokoro_0.KokoroSLAEngine</api_name>
+        <caller_access/>
+        <client_callable>false</client_callable>
+        <description/>
+        <mobile_callable>false</mobile_callable>
+        <name>KokoroSLAEngine</name>
+        <sandbox_callable>false</sandbox_callable>
+        <script><![CDATA[var KokoroSLAEngine = Class.create();
+KokoroSLAEngine.prototype = {
+    
+    CONFIG: {
+        tables: {
+            SILENT_WISH: 'x_1821654_kokoro_0_silent_wish',
+            SLA_DEFINITION: 'x_1821654_kokoro_0_sla_definition',
+            SLA_TASK: 'x_1821654_kokoro_0_sla_task'
+        },
+        // 默认SLA
+        defaultSLA: {
+            'Critical': { response: 5, resolution: 30, warning: 60, critical: 80 },
+            'High': { response: 15, resolution: 60, warning: 70, critical: 85 },
+            'Medium': { response: 30, resolution: 120, warning: 75, critical: 90 },
+            'Low': { response: 60, resolution: 240, warning: 80, critical: 95 }
+        },
+        stages: {
+            RESPONSE: 'response',
+            RESOLUTION: 'resolution'
+        },
+        statuses: {
+            IN_PROGRESS: 'in_progress',
+            PAUSED: 'paused',
+            BREACHED: 'breached',
+            ACHIEVED: 'achieved',
+            CANCELLED: 'cancelled'
+        },
+        pauseStates: ['6'] // ON_HOLD
+    },
+    
+    initialize: function() {
+        this.debugMode = false;
+    },
+    
+    setDebugMode: function(enabled) {
+        this.debugMode = enabled;
+    },
+    
+    _log: function(message, level) {
+        level = level || 'info';
+        var prefix = '[KokoroSLA] ';
+        if (level === 'error') {
+            gs.error(prefix + message);
+        } else if (level === 'warn') {
+            gs.warn(prefix + message);
+        } else if (this.debugMode) {
+            gs.info(prefix + message);
+        }
+    },
+    
+    /**
+     * 为请求附加SLA
+     */
+    attachSLA: function(wishSysId) {
+        var result = {
+            success: false,
+            sla_task_id: null,
+            reason: ''
+        };
+        
+        var wishGR = new GlideRecord(this.CONFIG.tables.SILENT_WISH);
+        if (!wishGR.get(wishSysId)) {
+            result.reason = 'Wish not found';
+            return result;
+        }
+        
+        var urgency = wishGR.getValue('u_urgency') || 'Medium';
+        
+        var existingSLA = this._getActiveSLATask(wishSysId);
+        if (existingSLA) {
+            result.reason = 'SLA already exists';
+            result.sla_task_id = existingSLA;
+            return result;
+        }
+        
+        var slaDef = this._getSLADefinition(urgency);
+        
+        var slaGR = new GlideRecord(this.CONFIG.tables.SLA_TASK);
+        slaGR.initialize();
+        slaGR.setValue('related_wish', wishSysId); 
+        
+        if (slaDef.sys_id) {
+            slaGR.setValue('sla_definition', slaDef.sys_id);
+        }
+        
+        var now = new GlideDateTime();
+        slaGR.setValue('start_time', now);
+        
+        var breachTime = new GlideDateTime();
+        breachTime.addSeconds(slaDef.resolution * 60);
+        slaGR.setValue('breach_time', breachTime);
+        
+        slaGR.setValue('stage', this.CONFIG.stages.RESPONSE);
+        slaGR.setValue('status', this.CONFIG.statuses.IN_PROGRESS);
+        slaGR.setValue('has_breached', false);
+        slaGR.setValue('percentage', 0);
+        slaGR.setValue('total_pause_duration', 0);
+        slaGR.setValue('breach_notified', false);
+        slaGR.setValue('warning_notified', false);
+        
+        var slaTaskId = slaGR.insert();
+        
+        if (slaTaskId) {
+            result.success = true;
+            result.sla_task_id = slaTaskId;
+            result.reason = 'SLA attached';
+            this._log('SLA attached to ' + wishGR.getValue('number') + 
+                      ' (urgency: ' + urgency + ', target: ' + slaDef.resolution + 'min)');
+        } else {
+            result.reason = 'Failed to create SLA task';
+        }
+        
+        return result;
+    },
+    
+    /**
+     * 更新所有活跃SLA的状态
+     */
+    updateAllSLAStatus: function() {
+        var stats = {
+            processed: 0,
+            ok: 0,
+            warnings: 0,
+            critical: 0,
+            breaches: 0,
+            achieved: 0
+        };
+        
+        var slaGR = new GlideRecord(this.CONFIG.tables.SLA_TASK);
+        slaGR.addQuery('status', this.CONFIG.statuses.IN_PROGRESS);
+        slaGR.query();
+        
+        while (slaGR.next()) {
+            stats.processed++;
+            var updateResult = this._updateSingleSLAStatus(slaGR);
+            
+            switch (updateResult.status) {
+                case 'ok': stats.ok++; break;
+                case 'warning': stats.warnings++; break;
+                case 'critical': stats.critical++; break;
+                case 'breached': stats.breaches++; break;
+                case 'achieved': stats.achieved++; break;
+            }
+        }
+        
+        this._log('SLA batch update: ' + stats.processed + ' processed, ' + 
+                  stats.breaches + ' breached, ' + stats.warnings + ' warnings');
+        
+        return stats;
+    },
+    
+    /**
+     * 获取请求的SLA信息 (修复版：移除gs.dateDiff)
+     */
+    getSLAInfo: function(wishSysId) {
+        var info = {
+            has_sla: false,
+            elapsed: 0,
+            target: 0,
+            remaining: 0,
+            percentage: 0,
+            status: 'unknown',
+            stage: '',
+            breach_time: null,
+            is_breached: false,
+            warning_threshold: 70,
+            critical_threshold: 90
+        };
+        
+        var slaGR = new GlideRecord(this.CONFIG.tables.SLA_TASK);
+        slaGR.addQuery('related_wish', wishSysId); 
+        slaGR.addQuery('status', 'IN', 'in_progress,paused');
+        slaGR.orderByDesc('sys_created_on');
+        slaGR.setLimit(1);
+        slaGR.query();
+        
+        if (slaGR.next()) {
+            info.has_sla = true;
+            info.stage = slaGR.getValue('stage');
+            info.is_breached = slaGR.getValue('has_breached') == 'true';
+            info.breach_time = slaGR.getValue('breach_time');
+            
+            var slaDef = this._getSLADefinitionFromTask(slaGR);
+            info.target = slaDef.resolution;
+            info.warning_threshold = slaDef.warning;
+            info.critical_threshold = slaDef.critical;
+            
+            // ===== 修复点：使用 GlideDateTime.subtract =====
+            var startTime = new GlideDateTime(slaGR.getValue('start_time'));
+            var now = new GlideDateTime();
+            var pauseDuration = parseInt(slaGR.getValue('total_pause_duration')) || 0;
+            
+            // 计算时间差
+            var diff = GlideDateTime.subtract(startTime, now);
+            // getNumericValue() 返回毫秒 -> 除以 60000 得到分钟
+            var elapsedMinutes = Math.floor(diff.getNumericValue() / 60000);
+            
+            // 减去暂停时长
+            elapsedMinutes = Math.max(0, elapsedMinutes - pauseDuration);
+            
+            info.elapsed = elapsedMinutes;
+            info.remaining = Math.max(0, info.target - elapsedMinutes);
+            // 计算百分比
+            if (info.target > 0) {
+                info.percentage = Math.min(100, Math.round((elapsedMinutes / info.target) * 100));
+            } else {
+                info.percentage = 100;
+            }
+            // ===== 修复结束 =====
+            
+            if (info.is_breached) {
+                info.status = 'critical';
+            } else if (info.percentage >= info.critical_threshold) {
+                info.status = 'critical';
+            } else if (info.percentage >= info.warning_threshold) {
+                info.status = 'warning';
+            } else {
+                info.status = 'ok';
+            }
+        }
+        
+        return info;
+    },
+    
+    /**
+     * 暂停SLA计时
+     */
+    pauseSLA: function(wishSysId) {
+        var slaGR = new GlideRecord(this.CONFIG.tables.SLA_TASK);
+        slaGR.addQuery('related_wish', wishSysId); 
+        slaGR.addQuery('status', this.CONFIG.statuses.IN_PROGRESS);
+        slaGR.query();
+        
+        if (slaGR.next()) {
+            slaGR.setValue('status', this.CONFIG.statuses.PAUSED);
+            slaGR.setValue('pause_time', new GlideDateTime());
+            slaGR.update();
+            this._log('SLA paused for wish ' + wishSysId);
+        }
+    },
+    
+    /**
+     * 恢复SLA计时 (修复版：移除gs.dateDiff)
+     */
+    resumeSLA: function(wishSysId) {
+        var slaGR = new GlideRecord(this.CONFIG.tables.SLA_TASK);
+        slaGR.addQuery('related_wish', wishSysId); 
+        slaGR.addQuery('status', this.CONFIG.statuses.PAUSED);
+        slaGR.query();
+        
+        if (slaGR.next()) {
+            // ===== 修复点：使用 GlideDateTime.subtract =====
+            var pauseTimeStr = slaGR.getValue('pause_time');
+            if (pauseTimeStr) {
+                var pauseTime = new GlideDateTime(pauseTimeStr);
+                var now = new GlideDateTime();
+                
+                // 计算本次暂停时长
+                var diff = GlideDateTime.subtract(pauseTime, now);
+                var pauseDurationSeconds = Math.floor(diff.getNumericValue() / 1000);
+                var pauseDurationMinutes = Math.floor(diff.getNumericValue() / 60000);
+                
+                var totalPause = parseInt(slaGR.getValue('total_pause_duration')) || 0;
+                totalPause += pauseDurationMinutes;
+                
+                slaGR.setValue('total_pause_duration', totalPause);
+                
+                // 调整违规时间
+                var breachTime = new GlideDateTime(slaGR.getValue('breach_time'));
+                breachTime.addSeconds(pauseDurationSeconds);
+                slaGR.setValue('breach_time', breachTime);
+                
+                this._log('Added ' + pauseDurationMinutes + ' minutes to pause duration (total: ' + totalPause + ')');
+            }
+            // ===== 修复结束 =====
+            
+            slaGR.setValue('status', this.CONFIG.statuses.IN_PROGRESS);
+            slaGR.setValue('pause_time', '');
+            slaGR.update();
+            
+            this._log('SLA resumed for wish ' + wishSysId);
+        }
+    },
+    
+    /**
+     * 完成SLA
+     */
+    completeSLA: function(wishSysId) {
+        var slaGR = new GlideRecord(this.CONFIG.tables.SLA_TASK);
+        slaGR.addQuery('related_wish', wishSysId); 
+        slaGR.addQuery('status', 'IN', 'in_progress,paused');
+        slaGR.query();
+        
+        if (slaGR.next()) {
+            var now = new GlideDateTime();
+            slaGR.setValue('actual_end_time', now);
+            
+            var breachTime = new GlideDateTime(slaGR.getValue('breach_time'));
+            if (now.compareTo(breachTime) > 0) {
+                slaGR.setValue('status', this.CONFIG.statuses.BREACHED);
+                slaGR.setValue('has_breached', true);
+            } else {
+                slaGR.setValue('status', this.CONFIG.statuses.ACHIEVED);
+            }
+            
+            slaGR.update();
+            this._log('SLA completed for wish ' + wishSysId + ' (status: ' + slaGR.getValue('status') + ')');
+        }
+    },
+    
+    /**
+     * 取消SLA
+     */
+    cancelSLA: function(wishSysId) {
+        var slaGR = new GlideRecord(this.CONFIG.tables.SLA_TASK);
+        slaGR.addQuery('related_wish', wishSysId); 
+        slaGR.addQuery('status', 'IN', 'in_progress,paused');
+        slaGR.query();
+        
+        if (slaGR.next()) {
+            slaGR.setValue('status', this.CONFIG.statuses.CANCELLED);
+            slaGR.setValue('actual_end_time', new GlideDateTime());
+            slaGR.update();
+        }
+    },
+    
+    /**
+     * 推进SLA阶段
+     */
+    advanceSLAStage: function(wishSysId) {
+        var slaGR = new GlideRecord(this.CONFIG.tables.SLA_TASK);
+        slaGR.addQuery('related_wish', wishSysId); 
+        slaGR.addQuery('status', this.CONFIG.statuses.IN_PROGRESS);
+        slaGR.addQuery('stage', this.CONFIG.stages.RESPONSE);
+        slaGR.query();
+        
+        if (slaGR.next()) {
+            slaGR.setValue('stage', this.CONFIG.stages.RESOLUTION);
+            slaGR.update();
+            this._log('SLA advanced to resolution stage for wish ' + wishSysId);
+        }
+    },
+    
+    // ==========================================
+    // 内部方法
+    // ==========================================
+    
+    _getActiveSLATask: function(wishSysId) {
+        var slaGR = new GlideRecord(this.CONFIG.tables.SLA_TASK);
+        slaGR.addQuery('related_wish', wishSysId); 
+        slaGR.addQuery('status', 'IN', 'in_progress,paused');
+        slaGR.query();
+        
+        if (slaGR.next()) {
+            return slaGR.getUniqueValue();
+        }
+        return null;
+    },
+    
+    _getSLADefinition: function(urgency) {
+        var slaDef = {
+            sys_id: null,
+            response: 30,
+            resolution: 120,
+            warning: 70,
+            critical: 90,
+            escalation_enabled: false
+        };
+        
+        var defGR = new GlideRecord(this.CONFIG.tables.SLA_DEFINITION);
+        defGR.addQuery('urgency', urgency);
+        defGR.addQuery('is_active', true);
+        defGR.query();
+        
+        if (defGR.next()) {
+            slaDef.sys_id = defGR.getUniqueValue();
+            slaDef.response = parseInt(defGR.getValue('response_time')) || slaDef.response;
+            slaDef.resolution = parseInt(defGR.getValue('resolution_time')) || slaDef.resolution;
+            slaDef.warning = parseInt(defGR.getValue('warning_threshold')) || slaDef.warning;
+            slaDef.critical = parseInt(defGR.getValue('critical_threshold')) || slaDef.critical;
+            slaDef.escalation_enabled = defGR.getValue('escalation_enabled') == 'true';
+        } else {
+            var defaults = this.CONFIG.defaultSLA[urgency] || this.CONFIG.defaultSLA['Medium'];
+            slaDef.response = defaults.response;
+            slaDef.resolution = defaults.resolution;
+            slaDef.warning = defaults.warning;
+            slaDef.critical = defaults.critical;
+        }
+        
+        return slaDef;
+    },
+    
+    _getSLADefinitionFromTask: function(slaGR) {
+        var slaDef = {
+            response: 30,
+            resolution: 120,
+            warning: 70,
+            critical: 90
+        };
+        
+        var defId = slaGR.getValue('sla_definition');
+        if (defId) {
+            var defGR = new GlideRecord(this.CONFIG.tables.SLA_DEFINITION);
+            if (defGR.get(defId)) {
+                slaDef.response = parseInt(defGR.getValue('response_time')) || slaDef.response;
+                slaDef.resolution = parseInt(defGR.getValue('resolution_time')) || slaDef.resolution;
+                slaDef.warning = parseInt(defGR.getValue('warning_threshold')) || slaDef.warning;
+                slaDef.critical = parseInt(defGR.getValue('critical_threshold')) || slaDef.critical;
+            }
+        } else {
+            var wishGR = new GlideRecord(this.CONFIG.tables.SILENT_WISH);
+            if (wishGR.get(slaGR.getValue('related_wish'))) { 
+                var urgency = wishGR.getValue('u_urgency') || 'Medium';
+                var defaults = this.CONFIG.defaultSLA[urgency] || this.CONFIG.defaultSLA['Medium'];
+                slaDef.response = defaults.response;
+                slaDef.resolution = defaults.resolution;
+                slaDef.warning = defaults.warning;
+                slaDef.critical = defaults.critical;
+            }
+        }
+        
+        return slaDef;
+    },
+    
+    /**
+     * 更新单个SLA状态 (修复版：移除gs.dateDiff)
+     * @private
+     */
+    _updateSingleSLAStatus: function(slaGR) {
+        var result = { status: 'ok', actions: [] };
+        
+        var slaDef = this._getSLADefinitionFromTask(slaGR);
+        
+        // ===== 修复点：使用 GlideDateTime.subtract =====
+        var startTime = new GlideDateTime(slaGR.getValue('start_time'));
+        var now = new GlideDateTime();
+        var pauseDuration = parseInt(slaGR.getValue('total_pause_duration')) || 0;
+        
+        var diff = GlideDateTime.subtract(startTime, now);
+        var elapsedMinutes = Math.floor(diff.getNumericValue() / 60000);
+        
+        // 减去暂停时长
+        elapsedMinutes = Math.max(0, elapsedMinutes - pauseDuration);
+        
+        var percentage = 0;
+        if (slaDef.resolution > 0) {
+            percentage = Math.min(100, Math.round((elapsedMinutes / slaDef.resolution) * 100));
+        }
+        // ===== 修复结束 =====
+        
+        slaGR.setValue('percentage', percentage);
+        
+        var breachTime = new GlideDateTime(slaGR.getValue('breach_time'));
+        if (now.compareTo(breachTime) > 0 && slaGR.getValue('has_breached') != 'true') {
+            slaGR.setValue('has_breached', true);
+            slaGR.setValue('status', this.CONFIG.statuses.BREACHED);
+            result.status = 'breached';
+            result.actions.push('marked_breached');
+            
+            if (slaGR.getValue('breach_notified') != 'true') {
+                this._sendBreachNotification(slaGR);
+                slaGR.setValue('breach_notified', true);
+                result.actions.push('breach_notified');
+            }
+        } else if (percentage >= slaDef.critical) {
+            result.status = 'critical';
+            
+            if (slaGR.getValue('warning_notified') != 'true') {
+                this._sendWarningNotification(slaGR, percentage);
+                slaGR.setValue('warning_notified', true);
+                result.actions.push('warning_notified');
+            }
+        } else if (percentage >= slaDef.warning) {
+            result.status = 'warning';
+        }
+        
+        slaGR.update();
+        
+        return result;
+    },
+    
+    _sendBreachNotification: function(slaGR) {
+        var wishSysId = slaGR.getValue('related_wish'); 
+        var wishGR = new GlideRecord(this.CONFIG.tables.SILENT_WISH);
+        
+        if (wishGR.get(wishSysId)) {
+            var message = '[SLA違反] ' + wishGR.getValue('number') + ' のSLAが違反しました。' +
+                          '緊急度: ' + wishGR.getValue('u_urgency') + ', ' +
+                          '担当者: ' + (wishGR.assigned_to.getDisplayValue() || '未割当');
+            
+            wishGR.work_notes = message;
+            wishGR.update();
+            
+            this._log('SLA breached for ' + wishGR.getValue('number'), 'warn');
+        }
+    },
+    
+    _sendWarningNotification: function(slaGR, percentage) {
+        var wishSysId = slaGR.getValue('related_wish'); 
+        var wishGR = new GlideRecord(this.CONFIG.tables.SILENT_WISH);
+        
+        if (wishGR.get(wishSysId)) {
+            var message = '[SLA警告] ' + wishGR.getValue('number') + ' のSLAが ' + percentage + '% に達しました。';
+            
+            wishGR.work_notes = message;
+            wishGR.update();
+            
+            this._log('SLA warning for ' + wishGR.getValue('number') + ' (' + percentage + '%)', 'warn');
+        }
+    },
+    
+    getBreachedWishes: function() {
+        var wishes = [];
+        
+        var slaGR = new GlideRecord(this.CONFIG.tables.SLA_TASK);
+        slaGR.addQuery('has_breached', true);
+        slaGR.addQuery('status', 'NOT IN', 'achieved,cancelled');
+        slaGR.query();
+        
+        while (slaGR.next()) {
+            var wishGR = new GlideRecord(this.CONFIG.tables.SILENT_WISH);
+            if (wishGR.get(slaGR.getValue('related_wish'))) { 
+                wishes.push({
+                    sys_id: wishGR.getUniqueValue(),
+                    number: wishGR.getValue('number'),
+                    urgency: wishGR.getValue('u_urgency'),
+                    category: wishGR.getValue('u_category'),
+                    assigned_to: wishGR.assigned_to.getDisplayValue(),
+                    state: wishGR.getValue('state'),
+                    sla_percentage: slaGR.getValue('percentage')
+                });
+            }
+        }
+        
+        return wishes;
+    },
+    
+    getAtRiskWishes: function(thresholdPercentage) {
+        thresholdPercentage = thresholdPercentage || 80;
+        var wishes = [];
+        
+        var slaGR = new GlideRecord(this.CONFIG.tables.SLA_TASK);
+        slaGR.addQuery('status', this.CONFIG.statuses.IN_PROGRESS);
+        slaGR.addQuery('percentage', '>=', thresholdPercentage);
+        slaGR.addQuery('has_breached', false);
+        slaGR.query();
+        
+        while (slaGR.next()) {
+            var wishGR = new GlideRecord(this.CONFIG.tables.SILENT_WISH);
+            if (wishGR.get(slaGR.getValue('related_wish'))) { 
+                wishes.push({
+                    sys_id: wishGR.getUniqueValue(),
+                    number: wishGR.getValue('number'),
+                    urgency: wishGR.getValue('u_urgency'),
+                    category: wishGR.getValue('u_category'),
+                    assigned_to: wishGR.assigned_to.getDisplayValue(),
+                    state: wishGR.getValue('state'),
+                    sla_percentage: parseInt(slaGR.getValue('percentage'))
+                });
+            }
+        }
+        
+        return wishes;
+    },
+    
+    type: 'KokoroSLAEngine'
+};]]></script>
+        <sys_class_name>sys_script_include</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-28 06:11:55</sys_created_on>
+        <sys_id>c696985c837a3210f6b1fb96feaad32d</sys_id>
+        <sys_mod_count>4</sys_mod_count>
+        <sys_name>KokoroSLAEngine</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy>read</sys_policy>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_script_include_c696985c837a3210f6b1fb96feaad32d</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-29 05:20:24</sys_updated_on>
+    </sys_script_include>
+</record_update>

@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_script_include">
+    <sys_script_include action="INSERT_OR_UPDATE">
+        <access>package_private</access>
+        <active>true</active>
+        <api_name>x_1821654_kokoro_0.KokoroShelterAPI</api_name>
+        <caller_access/>
+        <client_callable>true</client_callable>
+        <description/>
+        <mobile_callable>false</mobile_callable>
+        <name>KokoroShelterAPI</name>
+        <sandbox_callable>false</sandbox_callable>
+        <script><![CDATA[var KokoroShelterAPI = Class.create();
+   KokoroShelterAPI.prototype = Object.extendsObject(global.AbstractAjaxProcessor, {
+       
+       /**
+        * 提交新的救援请求
+        * @param {Object} params - 包含 location, category, urgency 等字段
+        * @return {Object} - 返回 ticketNumber 和 newId
+        */
+       submitWishRequest: function(params) {
+           var result = {
+               success: false,
+               ticketNumber: '',
+               newId: '',
+               error: ''
+           };
+           
+           try {
+               // 验证必填字段
+               if (!params.location || !params.category || !params.urgency) {
+                   result.error = '必須項目が不足しています';
+                   return JSON.stringify(result);
+               }
+               
+               // 创建记录
+               var gr = new GlideRecord('x_1821654_kokoro_0_silent_wish');
+               gr.initialize();
+               gr.setValue('opened_by', gs.getUserID());
+               gr.setValue('state', '1');
+               gr.setValue('shelter_zone', params.location);
+               gr.setValue('u_category', params.category);
+               gr.setValue('u_quantity', params.quantity || 1);
+               gr.setValue('u_urgency', params.urgency);
+               gr.setValue('u_affected_count', params.affected_count);
+               gr.setValue('u_remarks', this._sanitize(params.remarks));
+               gr.setValue('detail_loc', this._sanitize(params.detail_loc));
+               
+               // 构建描述
+               var description = this._buildDescription(params);
+               gr.setValue('wish_content', description);
+               gr.setValue('description', description);
+               
+               var sysId = gr.insert();
+               
+               if (sysId) {
+                   result.success = true;
+                   result.ticketNumber = gr.getValue('number');
+                   result.newId = sysId;
+               } else {
+                   result.error = 'データベースエラーが発生しました';
+               }
+               
+           } catch (e) {
+               result.error = 'システムエラー: ' + e.message;
+               gs.error('KokoroShelterAPI.submitWishRequest error: ' + e.message);
+           }
+           
+           return JSON.stringify(result);
+       },
+       
+       /**
+        * 更新现有请求
+        */
+       updateWishRequest: function(params) {
+           var result = { success: false, error: '' };
+           
+           try {
+               if (!params.sys_id) {
+                   result.error = 'Invalid record ID';
+                   return JSON.stringify(result);
+               }
+               
+               var gr = new GlideRecord('x_1821654_kokoro_0_silent_wish');
+               if (gr.get(params.sys_id)) {
+                   // 验证权限：只能编辑自己的记录
+                   if (gr.getValue('opened_by') != gs.getUserID() && !gs.hasRole('admin')) {
+                       result.error = '権限がありません';
+                       return JSON.stringify(result);
+                   }
+                   
+                   gr.setValue('u_category', params.category);
+                   gr.setValue('u_quantity', params.quantity);
+                   gr.setValue('u_urgency', params.urgency);
+                   gr.setValue('u_remarks', this._sanitize(params.remarks));
+                   gr.update();
+                   
+                   result.success = true;
+                   result.ticketNumber = gr.getValue('number');
+               } else {
+                   result.error = 'レコードが見つかりません';
+               }
+               
+           } catch (e) {
+               result.error = e.message;
+               gs.error('KokoroShelterAPI.updateWishRequest error: ' + e.message);
+           }
+           
+           return JSON.stringify(result);
+       },
+       
+       /**
+        * 私有方法：XSS防护
+        */
+       _sanitize: function(input) {
+           if (!input) return '';
+           var sanitizer = new GlideSPScriptable();
+           return sanitizer.sanitize(input);
+       },
+       
+       /**
+        * 私有方法：构建描述文本
+        */
+       _buildDescription: function(params) {
+           return "【詳細場所】: " + (params.detail_loc || '未記入') + "\n" +
+                  "【支援種別】: " + params.category + " x " + (params.quantity || 1) + "\n" +
+                  "【緊急度】: " + params.urgency + "\n" +
+                  "【対象人数】: " + (params.affected_count || '1') + "\n" +
+                  "【備考】: " + (params.remarks || 'なし');
+       },
+       
+       type: 'KokoroShelterAPI'
+   });]]></script>
+        <sys_class_name>sys_script_include</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-20 06:51:28</sys_created_on>
+        <sys_id>03215fa983ee7210f6b1fb96feaad3b3</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>KokoroShelterAPI</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy>read</sys_policy>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_script_include_03215fa983ee7210f6b1fb96feaad3b3</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-20 06:51:28</sys_updated_on>
+    </sys_script_include>
+</record_update>

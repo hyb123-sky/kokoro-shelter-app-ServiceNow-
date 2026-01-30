@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update sys_domain="global" table="sys_script">
+    <sys_script action="INSERT_OR_UPDATE">
+        <abort_action>false</abort_action>
+        <access>package_private</access>
+        <action_delete>false</action_delete>
+        <action_insert>false</action_insert>
+        <action_query>false</action_query>
+        <action_update>true</action_update>
+        <active>true</active>
+        <add_message>false</add_message>
+        <advanced>true</advanced>
+        <change_fields>false</change_fields>
+        <client_callable>false</client_callable>
+        <collection>x_1821654_kokoro_0_silent_wish</collection>
+        <condition/>
+        <description/>
+        <execute_function>false</execute_function>
+        <filter_condition/>
+        <is_rest>false</is_rest>
+        <message/>
+        <name>Kokoro - State Machine Validator</name>
+        <order>50</order>
+        <priority>100</priority>
+        <rest_method/>
+        <rest_method_text/>
+        <rest_service/>
+        <rest_service_text/>
+        <rest_variables/>
+        <role_conditions/>
+        <script><![CDATA[(function executeRule(current, previous /*null when insert*/) {
+    
+    // 只在状态变化时验证
+    if (!current.state.changes()) {
+        return;
+    }
+    
+    // [Safety] 允许 Admin 覆盖状态规则 (防止开发过程中死锁)
+    // 如果不需要 Admin 特权，注释掉下面 3 行
+    if (gs.hasRole('admin')) {
+        // gs.addInfoMessage('[Admin Override] 状态验证已跳过');
+        // return; 
+        // 建议保留验证逻辑，但在日志中记录 Admin 操作，暂不强制 return 以确保逻辑正确性
+    }
+    
+    var oldState = parseInt(previous.state) || 1;
+    var newState = parseInt(current.state);
+    
+    // ==========================================
+    // 状态转换规则定义 (与 Dashboard Server Script 对齐)
+    // ==========================================
+    var VALID_TRANSITIONS = {
+        // Draft -> Submitted, Assigned (直接分配), Cancelled
+        1:  [10, 11, 5], 
+        
+        // Submitted -> Draft (回退), Assigned, Cancelled
+        10: [1, 11, 5],  
+        
+        // Assigned -> Submitted (取消分配), In Progress, On Hold, Cancelled
+        11: [10, 2, 6, 5], 
+        
+        // In Progress -> Completed, Cancelled, On Hold
+        2:  [4, 5, 6],   
+        
+        // On Hold -> Assigned (重新开始), In Progress, Cancelled
+        6:  [11, 2, 5],  
+        
+        // Completed -> [终止状态] (Admin 可能需要重新打开，暂定为空)
+        4:  [],          
+        
+        // Cancelled -> [终止状态]
+        5:  []           
+    };
+    
+    var STATE_NAMES = {
+        1: 'Draft',
+        10: 'Submitted',
+        11: 'Assigned',
+        2: 'In Progress',
+        6: 'On Hold',
+        4: 'Completed',
+        5: 'Cancelled'
+    };
+    
+    // ==========================================
+    // 验证转换是否合法
+    // ==========================================
+    var validNextStates = VALID_TRANSITIONS[oldState] || [];
+    
+    // 检查 newState 是否在允许列表中
+    // 注意：使用 parseInt 确保类型一致
+    var isValid = false;
+    for (var i = 0; i < validNextStates.length; i++) {
+        if (validNextStates[i] === newState) {
+            isValid = true;
+            break;
+        }
+    }
+
+    if (!isValid) {
+        var errorMsg = '[状態エラー] 不正な状態遷移が検出されました:\n' +
+                       '現在: ' + (STATE_NAMES[oldState] || oldState) + ' (' + oldState + ')\n' +
+                       '遷移先: ' + (STATE_NAMES[newState] || newState) + ' (' + newState + ')\n' +
+                       'この遷移は許可されていません。';
+        
+        gs.addErrorMessage(errorMsg);
+        current.setAbortAction(true); // 阻止更新
+        
+        gs.error('[Kokoro State Machine] Invalid transition blocked for ' + 
+                current.number + ': ' + oldState + ' -> ' + newState);
+        
+        return;
+    }
+    
+    // ==========================================
+    // 终止状态保护 (防止修改已关闭的工单)
+    // ==========================================
+    if (oldState === 4 || oldState === 5) {
+        // 如果是 Admin，允许重新打开工单 (通过修改状态)，但不允许直接修改数据
+        // 如果不是 Admin，完全禁止
+        if (!gs.hasRole('admin')) {
+             gs.addErrorMessage('[状態エラー] 完了またはキャンセル済みのタスクは変更できません。');
+             current.setAbortAction(true);
+             return;
+        }
+    }
+    
+    // ==========================================
+    // 分配状态验证
+    // ==========================================
+    // 进入 Assigned(11) 或 In Progress(2) 或 Completed(4) 时，必须有 Assigned To
+    if (newState === 11 || newState === 2 || newState === 4) { 
+        if (current.assigned_to.nil()) {
+            gs.addErrorMessage('[割当エラー] ' + STATE_NAMES[newState] + ' 状態には担当者の割り当てが必要です。');
+            current.setAbortAction(true);
+            return;
+        }
+    }
+    
+    // ==========================================
+    // 自动填充字段 (Helper)
+    // ==========================================
+    // 如果进入 Assigned 状态且 assigned_to 有值，自动记录时间（可选）
+    // 如果进入 Completed，确保 completed_at 有值
+    if (newState === 4 && current.u_completed_at.nil()) {
+        current.u_completed_at = new GlideDateTime();
+    }
+    
+    gs.info('[Kokoro State Machine] Valid transition: ' + current.number + 
+           ' from ' + STATE_NAMES[oldState] + ' to ' + STATE_NAMES[newState]);
+    
+})(current, previous);]]></script>
+        <sys_class_name>sys_script</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-29 01:21:38</sys_created_on>
+        <sys_domain>global</sys_domain>
+        <sys_domain_path>/</sys_domain_path>
+        <sys_id>14add4208336b210f6b1fb96feaad30a</sys_id>
+        <sys_mod_count>1</sys_mod_count>
+        <sys_name>Kokoro - State Machine Validator</sys_name>
+        <sys_overrides/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_script_14add4208336b210f6b1fb96feaad30a</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-29 01:27:19</sys_updated_on>
+        <template/>
+        <when>before</when>
+    </sys_script>
+    <sys_translated_text action="delete_multiple" query="documentkey=14add4208336b210f6b1fb96feaad30a"/>
+</record_update>

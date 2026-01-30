@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="f207df4483b23210f6b1fb96feaad34e" label="SLA Task" max_length="40" name="x_1821654_kokoro_0_sla_task" type="collection">
+        <element choice="1" label="Stage" max_length="40" name="stage" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="解決" value="Resolution"/>
+                <element inactive_on_update="false" label="応答" value="response"/>
+            </choice>
+        </element>
+        <element choice="1" label="Status" max_length="40" name="status" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="違反" value="breached"/>
+                <element inactive_on_update="false" label="一時停止" value="paused"/>
+                <element inactive_on_update="false" label="キャンセル" value="cancelled"/>
+                <element inactive_on_update="false" label="進行中" value="in_progress"/>
+                <element inactive_on_update="false" label="達成" value="achieved"/>
+            </choice>
+        </element>
+        <element label="Warning Notified" max_length="40" name="warning_notified" type="boolean"/>
+        <element label="Pause Duration" max_length="40" name="total_pause_duration" type="integer"/>
+        <element label="Breach TIme" max_length="40" name="breach_time" type="glide_date_time"/>
+        <element label="Breach Notified" max_length="40" name="breach_notified" type="boolean"/>
+        <element label="Has Breached" max_length="40" name="has_breached" type="boolean"/>
+        <element label="Start Time" max_length="40" name="start_time" type="glide_date_time"/>
+        <element label="percentage" max_length="40" name="percentage" type="integer"/>
+        <element label="Pause Time" max_length="40" name="pause_time" type="glide_date_time"/>
+        <element label="SLA Defintion" max_length="32" name="sla_defintion" reference="x_1821654_kokoro_0_sla_definition" type="reference"/>
+        <element label="Related Wish" max_length="32" name="related_wish" reference="x_1821654_kokoro_0_silent_wish" type="reference"/>
+        <element label="Actual End Time" max_length="40" name="actual_end_time" type="glide_date_time"/>
+        <index name="index">
+            <element name="related_wish"/>
+        </index>
+        <index name="index2">
+            <element name="sla_defintion"/>
+        </index>
+    </element>
+</database>

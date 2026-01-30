@@ -1,0 +1,455 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_script_include">
+    <sys_script_include action="INSERT_OR_UPDATE">
+        <access>package_private</access>
+        <active>true</active>
+        <api_name>x_1821654_kokoro_0.KokoroAutoAssignment</api_name>
+        <caller_access/>
+        <client_callable>false</client_callable>
+        <description/>
+        <mobile_callable>false</mobile_callable>
+        <name>KokoroAutoAssignment</name>
+        <sandbox_callable>false</sandbox_callable>
+        <script><![CDATA[var KokoroAutoAssignment = Class.create();
+KokoroAutoAssignment.prototype = {
+    
+    CONFIG: {
+        tables: {
+            // ✅ Scope 修正: 确保包含 _0
+            SILENT_WISH: 'x_1821654_kokoro_0_silent_wish',
+            CAPABILITY: 'x_1821654_kokoro_0_volunteer_capability',
+            ASSIGNMENT_HISTORY: 'x_1821654_kokoro_0_assignment_history'
+        },
+        weights: {
+            SAME_ZONE: 50,
+            ADJACENT_ZONE: 25,
+            LOW_LOAD: 30,
+            MEDIUM_LOAD: 15,
+            SKILL_MATCH: 40,
+            SKILL_PARTIAL: 20,
+            RECENT_ACTIVITY: 20,
+            PRIORITY_MULTIPLIER: 0.5
+        },
+        defaults: {
+            MAX_TASKS: 5,
+            ACTIVITY_THRESHOLD_MINUTES: 30
+        },
+        skillMapping: {
+            'Medical': ['medical', 'first_aid', 'nursing'],
+            'Baby': ['childcare', 'nursing'],
+            'Food': ['food_handling', 'logistics'],
+            'Water': ['logistics'],
+            'Power': ['technical', 'electrical'],
+            'Other': []
+        },
+        zoneAdjacency: {
+            'Family Area': ['Single Area', 'Medical Area'],
+            'Single Area': ['Family Area', 'Medical Area'],
+            'Medical Area': ['Family Area', 'Single Area']
+        },
+        specialtyMapping: {
+            'Medical': 'medical',
+            'Baby': 'childcare',
+            'Food': 'logistics',
+            'Water': 'logistics',
+            'Power': 'general',
+            'Other': 'general'
+        }
+    },
+    
+    initialize: function() {
+        this.debugMode = false;
+    },
+    
+    setDebugMode: function(enabled) {
+        this.debugMode = enabled;
+    },
+    
+    _log: function(message, level) {
+        level = level || 'info';
+        var prefix = '[KokoroAutoAssign] ';
+        if (level === 'error') {
+            gs.error(prefix + message);
+        } else if (level === 'warn') {
+            gs.warn(prefix + message);
+        } else if (this.debugMode) {
+            gs.info(prefix + message);
+        }
+    },
+    
+    /**
+     * 自动分配请求给最佳志愿者
+     */
+    autoAssign: function(wishSysId, options) {
+        options = options || {};
+        
+        var result = {
+            success: false,
+            volunteer_id: null,
+            volunteer_name: null,
+            score: 0,
+            reason: '',
+            debug: {}
+        };
+        
+        var wishGR = new GlideRecord(this.CONFIG.tables.SILENT_WISH);
+        if (!wishGR.get(wishSysId)) {
+            result.reason = 'Wish not found';
+            return result;
+        }
+        
+        if (!wishGR.assigned_to.nil() && !options.forceReassign) {
+            result.reason = 'Already assigned';
+            return result;
+        }
+        
+        var wishInfo = {
+            sys_id: wishSysId,
+            number: wishGR.getValue('number'),
+            zone: wishGR.getValue('shelter_zone'),
+            category: wishGR.getValue('u_category'),
+            urgency: wishGR.getValue('u_urgency'),
+            previousAssignee: wishGR.getValue('assigned_to')
+        };
+        
+        var bestMatch = this._findBestVolunteer(wishInfo, options.excludeUsers || []);
+        
+        if (!bestMatch.success) {
+            result.reason = bestMatch.reason;
+            return result;
+        }
+        
+        var previousAssignee = wishGR.getValue('assigned_to');
+        wishGR.setValue('assigned_to', bestMatch.volunteer_id);
+        wishGR.setValue('state', '11'); // 11 = Assigned (担当決定)
+        
+        var assignNote = '[自動分配] ' + bestMatch.volunteer_name + ' (スコア: ' + bestMatch.score + ')';
+        wishGR.work_notes = assignNote;
+        
+        if (wishGR.update()) {
+            this._updateVolunteerTaskCount(bestMatch.volunteer_id, 1);
+            if (previousAssignee) {
+                this._updateVolunteerTaskCount(previousAssignee, -1);
+            }
+            this._recordAssignmentHistory(wishSysId, bestMatch.volunteer_id, 
+                previousAssignee ? 'reassign' : 'auto', bestMatch.score, assignNote, previousAssignee);
+            
+            result.success = true;
+            result.volunteer_id = bestMatch.volunteer_id;
+            result.volunteer_name = bestMatch.volunteer_name;
+            result.score = bestMatch.score;
+            result.reason = 'Successfully assigned';
+        } else {
+            result.reason = 'Failed to update';
+        }
+        
+        return result;
+    },
+    
+    /**
+     * 批量处理未分配的请求
+     */
+    processUnassignedWishes: function(limit) {
+        limit = limit || 50;
+        var stats = { total: 0, assigned: 0, failed: 0, results: [] };
+        
+        var wishGR = new GlideRecord(this.CONFIG.tables.SILENT_WISH);
+        wishGR.addNullQuery('assigned_to');
+        wishGR.addQuery('state', 'IN', '1,10'); // 1=Open, 10=Triaged
+        wishGR.orderByDesc('u_urgency');
+        wishGR.setLimit(limit);
+        wishGR.query();
+        
+        while (wishGR.next()) {
+            stats.total++;
+            var result = this.autoAssign(wishGR.getUniqueValue());
+            
+            if (result.success) {
+                stats.assigned++;
+            } else {
+                stats.failed++;
+            }
+            
+            stats.results.push({
+                wish_number: wishGR.getValue('number'),
+                result: result
+            });
+        }
+        
+        return stats;
+    },
+    
+    _findBestVolunteer: function(wishInfo, excludeUsers) {
+        var result = { success: false, volunteer_id: null, volunteer_name: null, score: 0, reason: '' };
+        
+        var candidates = this._getAvailableVolunteers(excludeUsers);
+        if (candidates.length === 0) {
+            result.reason = 'No available volunteers';
+            return result;
+        }
+        
+        var scoredCandidates = [];
+        for (var i = 0; i < candidates.length; i++) {
+            var scoreResult = this._calculateScore(candidates[i], wishInfo);
+            scoredCandidates.push({
+                volunteer: candidates[i],
+                score: scoreResult.total,
+                details: scoreResult.breakdown
+            });
+        }
+        
+        scoredCandidates.sort(function(a, b) { return b.score - a.score; });
+        
+        if (scoredCandidates.length > 0 && scoredCandidates[0].score > 0) {
+            var best = scoredCandidates[0];
+            result.success = true;
+            result.volunteer_id = best.volunteer.sys_id;
+            result.volunteer_name = best.volunteer.name;
+            result.score = best.score;
+        } else {
+            result.reason = 'No suitable match';
+        }
+        
+        return result;
+    },
+    
+    _getAvailableVolunteers: function(excludeUsers) {
+        var volunteers = [];
+        excludeUsers = excludeUsers || [];
+        
+        var capGR = new GlideRecord(this.CONFIG.tables.CAPABILITY);
+        capGR.addQuery('is_available', true);
+        capGR.addQuery('is_on_break', false);
+        if (excludeUsers.length > 0) {
+            capGR.addQuery('volunteer', 'NOT IN', excludeUsers.join(','));
+        }
+        capGR.query();
+        
+        while (capGR.next()) {
+            var current = parseInt(capGR.getValue('current_task_count')) || 0;
+            var max = parseInt(capGR.getValue('max_concurrent_tasks')) || this.CONFIG.defaults.MAX_TASKS;
+            
+            if (current < max) {
+                volunteers.push({
+                    sys_id: capGR.getValue('volunteer'),
+                    name: capGR.volunteer.getDisplayValue() || 'Unknown',
+                    current_zone: capGR.getValue('current_zone') || '',
+                    skills: this._parseSkills(capGR.getValue('skills')),
+                    specialty: capGR.getValue('specialty') || 'general',
+                    current_task_count: current,
+                    max_concurrent_tasks: max,
+                    priority_score: parseInt(capGR.getValue('priority_score')) || 0,
+                    last_activity: capGR.getValue('last_location_update')
+                });
+            }
+        }
+        
+        // 兜底逻辑：如果能力表没有数据，从角色表查找
+        if (volunteers.length === 0) {
+            volunteers = this._getVolunteersFromRoles(excludeUsers);
+        }
+        
+        return volunteers;
+    },
+    
+    _getVolunteersFromRoles: function(excludeUsers) {
+        var volunteers = [];
+        var roleGR = new GlideRecord('sys_user_has_role');
+        // ✅ Scope 修正: 加上了 _0，匹配截图中的 Scope ID
+        roleGR.addQuery('role.name', 'x_1821654_kokoro_0.volunteer'); 
+        roleGR.query();
+        
+        var userIds = [];
+        while (roleGR.next()) {
+            var userId = roleGR.getValue('user');
+            if (excludeUsers.indexOf(userId) === -1) {
+                userIds.push(userId);
+            }
+        }
+        
+        if (userIds.length > 0) {
+            var userGR = new GlideRecord('sys_user');
+            userGR.addQuery('sys_id', 'IN', userIds.join(','));
+            userGR.addQuery('active', true);
+            userGR.query();
+            
+            while (userGR.next()) {
+                var taskCount = this._getVolunteerActiveTaskCount(userGR.getUniqueValue());
+                if (taskCount < this.CONFIG.defaults.MAX_TASKS) {
+                    volunteers.push({
+                        sys_id: userGR.getUniqueValue(),
+                        name: userGR.getDisplayValue('name'),
+                        current_zone: '',
+                        skills: [],
+                        specialty: 'general',
+                        current_task_count: taskCount,
+                        max_concurrent_tasks: this.CONFIG.defaults.MAX_TASKS,
+                        priority_score: 0,
+                        last_activity: null
+                    });
+                }
+            }
+        }
+        
+        return volunteers;
+    },
+    
+    _calculateScore: function(volunteer, wishInfo) {
+        var weights = this.CONFIG.weights;
+        var breakdown = { zone: 0, load: 0, skill: 0, specialty: 0, activity: 0, priority: 0 };
+        
+        // 区域评分
+        if (volunteer.current_zone === wishInfo.zone) {
+            breakdown.zone = weights.SAME_ZONE;
+        } else if (this._isAdjacentZone(volunteer.current_zone, wishInfo.zone)) {
+            breakdown.zone = weights.ADJACENT_ZONE;
+        }
+        
+        // 负载评分
+        var loadRatio = volunteer.current_task_count / volunteer.max_concurrent_tasks;
+        if (loadRatio < 0.3) {
+            breakdown.load = weights.LOW_LOAD;
+        } else if (loadRatio < 0.6) {
+            breakdown.load = weights.MEDIUM_LOAD;
+        }
+        
+        // 技能评分
+        var requiredSkills = this.CONFIG.skillMapping[wishInfo.category] || [];
+        if (requiredSkills.length > 0) {
+            for (var i = 0; i < requiredSkills.length; i++) {
+                if (volunteer.skills.indexOf(requiredSkills[i]) !== -1) {
+                    breakdown.skill = weights.SKILL_MATCH;
+                    break;
+                }
+            }
+        } else {
+            breakdown.skill = weights.SKILL_PARTIAL;
+        }
+        
+        // 专长评分
+        var requiredSpecialty = this.CONFIG.specialtyMapping[wishInfo.category] || 'general';
+        if (volunteer.specialty === requiredSpecialty) {
+            breakdown.specialty = 15;
+        }
+        
+        // 活跃度评分
+        if ((wishInfo.urgency === 'Critical' || wishInfo.urgency === 'High') && volunteer.last_activity) {
+            var lastUpdate = new GlideDateTime(volunteer.last_activity);
+            var now = new GlideDateTime();
+            var diffMinutes = gs.dateDiff(lastUpdate.getValue(), now.getValue(), true) / 60;
+            if (diffMinutes < 30) {
+                breakdown.activity = weights.RECENT_ACTIVITY;
+            }
+        }
+        
+        // 优先分数
+        breakdown.priority = Math.round(volunteer.priority_score * weights.PRIORITY_MULTIPLIER);
+        
+        var total = breakdown.zone + breakdown.load + breakdown.skill + 
+                    breakdown.specialty + breakdown.activity + breakdown.priority;
+        
+        return { total: total, breakdown: breakdown };
+    },
+    
+    _isAdjacentZone: function(zone1, zone2) {
+        if (!zone1 || !zone2) return false;
+        var adjacent = this.CONFIG.zoneAdjacency[zone1];
+        return adjacent && adjacent.indexOf(zone2) !== -1;
+    },
+    
+    _parseSkills: function(skillsStr) {
+        if (!skillsStr) return [];
+        return String(skillsStr).split(',').map(function(s) { return s.trim().toLowerCase(); });
+    },
+    
+    _getVolunteerActiveTaskCount: function(volunteerId) {
+        var ga = new GlideAggregate(this.CONFIG.tables.SILENT_WISH);
+        ga.addQuery('assigned_to', volunteerId);
+        ga.addQuery('state', 'IN', '11,2'); // 11=Assigned, 2=In Progress
+        ga.addAggregate('COUNT');
+        ga.query();
+        return ga.next() ? parseInt(ga.getAggregate('COUNT')) || 0 : 0;
+    },
+    
+    _updateVolunteerTaskCount: function(volunteerId, delta) {
+        var capGR = new GlideRecord(this.CONFIG.tables.CAPABILITY);
+        capGR.addQuery('volunteer', volunteerId);
+        capGR.query();
+        if (capGR.next()) {
+            var count = Math.max(0, (parseInt(capGR.getValue('current_task_count')) || 0) + delta);
+            capGR.setValue('current_task_count', count);
+            capGR.update();
+        }
+    },
+    
+    _recordAssignmentHistory: function(wishSysId, assigneeId, type, score, reason, previousAssignee) {
+        try {
+            var histGR = new GlideRecord(this.CONFIG.tables.ASSIGNMENT_HISTORY);
+            histGR.initialize();
+            histGR.setValue('wish', wishSysId);
+            histGR.setValue('assigned_to', assigneeId);
+            histGR.setValue('assigned_by', gs.getUserID());
+            histGR.setValue('assignment_type', type);
+            histGR.setValue('assignment_score', score);
+            histGR.setValue('assignment_reason', reason);
+            histGR.setValue('timestamp', new GlideDateTime());
+            if (previousAssignee) histGR.setValue('previous_assignee', previousAssignee);
+            histGR.insert();
+        } catch (e) {
+            gs.error('[KokoroAutoAssign] History error: ' + e.message);
+        }
+    },
+    
+    updateVolunteerLocation: function(volunteerId, zone) {
+        var capGR = new GlideRecord(this.CONFIG.tables.CAPABILITY);
+        capGR.addQuery('volunteer', volunteerId);
+        capGR.query();
+        
+        if (capGR.next()) {
+            capGR.setValue('current_zone', zone);
+            capGR.setValue('last_location_update', new GlideDateTime());
+            capGR.update();
+        } else {
+            capGR.initialize();
+            capGR.setValue('volunteer', volunteerId);
+            capGR.setValue('current_zone', zone);
+            capGR.setValue('is_available', true);
+            capGR.setValue('max_concurrent_tasks', this.CONFIG.defaults.MAX_TASKS);
+            capGR.setValue('current_task_count', 0);
+            capGR.setValue('last_location_update', new GlideDateTime());
+            capGR.insert();
+        }
+    },
+    
+    setVolunteerAvailability: function(volunteerId, available) {
+        var capGR = new GlideRecord(this.CONFIG.tables.CAPABILITY);
+        capGR.addQuery('volunteer', volunteerId);
+        capGR.query();
+        if (capGR.next()) {
+            capGR.setValue('is_available', available);
+            capGR.update();
+        }
+    },
+    
+    onTaskCompleted: function(wishSysId) {
+        var wishGR = new GlideRecord(this.CONFIG.tables.SILENT_WISH);
+        if (wishGR.get(wishSysId) && !wishGR.assigned_to.nil()) {
+            this._updateVolunteerTaskCount(wishGR.getValue('assigned_to'), -1);
+        }
+    },
+    
+    type: 'KokoroAutoAssignment'
+};]]></script>
+        <sys_class_name>sys_script_include</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-28 05:48:48</sys_created_on>
+        <sys_id>974158d0837a3210f6b1fb96feaad3ed</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>KokoroAutoAssignment</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy>read</sys_policy>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_script_include_974158d0837a3210f6b1fb96feaad3ed</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-28 05:48:48</sys_updated_on>
+    </sys_script_include>
+</record_update>

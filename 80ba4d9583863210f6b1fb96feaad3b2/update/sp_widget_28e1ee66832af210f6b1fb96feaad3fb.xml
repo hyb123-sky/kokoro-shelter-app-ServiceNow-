@@ -1,0 +1,2187 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sp_widget">
+    <sp_widget action="INSERT_OR_UPDATE">
+        <category>custom</category>
+        <client_script><![CDATA[function($scope, $timeout, $interval, spUtil) {
+  var c = this;
+  
+  // ========================================
+  // 初始化配置
+  // ========================================
+  c.loading = true;
+  c.isDarkMode = true;
+  c.is3D = false;
+  c.autoRefresh = true;
+  c.urgencyFilter = '';
+  c.selectedRequest = null;
+  c.map = null;
+  c.markers = {};
+  
+  // 翻译字典
+  c.dict = {
+    'Water': ']]>💧<![CDATA[ 飲料水',
+    'Food': ']]>🍞<![CDATA[ 食料',
+    'Medical': ']]>💊<![CDATA[ 医療・薬',
+    'Baby': ']]>👶<![CDATA[ 乳幼児用品',
+    'Power': ']]>🔋<![CDATA[ 電源・充電',
+    'Other': ']]>📦<![CDATA[ その他',
+    'Critical': ']]>🔴<![CDATA[ 限界',
+    'High': ']]>🟠<![CDATA[ 困っている',
+    'Medium': ']]>🟡<![CDATA[ 普通',
+    'Low': ']]>🟢<![CDATA[ 急ぎません',
+    'Family Area': 'ファミリーエリア',
+    'Single Area': '単身エリア',
+    'Medical Area': '医療・ケアエリア'
+  };
+  
+  // 统计数据
+  c.stats = {
+    critical: 0,
+    pending: 0,
+    inProgress: 0
+  };
+  
+  // ========================================
+  // 地图初始化
+  // ========================================
+  function initMap() {
+    console.log(']]>🚀<![CDATA[ Initializing map...');
+    
+    // 检查 Mapbox 是否已加载
+    if (typeof mapboxgl === 'undefined') {
+      console.log('⏳ Mapbox GL JS not loaded, loading now...');
+      loadMapboxLibrary();
+      return;
+    }
+    
+    console.log('✅ Mapbox GL JS already loaded');
+    
+    // 从服务器获取 Token
+    c.server.get().then(function(response) {
+      console.log(']]>📡<![CDATA[ Server response:', response.data);
+      
+      if (response.data.error) {
+        console.error('❌ Server error:', response.data.error);
+        c.loading = false;
+        spUtil.addErrorMessage(response.data.error);
+        return;
+      }
+      
+      if (response.data.mapbox_token) {
+        console.log('✅ Token received (length: ' + response.data.mapbox_token.length + ')');
+        createMap(response.data.mapbox_token);
+      } else {
+        console.error('❌ No Mapbox token in response');
+        c.loading = false;
+        spUtil.addErrorMessage('Mapbox Token が設定されていません。System Property を確認してください。');
+      }
+    }).catch(function(error) {
+      console.error('❌ Server request failed:', error);
+      c.loading = false;
+      spUtil.addErrorMessage('サーバーとの通信に失敗しました');
+    });
+  }
+  
+  function loadMapboxLibrary() {
+    // 动态加载 Mapbox GL JS
+    var link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css';
+    document.head.appendChild(link);
+    
+    var script = document.createElement('script');
+    script.src = 'https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js';
+    script.onload = function() {
+      console.log('✅ Mapbox GL JS loaded dynamically');
+      $timeout(initMap, 500);
+    };
+    script.onerror = function() {
+      console.error('❌ Failed to load Mapbox GL JS');
+      c.loading = false;
+      spUtil.addErrorMessage('Mapbox ライブラリの読み込みに失敗しました');
+      $scope.$apply();
+    };
+    document.head.appendChild(script);
+  }
+  
+  function createMap(token) {
+    console.log(']]>🗺<![CDATA[️ Creating map with token...');
+    
+    try {
+      mapboxgl.accessToken = token;
+      
+      c.map = new mapboxgl.Map({
+        container: 'kokoro-map',
+        style: c.isDarkMode ? 
+          'mapbox://styles/mapbox/dark-v10' : 
+          'mapbox://styles/mapbox/streets-v11',
+        center: [139.6917, 35.6895], // 东京中心
+        zoom: 11,
+        pitch: c.is3D ? 60 : 0,
+        bearing: c.is3D ? -17.6 : 0
+      });
+      
+      console.log('✅ Map instance created');
+      
+      // 添加导航控制
+      c.map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+      
+      // 添加全屏控制
+      c.map.addControl(new mapboxgl.FullscreenControl(), 'top-right');
+      
+      // 添加定位控制
+      c.map.addControl(new mapboxgl.GeolocateControl({
+        positionOptions: {
+          enableHighAccuracy: true
+        },
+        trackUserLocation: true,
+        showUserHeading: true
+      }), 'top-right');
+      
+      // 地图加载完成
+      c.map.on('load', function() {
+        console.log('✅ Map loaded successfully');
+        c.loading = false;
+        $scope.$apply();
+        
+        // 加载请求数据
+        loadRequests();
+        
+        // 添加发光效果层
+        addGlowLayer();
+      });
+      
+      // 地图错误处理
+      c.map.on('error', function(e) {
+        console.error('❌ Map error:', e);
+        c.loading = false;
+        spUtil.addErrorMessage('地図の読み込みに失敗しました: ' + (e.error ? e.error.message : ''));
+        $scope.$apply();
+      });
+      
+    } catch (error) {
+      console.error('❌ Exception creating map:', error);
+      c.loading = false;
+      spUtil.addErrorMessage('地図の初期化に失敗しました: ' + error.message);
+      $scope.$apply();
+    }
+  }
+  
+  // ========================================
+  // 加载请求数据
+  // ========================================
+  function loadRequests() {
+    console.log(']]>📡<![CDATA[ Loading requests...');
+    
+    c.server.get({
+      action: 'get_map_requests',
+      urgency_filter: c.urgencyFilter
+    }).then(function(response) {
+      console.log(']]>📦<![CDATA[ Received data:', response.data);
+      
+      if (response.data && response.data.requests) {
+        console.log('✅ Found ' + response.data.requests.length + ' requests');
+        updateMarkers(response.data.requests);
+        updateStats(response.data.stats);
+      } else {
+        console.warn('⚠️ No requests data in response');
+      }
+    }).catch(function(error) {
+      console.error('❌ Failed to load requests:', error);
+    });
+  }
+  
+  // ========================================
+  // 更新地图标记
+  // ========================================
+  function updateMarkers(requests) {
+    console.log(']]>🎯<![CDATA[ Updating markers for ' + requests.length + ' requests');
+    
+    // 清除不存在的旧标记
+    Object.keys(c.markers).forEach(function(id) {
+      if (!requests.find(function(r) { return r.sys_id === id; })) {
+        console.log(']]>🗑<![CDATA[️ Removing old marker:', id);
+        c.markers[id].remove();
+        delete c.markers[id];
+      }
+    });
+    
+    // 添加/更新标记
+    var addedCount = 0;
+    requests.forEach(function(req) {
+      if (req.latitude && req.longitude) {
+        if (c.markers[req.sys_id]) {
+          // 更新现有标记
+          c.markers[req.sys_id].request = req;
+        } else {
+          // 创建新标记
+          createMarker(req);
+          addedCount++;
+        }
+      } else {
+        console.warn('⚠️ Request ' + req.number + ' has no coordinates');
+      }
+    });
+    
+    console.log('✅ Added ' + addedCount + ' new markers');
+    console.log(']]>📍<![CDATA[ Total markers on map: ' + Object.keys(c.markers).length);
+  }
+  
+  function createMarker(req) {
+    // ]]>🔧<![CDATA[ 增强错误处理
+    if (!c.map) {
+      console.error('❌ Cannot create marker: map is null');
+      return;
+    }
+    
+    console.log(']]>📍<![CDATA[ Creating marker for ' + req.number + ' at [' + req.latitude + ', ' + req.longitude + ']');
+    
+    try {
+      // 创建自定义标记元素
+      var el = document.createElement('div');
+      el.className = 'custom-marker';
+      
+      // 添加脉冲动画（Critical级别）
+      if (req.urgency === 'Critical') {
+        el.classList.add('marker-pulse');
+      }
+      
+      el.innerHTML = getMarkerHTML(req);
+      
+      // 创建标记
+      var marker = new mapboxgl.Marker({
+        element: el,
+        anchor: 'bottom'
+      })
+        .setLngLat([req.longitude, req.latitude])
+        .addTo(c.map);
+      
+      // 点击事件
+      el.addEventListener('click', function() {
+        console.log(']]>👆<![CDATA[ Marker clicked:', req.number);
+        selectRequest(req);
+      });
+      
+      // 保存引用
+      c.markers[req.sys_id] = marker;
+      c.markers[req.sys_id].request = req;
+      
+      console.log('✅ Marker created successfully for ' + req.number);
+      
+    } catch (error) {
+      console.error('❌ Error creating marker for ' + req.number + ':', error);
+    }
+  }
+  
+  function getMarkerHTML(req) {
+    var icons = {
+      'Water': ']]>💧<![CDATA[',
+      'Food': ']]>🍞<![CDATA[',
+      'Medical': ']]>💊<![CDATA[',
+      'Baby': ']]>👶<![CDATA[',
+      'Power': ']]>🔋<![CDATA[',
+      'Other': ']]>📦<![CDATA['
+    };
+    
+    var urgencyColors = {
+      'Critical': '#ff1744',
+      'High': '#ff9800',
+      'Medium': '#ffc107',
+      'Low': '#4caf50'
+    };
+    
+    return '<div class="marker-icon" style="background: ' + 
+           urgencyColors[req.urgency] + '">' +
+           icons[req.category] +
+           '</div>';
+  }
+  
+  // ========================================
+  // 选择请求
+  // ========================================
+  function selectRequest(req) {
+    c.selectedRequest = req;
+    console.log(']]>🎯<![CDATA[ Selected request:', req.number);
+    
+    // ]]>🔧<![CDATA[ 增强错误处理
+    if (!c.map) {
+      console.error('❌ Cannot fly to location: map is null');
+      return;
+    }
+    
+    // 飞行到选中位置
+    c.map.flyTo({
+      center: [req.longitude, req.latitude],
+      zoom: 15,
+      pitch: 60,
+      bearing: -17.6,
+      duration: 2000,
+      essential: true
+    });
+    
+    $scope.$apply();
+  }
+  
+  c.closeDetails = function() {
+    console.log(']]>🚪<![CDATA[ Closing details panel');
+    c.selectedRequest = null;
+    
+    // ]]>🔧<![CDATA[ 增强错误处理
+    if (!c.map) {
+      console.error('❌ Cannot reset view: map is null');
+      return;
+    }
+    
+    // 恢复视角
+    c.map.flyTo({
+      center: [139.6917, 35.6895],
+      zoom: 11,
+      pitch: c.is3D ? 60 : 0,
+      bearing: c.is3D ? -17.6 : 0,
+      duration: 1500
+    });
+  };
+  
+  // ========================================
+  // 控制按钮功能
+  // ========================================
+  c.toggleMapStyle = function() {
+    if (!c.map) {
+      console.error('❌ Cannot toggle style: map is null');
+      return;
+    }
+    
+    c.isDarkMode = !c.isDarkMode;
+    console.log(']]>🎨<![CDATA[ Switching to ' + (c.isDarkMode ? 'dark' : 'light') + ' mode');
+    
+    c.map.setStyle(c.isDarkMode ? 
+      'mapbox://styles/mapbox/dark-v10' :
+      'mapbox://styles/mapbox/streets-v11'
+    );
+    
+    // 样式切换后重新添加标记
+    c.map.once('styledata', function() {
+      console.log('✅ Style changed, re-adding glow layer');
+      addGlowLayer();
+    });
+  };
+  
+  c.toggle3D = function() {
+    if (!c.map) {
+      console.error('❌ Cannot toggle 3D: map is null');
+      return;
+    }
+    
+    c.is3D = !c.is3D;
+    console.log(']]>🎬<![CDATA[ Switching to ' + (c.is3D ? '3D' : '2D') + ' view');
+    
+    c.map.easeTo({
+      pitch: c.is3D ? 60 : 0,
+      bearing: c.is3D ? -17.6 : 0,
+      duration: 1000
+    });
+  };
+  
+  c.toggleAutoRefresh = function() {
+    c.autoRefresh = !c.autoRefresh;
+    console.log(']]>🔄<![CDATA[ Auto-refresh ' + (c.autoRefresh ? 'enabled' : 'disabled'));
+    
+    if (c.autoRefresh) {
+      startAutoRefresh();
+    } else {
+      stopAutoRefresh();
+    }
+  };
+  
+  function startAutoRefresh() {
+    c.refreshInterval = $interval(function() {
+      console.log(']]>🔄<![CDATA[ Auto-refreshing data...');
+      loadRequests();
+    }, 10000);
+  }
+  
+  function stopAutoRefresh() {
+    if (c.refreshInterval) {
+      $interval.cancel(c.refreshInterval);
+      c.refreshInterval = null;
+    }
+  }
+  
+  c.applyFilter = function() {
+    console.log(']]>🔍<![CDATA[ Applying filter:', c.urgencyFilter);
+    loadRequests();
+  };
+  
+  // ========================================
+  // 操作按钮
+  // ========================================
+  c.assignToMe = function(req) {
+    if (!confirm('このリクエストを担当しますか？')) {
+      return;
+    }
+    
+    console.log('✋ Assigning request:', req.number);
+    
+    c.server.get({
+      action: 'assign_to_me',
+      sys_id: req.sys_id
+    }).then(function(response) {
+      if (response.data.success) {
+        console.log('✅ Assignment successful');
+        spUtil.addInfoMessage('任務を開始しました！');
+        c.closeDetails();
+        loadRequests();
+      } else {
+        console.error('❌ Assignment failed:', response.data.error);
+        spUtil.addErrorMessage(response.data.error || 'エラーが発生しました');
+      }
+    }).catch(function(error) {
+      console.error('❌ Assignment request failed:', error);
+      spUtil.addErrorMessage('通信エラーが発生しました');
+    });
+  };
+  
+  c.openDirections = function(req) {
+    console.log(']]>🧭<![CDATA[ Opening directions to:', req.number);
+    var url = 'https://www.google.com/maps/dir/?api=1&destination=' +
+              req.latitude + ',' + req.longitude;
+    window.open(url, '_blank');
+  };
+  
+  // ========================================
+  // 发光效果层
+  // ========================================
+  function addGlowLayer() {
+    if (!c.map) {
+      console.error('❌ Cannot add glow layer: map is null');
+      return;
+    }
+    
+    try {
+      // 检查图层是否已存在
+      if (c.map.getLayer('glow-layer')) {
+        console.log('ℹ️ Glow layer already exists');
+        return;
+      }
+      
+      console.log('✨ Adding glow layer');
+      
+      // 添加空的数据源
+      c.map.addSource('glow-points', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: []
+        }
+      });
+      
+      // 添加发光圆圈层
+      c.map.addLayer({
+        id: 'glow-layer',
+        type: 'circle',
+        source: 'glow-points',
+        paint: {
+          'circle-radius': 40,
+          'circle-color': '#00ffff',
+          'circle-opacity': 0.2,
+          'circle-blur': 1
+        }
+      });
+      
+      console.log('✅ Glow layer added');
+      
+    } catch (error) {
+      console.error('❌ Error adding glow layer:', error);
+    }
+  }
+  
+  // ========================================
+  // 更新统计数据
+  // ========================================
+  function updateStats(stats) {
+    if (stats) {
+      c.stats = stats;
+      console.log(']]>📊<![CDATA[ Stats updated:', stats);
+    }
+  }
+  
+  // ========================================
+  // 初始化执行
+  // ========================================
+  console.log(']]>🚀<![CDATA[ Starting Kokoro Live Map initialization');
+  
+  $timeout(function() {
+    initMap();
+    
+    // 启动自动刷新
+    if (c.autoRefresh) {
+      startAutoRefresh();
+    }
+  }, 500);
+  
+  // ========================================
+  // 清理
+  // ========================================
+  $scope.$on('$destroy', function() {
+    console.log(']]>🧹<![CDATA[ Cleaning up...');
+    stopAutoRefresh();
+    
+    if (c.map) {
+      c.map.remove();
+      c.map = null;
+    }
+  });
+}]]></client_script>
+        <controller_as>c</controller_as>
+        <css>/* ========================================
+   KOKORO LIVE MAP - INDUSTRIAL MINIMALISM
+   白色金属质感 · 工业极简主义
+   ======================================== */
+
+.kokoro-map-container {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: #f8f9fa;
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow: hidden;
+  z-index: 1000;
+  
+  /* 金属质感噪点纹理 */
+  background-image: 
+    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.008) 2px, rgba(0,0,0,0.008) 4px),
+    repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(0,0,0,0.008) 2px, rgba(0,0,0,0.008) 4px);
+}
+
+/* ========================================
+   顶部控制栏 - HUD 风格
+   ======================================== */
+.map-controls {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 100%);
+  backdrop-filter: blur(20px) saturate(180%);
+  padding: 20px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 100;
+  border-bottom: 1px solid rgba(0,0,0,0.12);
+  box-shadow: 
+    0 1px 0 0 rgba(255,255,255,0.8) inset,
+    0 4px 20px -2px rgba(0,0,0,0.08);
+  
+  /* 切角效果 */
+  clip-path: polygon(
+    0 0,
+    calc(100% - 20px) 0,
+    100% 20px,
+    100% 100%,
+    0 100%
+  );
+}
+
+.map-title {
+  color: #1a1a1a;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  text-transform: uppercase;
+  
+  /* 装饰性编号 */
+  position: relative;
+}
+
+.map-title::before {
+  content: '//';
+  color: #666;
+  font-size: 0.9rem;
+  font-weight: 400;
+  margin-right: -8px;
+}
+
+.map-title i {
+  color: #333;
+  font-size: 1.2rem;
+}
+
+.live-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.65rem;
+  color: #1a1a1a;
+  font-weight: 700;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
+  border: 1px solid rgba(0,0,0,0.15);
+  letter-spacing: 1.5px;
+  
+  /* 切角 */
+  clip-path: polygon(
+    6px 0,
+    100% 0,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0 100%,
+    0 6px
+  );
+  
+  box-shadow: 
+    0 1px 3px rgba(0,0,0,0.08),
+    0 0 0 1px rgba(255,255,255,0.5) inset;
+}
+
+.pulse-dot {
+  width: 6px;
+  height: 6px;
+  background: #1a1a1a;
+  border-radius: 50%;
+  animation: pulseMetal 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
+}
+
+@keyframes pulseMetal {
+  0%, 100% { 
+    transform: scale(1); 
+    opacity: 1;
+  }
+  50% { 
+    transform: scale(1.2); 
+    opacity: 0.6;
+  }
+}
+
+.control-buttons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.map-btn {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  border: 1px solid rgba(0,0,0,0.15);
+  color: #1a1a1a;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.3px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: uppercase;
+  
+  /* 矩形切角 */
+  clip-path: polygon(
+    4px 0,
+    100% 0,
+    100% calc(100% - 4px),
+    calc(100% - 4px) 100%,
+    0 100%,
+    0 4px
+  );
+  
+  box-shadow: 
+    0 1px 2px rgba(0,0,0,0.08),
+    0 0 0 1px rgba(255,255,255,0.5) inset;
+}
+
+.map-btn:hover {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  transform: translateY(-1px);
+  box-shadow: 
+    0 2px 4px rgba(0,0,0,0.12),
+    0 0 0 1px rgba(255,255,255,0.5) inset;
+}
+
+.map-btn:active {
+  transform: translateY(0);
+}
+
+.map-btn.active {
+  background: linear-gradient(135deg, #1a1a1a 0%, #333 100%);
+  color: #fff;
+  border-color: #1a1a1a;
+  box-shadow: 
+    0 2px 6px rgba(0,0,0,0.25),
+    0 0 0 1px rgba(255,255,255,0.1) inset;
+}
+
+.map-btn i {
+  font-size: 1rem;
+}
+
+.map-select {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  border: 1px solid rgba(0,0,0,0.15);
+  color: #1a1a1a;
+  padding: 10px 18px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  outline: none;
+  text-transform: uppercase;
+  
+  /* 切角 */
+  clip-path: polygon(
+    4px 0,
+    100% 0,
+    100% calc(100% - 4px),
+    calc(100% - 4px) 100%,
+    0 100%,
+    0 4px
+  );
+  
+  box-shadow: 
+    0 1px 2px rgba(0,0,0,0.08),
+    0 0 0 1px rgba(255,255,255,0.5) inset;
+}
+
+.map-select:hover {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.map-select option {
+  background: #fff;
+  color: #1a1a1a;
+}
+
+/* ========================================
+   地图画布
+   ======================================== */
+.map-canvas {
+  position: absolute;
+  top: 80px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+}
+
+/* ========================================
+   侧边栏 - 数据面板
+   ======================================== */
+.map-sidebar {
+  position: absolute;
+  top: 100px;
+  right: 30px;
+  width: 420px;
+  max-height: calc(100vh - 140px);
+  background: linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(248,249,250,0.98) 100%);
+  backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid rgba(0,0,0,0.15);
+  box-shadow: 
+    0 20px 60px rgba(0,0,0,0.15),
+    0 0 0 1px rgba(255,255,255,0.5) inset,
+    0 1px 0 0 rgba(255,255,255,0.8) inset;
+  z-index: 50;
+  overflow: hidden;
+  
+  /* 切角 */
+  clip-path: polygon(
+    0 0,
+    calc(100% - 30px) 0,
+    100% 30px,
+    100% 100%,
+    30px 100%,
+    0 calc(100% - 30px)
+  );
+}
+
+.map-sidebar.slide-in {
+  animation: slideInMetal 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slideInMetal {
+  from {
+    transform: translateX(480px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.sidebar-header {
+  background: linear-gradient(135deg, #1a1a1a 0%, #333 100%);
+  padding: 20px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  position: relative;
+}
+
+/* 装饰性条纹 */
+.sidebar-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255,255,255,0.1) 0px,
+    rgba(255,255,255,0.1) 10px,
+    transparent 10px,
+    transparent 20px
+  );
+}
+
+.sidebar-header h3 {
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-family: 'Courier New', monospace;
+}
+
+.close-btn {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  width: 32px;
+  height: 32px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  /* 切角 */
+  clip-path: polygon(
+    4px 0,
+    100% 0,
+    100% calc(100% - 4px),
+    calc(100% - 4px) 100%,
+    0 100%,
+    0 4px
+  );
+}
+
+.close-btn:hover {
+  background: rgba(255,255,255,0.2);
+  transform: scale(1.1);
+}
+
+.sidebar-content {
+  padding: 30px;
+  overflow-y: auto;
+  max-height: calc(100vh - 300px);
+}
+
+/* 精细滚动条 */
+.sidebar-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-content::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.03);
+}
+
+.sidebar-content::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2);
+  border-radius: 2px;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0,0,0,0.3);
+}
+
+/* ========================================
+   紧急度标识 - 极简设计
+   ======================================== */
+.urgency-badge {
+  display: inline-block;
+  padding: 12px 24px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  margin-bottom: 24px;
+  width: 100%;
+  text-align: left;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  position: relative;
+  
+  /* 切角 */
+  clip-path: polygon(
+    8px 0,
+    100% 0,
+    100% calc(100% - 8px),
+    calc(100% - 8px) 100%,
+    0 100%,
+    0 8px
+  );
+}
+
+/* 装饰性编号 */
+.urgency-badge::before {
+  content: '//';
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.7rem;
+  opacity: 0.4;
+}
+
+.urgency-Critical {
+  background: linear-gradient(135deg, #1a1a1a 0%, #333 100%);
+  color: #fff;
+  border: 2px solid #d32f2f;
+  box-shadow: 
+    0 0 20px rgba(211, 47, 47, 0.3),
+    0 4px 12px rgba(0,0,0,0.2);
+  animation: urgencyPulseMetal 3s ease-in-out infinite;
+}
+
+.urgency-High {
+  background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+  color: #1a1a1a;
+  border: 2px solid #f57c00;
+  box-shadow: 0 2px 8px rgba(245, 124, 0, 0.15);
+}
+
+.urgency-Medium {
+  background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+  color: #1a1a1a;
+  border: 2px solid #fbc02d;
+  box-shadow: 0 2px 8px rgba(251, 192, 45, 0.15);
+}
+
+.urgency-Low {
+  background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+  color: #1a1a1a;
+  border: 2px solid #689f38;
+  box-shadow: 0 2px 8px rgba(104, 159, 56, 0.15);
+}
+
+@keyframes urgencyPulseMetal {
+  0%, 100% { 
+    border-color: #d32f2f;
+    box-shadow: 
+      0 0 20px rgba(211, 47, 47, 0.3),
+      0 4px 12px rgba(0,0,0,0.2);
+  }
+  50% { 
+    border-color: #ff5252;
+    box-shadow: 
+      0 0 30px rgba(255, 82, 82, 0.5),
+      0 4px 12px rgba(0,0,0,0.2);
+  }
+}
+
+/* ========================================
+   信息区域 - HUD 数据显示
+   ======================================== */
+.info-section {
+  background: linear-gradient(135deg, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0.01) 100%);
+  border: 1px solid rgba(0,0,0,0.08);
+  padding: 20px;
+  margin-bottom: 24px;
+  position: relative;
+  
+  /* 切角 */
+  clip-path: polygon(
+    12px 0,
+    100% 0,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    0 100%,
+    0 12px
+  );
+}
+
+/* 装饰性网格 */
+.info-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    repeating-linear-gradient(0deg, transparent, transparent 10px, rgba(0,0,0,0.01) 10px, rgba(0,0,0,0.01) 11px),
+    repeating-linear-gradient(90deg, transparent, transparent 10px, rgba(0,0,0,0.01) 10px, rgba(0,0,0,0.01) 11px);
+  pointer-events: none;
+}
+
+.info-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  color: #1a1a1a;
+  font-size: 0.95rem;
+  position: relative;
+  font-weight: 500;
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-row i {
+  color: #333;
+  width: 20px;
+  text-align: center;
+  margin-top: 2px;
+  flex-shrink: 0;
+  font-size: 0.9rem;
+}
+
+.info-row strong {
+  font-weight: 700;
+  color: #000;
+}
+
+.info-row.coordinates {
+  font-family: 'SF Mono', 'Courier New', monospace;
+  font-size: 0.85rem;
+  color: #555;
+  background: rgba(0,0,0,0.03);
+  padding: 12px 14px;
+  margin: 8px -20px;
+  border-bottom: none;
+}
+
+.info-row .remarks {
+  font-style: normal;
+  color: #555;
+  line-height: 1.6;
+  background: rgba(251, 192, 45, 0.08);
+  padding: 8px 12px;
+  margin: 4px -4px;
+  border-left: 3px solid #fbc02d;
+}
+
+/* ========================================
+   操作按钮 - 工业设计
+   ======================================== */
+.sidebar-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.action-btn {
+  flex: 1;
+  padding: 14px;
+  border: none;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  
+  /* 切角 */
+  clip-path: polygon(
+    8px 0,
+    100% 0,
+    100% calc(100% - 8px),
+    calc(100% - 8px) 100%,
+    0 100%,
+    0 8px
+  );
+}
+
+.action-btn.primary {
+  background: linear-gradient(135deg, #1a1a1a 0%, #333 100%);
+  color: #fff;
+  box-shadow: 
+    0 4px 12px rgba(0,0,0,0.25),
+    0 0 0 1px rgba(255,255,255,0.1) inset;
+}
+
+.action-btn.primary:hover {
+  background: linear-gradient(135deg, #333 0%, #444 100%);
+  transform: translateY(-2px);
+  box-shadow: 
+    0 6px 16px rgba(0,0,0,0.3),
+    0 0 0 1px rgba(255,255,255,0.1) inset;
+}
+
+.action-btn.primary:active {
+  transform: translateY(0);
+}
+
+.action-btn.secondary {
+  background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+  border: 2px solid #1a1a1a;
+  color: #1a1a1a;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+.action-btn.secondary:hover {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+}
+
+/* ========================================
+   统计面板 - 数据 HUD (增强可见性)
+   ======================================== */
+.stats-panel {
+  position: absolute;
+  bottom: 30px;
+  left: 30px;
+  display: flex;
+  gap: 16px;
+  z-index: 50;
+}
+
+.stat-item {
+  background: linear-gradient(135deg, rgba(0,0,0,0.95) 0%, rgba(26,26,26,0.95) 100%);
+  backdrop-filter: blur(30px) saturate(180%);
+  border: 2px solid rgba(255,255,255,0.2);
+  padding: 20px 28px;
+  min-width: 140px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  
+  /* 切角 */
+  clip-path: polygon(
+    12px 0,
+    100% 0,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    0 100%,
+    0 12px
+  );
+  
+  box-shadow: 
+    0 8px 32px rgba(0,0,0,0.8),
+    0 0 0 1px rgba(255,255,255,0.1) inset,
+    0 1px 0 0 rgba(255,255,255,0.15) inset;
+}
+
+.stat-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 
+    0 12px 40px rgba(0,0,0,0.9),
+    0 0 0 1px rgba(255,255,255,0.15) inset;
+  border-color: rgba(255,255,255,0.3);
+  background: linear-gradient(135deg, rgba(0,0,0,0.98) 0%, rgba(26,26,26,0.98) 100%);
+}
+
+/* 左侧装饰条 */
+.stat-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 4px;
+}
+
+.stat-item.critical::before {
+  background: linear-gradient(180deg, #ff5252 0%, #d32f2f 100%);
+  box-shadow: 0 0 16px rgba(255, 82, 82, 0.8);
+}
+
+.stat-item.pending::before {
+  background: linear-gradient(180deg, #ffeb3b 0%, #fbc02d 100%);
+  box-shadow: 0 0 16px rgba(255, 235, 59, 0.8);
+}
+
+.stat-item.active::before {
+  background: linear-gradient(180deg, #ffffff 0%, #e0e0e0 100%);
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.8);
+}
+
+/* 几何图标 - 代替 emoji */
+.stat-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* Critical 图标 - 六边形警告 */
+.stat-item.critical .stat-icon::before {
+  content: '';
+  width: 32px;
+  height: 32px;
+  background: #d32f2f;
+  clip-path: polygon(
+    50% 0%,
+    100% 25%,
+    100% 75%,
+    50% 100%,
+    0% 75%,
+    0% 25%
+  );
+  box-shadow: 0 0 20px rgba(211, 47, 47, 1);
+}
+
+.stat-item.critical .stat-icon::after {
+  content: '!';
+  position: absolute;
+  color: #fff;
+  font-size: 1.4rem;
+  font-weight: 900;
+  text-shadow: 0 0 8px rgba(255,255,255,0.8);
+}
+
+/* Pending 图标 - 旋转方块 */
+.stat-item.pending .stat-icon::before {
+  content: '';
+  width: 28px;
+  height: 28px;
+  background: #fbc02d;
+  clip-path: polygon(
+    8px 0,
+    100% 0,
+    100% calc(100% - 8px),
+    calc(100% - 8px) 100%,
+    0 100%,
+    0 8px
+  );
+  transform: rotate(45deg);
+  box-shadow: 0 0 20px rgba(251, 192, 45, 1);
+}
+
+/* Active 图标 - 箭头 */
+.stat-item.active .stat-icon::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 18px solid transparent;
+  border-right: 18px solid transparent;
+  border-bottom: 28px solid #ffffff;
+  transform: rotate(45deg);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 1);
+  filter: drop-shadow(0 0 8px rgba(255,255,255,0.8));
+}
+
+.stat-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-number {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 1;
+  font-family: 'SF Mono', 'Courier New', monospace;
+  text-shadow: 
+    0 2px 8px rgba(0,0,0,0.5),
+    0 0 12px rgba(255,255,255,0.3);
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.85);
+  font-weight: 700;
+  margin-top: 6px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+
+/* ========================================
+   加载状态
+   ======================================== */
+.loading-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  color: #1a1a1a;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 3px solid rgba(0,0,0,0.1);
+  border-top-color: #1a1a1a;
+  border-radius: 0;
+  animation: spinMetal 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  margin-bottom: 24px;
+  
+  /* 切角 */
+  clip-path: polygon(
+    6px 0,
+    100% 0,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0 100%,
+    0 6px
+  );
+}
+
+@keyframes spinMetal {
+  to { transform: rotate(360deg); }
+}
+
+.loading-overlay p {
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #666;
+}
+
+/* ========================================
+   响应式设计
+   ======================================== */
+@media (max-width: 768px) {
+  .map-controls {
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px 20px;
+  }
+  
+  .map-title {
+    font-size: 1.1rem;
+  }
+  
+  .control-buttons {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  
+  .map-sidebar {
+    width: calc(100% - 40px);
+    right: 20px;
+    left: 20px;
+  }
+  
+  .stats-panel {
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    flex-direction: row;
+    gap: 12px;
+  }
+  
+  .stat-item {
+    flex: 1;
+    min-width: 0;
+    padding: 16px 20px;
+  }
+}
+
+/* ========================================
+   自定义地图标记 - 闪烁光点系统
+   ======================================== */
+.custom-marker {
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 10;
+}
+
+.custom-marker:hover {
+  transform: scale(1.3);
+  z-index: 100;
+}
+
+/* 光点样式 - 简洁的圆形发光点 */
+.marker-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  position: relative;
+  box-shadow: 
+    0 0 0 2px rgba(255,255,255,0.4),
+    0 0 12px currentColor,
+    0 0 24px currentColor;
+  animation: markerPulse 2s ease-in-out infinite;
+}
+
+/* 根据类别设置颜色 */
+.marker-icon[data-category="Water"] {
+  background: #1976d2;
+  color: #1976d2;
+}
+
+.marker-icon[data-category="Food"] {
+  background: #f57c00;
+  color: #f57c00;
+}
+
+.marker-icon[data-category="Medical"] {
+  background: #d32f2f;
+  color: #d32f2f;
+}
+
+.marker-icon[data-category="Baby"] {
+  background: #7b1fa2;
+  color: #7b1fa2;
+}
+
+.marker-icon[data-category="Power"] {
+  background: #fbc02d;
+  color: #fbc02d;
+}
+
+.marker-icon[data-category="Other"] {
+  background: #616161;
+  color: #616161;
+}
+
+/* 外圈光环 */
+.marker-icon::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  opacity: 0.4;
+  animation: ringPulse 2s ease-in-out infinite;
+}
+
+/* 内核光点 */
+.marker-icon::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.9);
+  box-shadow: 0 0 8px rgba(255,255,255,0.8);
+}
+
+/* Critical 标记特殊样式 - 快速闪烁 */
+.marker-pulse .marker-icon {
+  animation: markerPulseCritical 1s ease-in-out infinite;
+  box-shadow: 
+    0 0 0 3px rgba(255,255,255,0.6),
+    0 0 20px #d32f2f,
+    0 0 40px #d32f2f;
+}
+
+.marker-pulse .marker-icon::before {
+  animation: ringPulseCritical 1s ease-in-out infinite;
+  border-width: 3px;
+}
+
+/* 脉冲动画 */
+@keyframes markerPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+@keyframes markerPulseCritical {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 
+      0 0 0 3px rgba(255,255,255,0.6),
+      0 0 20px #d32f2f,
+      0 0 40px #d32f2f;
+  }
+  50% {
+    transform: scale(1.2);
+    box-shadow: 
+      0 0 0 5px rgba(255,255,255,0.8),
+      0 0 30px #ff5252,
+      0 0 60px #ff5252;
+  }
+}
+
+@keyframes ringPulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0;
+  }
+}
+
+@keyframes ringPulseCritical {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(2);
+    opacity: 0;
+  }
+}
+
+/* ========================================
+   条形码装饰元素（可选）
+   ======================================== */
+.barcode-decoration {
+  display: inline-block;
+  height: 20px;
+  background: repeating-linear-gradient(
+    90deg,
+    #1a1a1a 0px,
+    #1a1a1a 2px,
+    transparent 2px,
+    transparent 4px,
+    #1a1a1a 4px,
+    #1a1a1a 5px,
+    transparent 5px,
+    transparent 8px
+  );
+  opacity: 0.3;
+  width: 60px;
+}
+
+/* ========================================
+   地图工具面板 - 右侧工具栏
+   ======================================== */
+.map-tools-panel {
+  position: absolute;
+  top: 100px;
+  right: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 60;
+}
+
+.tool-group {
+  background: linear-gradient(135deg, rgba(0,0,0,0.95) 0%, rgba(26,26,26,0.95) 100%);
+  backdrop-filter: blur(30px) saturate(180%);
+  border: 2px solid rgba(255,255,255,0.2);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  
+  clip-path: polygon(
+    8px 0,
+    100% 0,
+    100% calc(100% - 8px),
+    calc(100% - 8px) 100%,
+    0 100%,
+    0 8px
+  );
+  
+  box-shadow: 
+    0 8px 32px rgba(0,0,0,0.8),
+    0 0 0 1px rgba(255,255,255,0.1) inset;
+}
+
+.tool-btn {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.05) 100%);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.8);
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  clip-path: polygon(
+    4px 0,
+    100% 0,
+    100% calc(100% - 4px),
+    calc(100% - 4px) 100%,
+    0 100%,
+    0 4px
+  );
+}
+
+.tool-btn:hover {
+  background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.1) 100%);
+  border-color: rgba(255,255,255,0.3);
+  color: #fff;
+  transform: translateX(-4px);
+  box-shadow: 0 0 16px rgba(255,255,255,0.2);
+}
+
+.tool-btn.active {
+  background: linear-gradient(135deg, #fff 0%, #f0f0f0 100%);
+  border-color: #fff;
+  color: #1a1a1a;
+  box-shadow: 0 0 20px rgba(255,255,255,0.6);
+}
+
+/* ========================================
+   图例面板
+   ======================================== */
+.legend-panel {
+  position: absolute;
+  top: 100px;
+  left: 30px;
+  width: 280px;
+  background: linear-gradient(135deg, rgba(0,0,0,0.95) 0%, rgba(26,26,26,0.95) 100%);
+  backdrop-filter: blur(30px) saturate(180%);
+  border: 2px solid rgba(255,255,255,0.2);
+  padding: 20px;
+  z-index: 55;
+  
+  clip-path: polygon(
+    12px 0,
+    100% 0,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    0 100%,
+    0 12px
+  );
+  
+  box-shadow: 
+    0 8px 32px rgba(0,0,0,0.8),
+    0 0 0 1px rgba(255,255,255,0.1) inset;
+  
+  animation: fadeInLeft 0.3s ease-out;
+}
+
+@keyframes fadeInLeft {
+  from {
+    transform: translateX(-30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.legend-title {
+  color: rgba(255,255,255,0.9);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin: 0 0 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+}
+
+.legend-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: rgba(255,255,255,0.8);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.legend-marker {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 
+    0 0 0 2px rgba(255,255,255,0.3),
+    0 0 8px currentColor;
+  animation: legendPulse 2s ease-in-out infinite;
+}
+
+@keyframes legendPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+.legend-priority {
+  width: 40px;
+  height: 12px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.legend-priority.critical {
+  background: #d32f2f;
+  box-shadow: 0 0 12px rgba(211, 47, 47, 0.6);
+  animation: priorityPulseCritical 1s ease-in-out infinite;
+}
+
+.legend-priority.high {
+  background: #f57c00;
+  box-shadow: 0 0 8px rgba(245, 124, 0, 0.4);
+}
+
+.legend-priority.medium {
+  background: #fbc02d;
+  box-shadow: 0 0 8px rgba(251, 192, 45, 0.4);
+}
+
+.legend-priority.low {
+  background: #689f38;
+  box-shadow: 0 0 8px rgba(104, 159, 56, 0.4);
+}
+
+@keyframes priorityPulseCritical {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ========================================
+   响应式 - 移动端优化
+   ======================================== */
+@media (max-width: 768px) {
+  /* 工具面板移到底部 */
+  .map-tools-panel {
+    top: auto;
+    bottom: 120px;
+    right: 20px;
+  }
+  
+  .tool-group {
+    flex-direction: row;
+    padding: 8px;
+  }
+  
+  .tool-btn {
+    width: 40px;
+    height: 40px;
+    font-size: 1rem;
+  }
+  
+  /* 图例面板自动隐藏 */
+  .legend-panel {
+    width: calc(100% - 40px);
+    left: 20px;
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+  
+  /* 统计面板适配 */
+  .stats-panel {
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    gap: 8px;
+  }
+  
+  .stat-item {
+    flex: 1;
+    min-width: 0;
+    padding: 16px 20px;
+  }
+}</css>
+        <data_table>sp_instance</data_table>
+        <demo_data/>
+        <description/>
+        <docs/>
+        <field_list/>
+        <has_preview>false</has_preview>
+        <id>kokoro_live_map</id>
+        <internal>false</internal>
+        <link><![CDATA[function link(scope, element, attrs, controller) {  }]]></link>
+        <name>Kokoro Live Map</name>
+        <option_schema/>
+        <public>false</public>
+        <roles/>
+        <script><![CDATA[(function() {
+  
+  // 1. 获取 Token
+  data.mapbox_token = gs.getProperty('x_1821654_kokoro_0.kokoro.mapbox.api_key', '');
+  
+  // 2. 处理请求
+  if (input && input.action) {
+    
+    if (input.action === 'get_map_requests') {
+      data.requests = [];
+      data.stats = { critical: 0, pending: 0, inProgress: 0 };
+      
+      var gr = new GlideRecord('x_1821654_kokoro_0_silent_wish');
+      
+      // --- ]]>🛑<![CDATA[ 调试模式：暂时注释掉严格过滤，只要有坐标就抓出来！ ---
+      // gr.addQuery('geocode_status', 'success'); 
+      // gr.addQuery('state', 'IN', '1,10,11,2'); 
+      
+      // 确保有坐标 (尝试标准字段名和 u_ 前缀)
+      var qc = gr.addNotNullQuery('latitude');
+      qc.addOrCondition('u_latitude', '!=', '');
+      
+      gr.orderByDesc('sys_created_on');
+      gr.setLimit(50); 
+      gr.query();
+      
+      // ]]>📝<![CDATA[ 记录日志：查到了多少条？
+      gs.info('[Kokoro Map Debug] Found ' + gr.getRowCount() + ' records with latitude.');
+      
+      while (gr.next()) {
+        // 尝试获取字段 (兼容带 u_ 和不带 u_ 的情况)
+        var lat = gr.getValue('latitude') || gr.getValue('u_latitude');
+        var lng = gr.getValue('longitude') || gr.getValue('u_longitude');
+        
+        // 打印第一条记录的详情，帮助我们确认字段名
+        if (data.requests.length === 0) {
+            gs.info('[Kokoro Map Debug] First Record: ' + 
+                    'Number=' + gr.getValue('number') + 
+                    ', State=' + gr.getValue('state') + 
+                    ', Lat=' + lat + 
+                    ', Urgency=' + gr.getValue('urgency'));
+        }
+
+        if (lat && lng) {
+            var req = {
+              sys_id: gr.getUniqueValue(),
+              number: gr.getValue('number'),
+              // 各种字段都试一下
+              category: gr.getValue('u_category') || gr.getValue('category') || 'Other',
+              urgency: gr.getValue('u_urgency') || gr.getValue('urgency') || '3',
+              zone: gr.getDisplayValue('shelter_zone'),
+              detail_loc: gr.getValue('detail_loc'),
+              quantity: gr.getValue('u_quantity') || gr.getValue('quantity'),
+              latitude: parseFloat(lat),
+              longitude: parseFloat(lng),
+              assigned_to: gr.getDisplayValue('assigned_to'),
+              assigned_to_id: gr.getValue('assigned_to'),
+              state: gr.getValue('state'),
+              time_ago: 'Just now', // 简化调试
+              remarks: gr.getValue('u_remarks') || gr.getValue('remarks')
+            };
+            
+            data.requests.push(req);
+            
+            // 简单统计
+            data.stats.pending++; // 暂时全部算作 pending
+        }
+      }
+    }
+  }
+})();]]></script>
+        <servicenow>false</servicenow>
+        <sys_class_name>sp_widget</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-23 05:50:12</sys_created_on>
+        <sys_id>28e1ee66832af210f6b1fb96feaad3fb</sys_id>
+        <sys_mod_count>15</sys_mod_count>
+        <sys_name>Kokoro Live Map</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sp_widget_28e1ee66832af210f6b1fb96feaad3fb</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-25 09:20:51</sys_updated_on>
+        <template><![CDATA[<div class="kokoro-map-container">
+  
+  <!-- 顶部控制栏 - HUD 风格 -->
+  <div class="map-controls">
+    <h2 class="map-title">
+      <i class="fa fa-globe"></i>
+      <span>KOKORO LIVE MAP</span>
+      <span class="live-indicator" ng-if="c.autoRefresh">
+        <span class="pulse-dot"></span>
+        <span>LIVE</span>
+      </span>
+    </h2>
+    
+    <div class="control-buttons">
+      <!-- 地图样式切换 -->
+      <button class="map-btn" ng-click="c.toggleMapStyle()" 
+              ng-class="{'active': c.isDarkMode}">
+        <i class="fa fa-moon-o"></i>
+        <span>{{c.isDarkMode ? 'SATELLITE' : 'STANDARD'}}</span>
+      </button>
+      
+      <!-- 3D视角切换 -->
+      <button class="map-btn" ng-click="c.toggle3D()"
+              ng-class="{'active': c.is3D}">
+        <i class="fa fa-cube"></i>
+        <span>{{c.is3D ? '3D' : '2D'}}</span>
+      </button>
+      
+      <!-- 实时更新开关 -->
+      <button class="map-btn" ng-click="c.toggleAutoRefresh()"
+              ng-class="{'active': c.autoRefresh}">
+        <i class="fa fa-refresh" ng-class="{'fa-spin': c.autoRefresh}"></i>
+        <span>REALTIME</span>
+      </button>
+      
+      <!-- ]]>🆕<![CDATA[ 聚类开关 -->
+      <button class="map-btn" ng-click="c.toggleClustering()"
+              ng-class="{'active': c.clustering}">
+        <i class="fa fa-object-group"></i>
+        <span>CLUSTER</span>
+      </button>
+      
+      <!-- ]]>🆕<![CDATA[ 热力图 -->
+      <button class="map-btn" ng-click="c.toggleHeatmap()"
+              ng-class="{'active': c.heatmapVisible}">
+        <i class="fa fa-fire"></i>
+        <span>HEATMAP</span>
+      </button>
+      
+      <!-- ]]>🆕<![CDATA[ 路径规划 -->
+      <button class="map-btn" ng-click="c.toggleRouting()"
+              ng-class="{'active': c.routingMode}">
+        <i class="fa fa-route"></i>
+        <span>ROUTE</span>
+      </button>
+      
+      <!-- 过滤器 -->
+      <select class="map-select" ng-model="c.urgencyFilter" 
+              ng-change="c.applyFilter()">
+        <option value="">ALL PRIORITY</option>
+        <option value="Critical">CRITICAL</option>
+        <option value="High">HIGH</option>
+        <option value="Medium">MEDIUM</option>
+        <option value="Low">LOW</option>
+      </select>
+      
+      <!-- ]]>🆕<![CDATA[ 类别过滤 -->
+      <select class="map-select" ng-model="c.categoryFilter" 
+              ng-change="c.applyFilter()">
+        <option value="">ALL TYPES</option>
+        <option value="Water">WATER</option>
+        <option value="Food">FOOD</option>
+        <option value="Medical">MEDICAL</option>
+        <option value="Baby">BABY</option>
+        <option value="Power">POWER</option>
+        <option value="Other">OTHER</option>
+      </select>
+    </div>
+  </div>
+  
+  <!-- 地图容器 -->
+  <div id="kokoro-map" class="map-canvas"></div>
+  
+  <!-- 侧边栏：请求详情 -->
+  <div class="map-sidebar" ng-if="c.selectedRequest" ng-class="{'slide-in': c.selectedRequest}">
+    
+    <!-- 顶部标题栏 -->
+    <div class="sidebar-header">
+      <h3>{{c.selectedRequest.number}}</h3>
+      <button class="close-btn" ng-click="c.closeDetails()">
+        <i class="fa fa-times"></i>
+      </button>
+    </div>
+    
+    <div class="sidebar-content">
+      
+      <!-- 紧急度标识 -->
+      <div class="urgency-badge urgency-{{c.selectedRequest.urgency}}">
+        <span>{{c.dict[c.selectedRequest.urgency]}} PRIORITY</span>
+      </div>
+      
+      <!-- 需求信息 -->
+      <div class="info-section">
+        
+        <!-- 物资类别 -->
+        <div class="info-row">
+          <i class="fa fa-box"></i>
+          <span>{{c.dict[c.selectedRequest.category]}} <strong>x{{c.selectedRequest.quantity}}</strong></span>
+        </div>
+        
+        <!-- 位置信息 -->
+        <div class="info-row">
+          <i class="fa fa-map-marker"></i>
+          <span><strong>{{c.selectedRequest.zone}}</strong></span>
+        </div>
+        
+        <div class="info-row">
+          <i class="fa fa-home"></i>
+          <span>{{c.selectedRequest.detail_loc}}</span>
+        </div>
+        
+        <!-- 坐标信息 -->
+        <div class="info-row coordinates">
+          <i class="fa fa-location-arrow"></i>
+          <span>{{c.selectedRequest.latitude | number:6}}, {{c.selectedRequest.longitude | number:6}}</span>
+        </div>
+        
+        <!-- 时间信息 -->
+        <div class="info-row">
+          <i class="fa fa-clock-o"></i>
+          <span>{{c.selectedRequest.time_ago}}</span>
+        </div>
+        
+        <!-- 担当者 -->
+        <div class="info-row" ng-if="c.selectedRequest.assigned_to">
+          <i class="fa fa-user"></i>
+          <span>ASSIGNED: <strong>{{c.selectedRequest.assigned_to}}</strong></span>
+        </div>
+        
+        <!-- 备注 -->
+        <div class="info-row" ng-if="c.selectedRequest.remarks">
+          <i class="fa fa-sticky-note-o"></i>
+          <span class="remarks">{{c.selectedRequest.remarks}}</span>
+        </div>
+        
+      </div>
+      
+      <!-- 操作按钮 -->
+      <div class="sidebar-actions">
+        <button class="action-btn primary" ng-click="c.assignToMe(c.selectedRequest)"
+                ng-if="!c.selectedRequest.assigned_to_id">
+          <i class="fa fa-hand-paper-o"></i>
+          <span>ASSIGN</span>
+        </button>
+        
+        <button class="action-btn secondary" ng-click="c.openDirections(c.selectedRequest)">
+          <i class="fa fa-location-arrow"></i>
+          <span>NAVIGATE</span>
+        </button>
+      </div>
+      
+    </div>
+  </div>
+  
+  <!-- ]]>🆕<![CDATA[ 地图功能工具面板 -->
+  <div class="map-tools-panel">
+    <div class="tool-group">
+      <button class="tool-btn" ng-click="c.fitBounds()" title="View All Markers">
+        <i class="fa fa-expand"></i>
+      </button>
+      <button class="tool-btn" ng-click="c.centerOnUser()" title="My Location">
+        <i class="fa fa-crosshairs"></i>
+      </button>
+      <button class="tool-btn" ng-click="c.toggleMeasure()" 
+              ng-class="{'active': c.measureMode}" title="Measure Distance">
+        <i class="fa fa-ruler"></i>
+      </button>
+      <button class="tool-btn" ng-click="c.exportData()" title="Export CSV">
+        <i class="fa fa-download"></i>
+      </button>
+      <button class="tool-btn" ng-click="c.shareMap()" title="Share Map">
+        <i class="fa fa-share-alt"></i>
+      </button>
+      <button class="tool-btn" ng-click="c.toggleLegend()"
+              ng-class="{'active': c.legendVisible}" title="Legend">
+        <i class="fa fa-info-circle"></i>
+      </button>
+    </div>
+  </div>
+  
+  <!-- ]]>🆕<![CDATA[ 图例面板 -->
+  <div class="legend-panel" ng-if="c.legendVisible">
+    <h4 class="legend-title">MARKER LEGEND</h4>
+    <div class="legend-items">
+      <div class="legend-item">
+        <div class="legend-marker" style="background: #1976d2;"></div>
+        <span>WATER</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-marker" style="background: #f57c00;"></div>
+        <span>FOOD</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-marker" style="background: #d32f2f;"></div>
+        <span>MEDICAL</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-marker" style="background: #7b1fa2;"></div>
+        <span>BABY</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-marker" style="background: #fbc02d;"></div>
+        <span>POWER</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-marker" style="background: #616161;"></div>
+        <span>OTHER</span>
+      </div>
+    </div>
+    
+    <h4 class="legend-title" style="margin-top: 16px;">PRIORITY</h4>
+    <div class="legend-items">
+      <div class="legend-item">
+        <div class="legend-priority critical"></div>
+        <span>CRITICAL (Fast Pulse)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-priority high"></div>
+        <span>HIGH</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-priority medium"></div>
+        <span>MEDIUM</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-priority low"></div>
+        <span>LOW</span>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 统计面板 - 数据 HUD (几何图标) -->
+  <div class="stats-panel">
+    
+    <div class="stat-item critical">
+      <div class="stat-icon"></div>
+      <div class="stat-info">
+        <span class="stat-number">{{c.stats.critical}}</span>
+        <span class="stat-label">CRITICAL</span>
+      </div>
+    </div>
+    
+    <div class="stat-item pending">
+      <div class="stat-icon"></div>
+      <div class="stat-info">
+        <span class="stat-number">{{c.stats.pending}}</span>
+        <span class="stat-label">PENDING</span>
+      </div>
+    </div>
+    
+    <div class="stat-item active">
+      <div class="stat-icon"></div>
+      <div class="stat-info">
+        <span class="stat-number">{{c.stats.inProgress}}</span>
+        <span class="stat-label">ACTIVE</span>
+      </div>
+    </div>
+    
+  </div>
+  
+  <!-- 加载提示 -->
+  <div class="loading-overlay" ng-if="c.loading">
+    <div class="loading-spinner"></div>
+    <p>INITIALIZING MAP SYSTEM...</p>
+  </div>
+  
+</div>]]></template>
+    </sp_widget>
+    <sys_es_latest_script action="INSERT_OR_UPDATE">
+        <id>28e1ee66832af210f6b1fb96feaad3fb</id>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-23 05:50:12</sys_created_on>
+        <sys_id>ece1ee66832af210f6b1fb96feaad3fe</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-23 05:50:12</sys_updated_on>
+        <table>sp_widget</table>
+        <use_es_latest>true</use_es_latest>
+    </sys_es_latest_script>
+</record_update>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update>
+    <sys_documentation element="accessed_at" label="Accessed at" language="en" table="x_1821654_kokoro_0_emergency_message">
+        <sys_documentation action="INSERT_OR_UPDATE">
+            <element>accessed_at</element>
+            <help/>
+            <hint/>
+            <label>Accessed at</label>
+            <language>en</language>
+            <name>x_1821654_kokoro_0_emergency_message</name>
+            <plural>Accessed ats</plural>
+            <sys_class_name>sys_documentation</sys_class_name>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-01-23 15:31:17</sys_created_on>
+            <sys_mod_count>0</sys_mod_count>
+            <sys_name>Accessed at</sys_name>
+            <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+            <sys_policy/>
+            <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+            <sys_update_name>sys_documentation_x_1821654_kokoro_0_emergency_message_accessed_at_en</sys_update_name>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-01-23 15:31:17</sys_updated_on>
+            <url/>
+            <url_target/>
+        </sys_documentation>
+    </sys_documentation>
+</record_update>

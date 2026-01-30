@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sp_widget">
+    <sp_widget action="INSERT_OR_UPDATE">
+        <category>custom</category>
+        <client_script><![CDATA[api.controller = function($scope, $timeout) {
+    var c = this;
+    c.error = '';
+    c.success = false;
+    c.geoSuccess = ''; // 新增：用于存储地理编码成功信息
+    c.geoError = '';   // 新增：用于存储地理编码失败信息
+    
+    // 从 Server 获取 Token
+    c.server.get().then(function(response) {
+        if (response.data.token) {
+            // console.log("Token retrieved.");
+            $timeout(function() {
+                testMap(response.data.token);
+            }, 500);
+        } else {
+            c.error = "No token returned from server.";
+        }
+    });
+    
+    function testMap(token) {
+        try {
+            if (typeof mapboxgl === 'undefined') {
+                c.error = 'Mapbox GL JS library is not loaded.';
+                return;
+            }
+            
+            mapboxgl.accessToken = token;
+            
+            var map = new mapboxgl.Map({
+                container: 'test-map',
+                style: 'mapbox://styles/mapbox/dark-v10', // 保持深色模式
+                center: [139.6917, 35.6895], // 东京
+                zoom: 10
+            });
+            
+            map.on('load', function() {
+                c.success = true;
+                c.error = ''; 
+                map.resize(); // 关键：防止地图显示不全
+                
+                // --- 新增：测试 Geocoding API (查询东京塔) ---
+                console.log("正在测试 Geocoding API...");
+                var geocodingUrl = 'https://api.mapbox.com/geocoding/v5/mapbox.places/Tokyo%20Tower.json?access_token=' + token;
+                
+                fetch(geocodingUrl)
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        if (data.features && data.features.length > 0) {
+                            console.log("✅ Geocoding 成功! 坐标:", data.features[0].center);
+                            // 更新 UI 显示成功信息
+                            c.geoSuccess = "Geocoding API is working! Found: " + data.features[0].place_name;
+                        } else {
+                            console.warn("Geocoding 返回了空数据");
+                            c.geoError = "Geocoding returned no results.";
+                        }
+                        $scope.$apply(); // 刷新页面显示
+                    })
+                    .catch(function(error) {
+                        console.error("❌ Geocoding 失败:", error);
+                        c.geoError = "Geocoding failed: " + error.message;
+                        $scope.$apply();
+                    });
+                // ---------------------------------------------
+                
+                $timeout(function() {
+                    $scope.$apply();
+                });
+            });
+            
+            map.on('error', function(e) {
+                console.error("Mapbox Error:", e);
+                c.error = 'Map error: ' + (e.error ? e.error.message : 'Unknown error');
+                $scope.$apply();
+            });
+
+        } catch (e) {
+            console.error(e);
+            c.error = 'Exception: ' + e.message;
+        }
+    }
+};]]></client_script>
+        <controller_as>c</controller_as>
+        <css>#test-map {
+    border: 2px solid #ddd;
+    border-radius: 4px;
+}
+
+.panel {
+    margin: 20px;
+}</css>
+        <data_table>sp_instance</data_table>
+        <demo_data/>
+        <description/>
+        <docs/>
+        <field_list/>
+        <has_preview>false</has_preview>
+        <id>mapbox_test</id>
+        <internal>false</internal>
+        <link><![CDATA[function link(scope, element, attrs, controller) {  }]]></link>
+        <name>Mapbox Test</name>
+        <option_schema/>
+        <public>false</public>
+        <roles/>
+        <script><![CDATA[(function() {
+    // 修正：使用完整的、正确的属性名称
+    // 之前错误写成了 .mapbc
+    data.token = gs.getProperty('x_1821654_kokoro_0.kokoro.mapbox.api_key', '');
+    
+    if (!data.token) {
+        gs.error('[Kokoro Map Test] Token not found using property: x_1821654_kokoro_0.kokoro.mapbox.api_key');
+        data.error = 'Token not configured in System Properties';
+    } else {
+        // 可选：调试日志
+        // gs.info('[Kokoro Map Test] Token found: ' + data.token.substring(0, 5) + '...');
+    }
+})();]]></script>
+        <servicenow>false</servicenow>
+        <sys_class_name>sp_widget</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-23 01:20:52</sys_created_on>
+        <sys_id>1f34252683a2f210f6b1fb96feaad3fb</sys_id>
+        <sys_mod_count>10</sys_mod_count>
+        <sys_name>Mapbox Test</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sp_widget_1f34252683a2f210f6b1fb96feaad3fb</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-23 04:23:54</sys_updated_on>
+        <template><![CDATA[<div>
+    <h2>Mapbox Token Test</h2>
+    <div id="test-map" style="width: 100%; height: 400px;"></div>
+    
+    <div style="margin-top: 10px;">
+        <p ng-if="c.error" style="color: red; font-weight: bold;">❌ {{c.error}}</p>
+        <p ng-if="c.success" style="color: green; font-weight: bold;">✅ Token is valid! Map Loaded.</p>
+        
+        <p ng-if="c.geoSuccess" style="color: blue; font-weight: bold; margin-top: 5px;">
+            ]]>📍<![CDATA[ {{c.geoSuccess}}
+        </p>
+        <p ng-if="c.geoError" style="color: orange; font-weight: bold; margin-top: 5px;">
+            ⚠️ {{c.geoError}}
+        </p>
+    </div>
+</div>]]></template>
+    </sp_widget>
+    <sys_es_latest_script action="INSERT_OR_UPDATE">
+        <id>1f34252683a2f210f6b1fb96feaad3fb</id>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-23 01:20:52</sys_created_on>
+        <sys_id>5734252683a2f210f6b1fb96feaad3ff</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-23 01:20:52</sys_updated_on>
+        <table>sp_widget</table>
+        <use_es_latest>true</use_es_latest>
+    </sys_es_latest_script>
+</record_update>

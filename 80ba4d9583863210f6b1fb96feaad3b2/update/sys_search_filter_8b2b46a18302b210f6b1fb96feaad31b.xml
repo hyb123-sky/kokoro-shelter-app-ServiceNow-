@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_search_filter">
+    <sys_search_filter action="INSERT_OR_UPDATE">
+        <active>true</active>
+        <ais_search_source display_value="Silent Wish">fa2b06a18302b210f6b1fb96feaad3fd</ais_search_source>
+        <label>Silent Wish</label>
+        <name>Silent Wish</name>
+        <order>100</order>
+        <search_context_config display_value="Kokoro Shelter AI Search Configuration">012bc2a19d02b21023c8382b3623952c</search_context_config>
+        <sys_class_name>sys_search_filter</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 05:05:39</sys_created_on>
+        <sys_id>8b2b46a18302b210f6b1fb96feaad31b</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Silent Wish</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_search_filter_8b2b46a18302b210f6b1fb96feaad31b</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 05:05:39</sys_updated_on>
+    </sys_search_filter>
+</record_update>

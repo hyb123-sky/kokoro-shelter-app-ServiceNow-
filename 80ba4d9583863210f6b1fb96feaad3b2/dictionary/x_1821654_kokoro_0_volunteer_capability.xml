@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="1a1c133b83aab210f6b1fb96feaad39a" label="Volunteer Capability" max_length="40" name="x_1821654_kokoro_0_volunteer_capability" type="collection">
+        <element label="Priority Score" max_length="40" name="priority_score" type="integer"/>
+        <element label="Skills" max_length="1000" name="skills" type="string"/>
+        <element label="Volunteer" max_length="32" name="volunteer" reference="sys_user" type="reference"/>
+        <element label="On Break" max_length="40" name="is_on_break" type="boolean"/>
+        <element default="true" label="Available" max_length="40" name="is_available" type="boolean"/>
+        <element default="0" label="Current Tasks" max_length="40" name="current_task_count" type="integer"/>
+        <element choice="1" label="Current Zone" max_length="40" name="current_zone" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="Medical Area" sequence="3" value="Medical Area"/>
+                <element inactive_on_update="false" label="Single Area" sequence="2" value="Single Area"/>
+                <element inactive_on_update="false" label="Family Area" sequence="1" value="Family Area"/>
+            </choice>
+        </element>
+        <element label="Last Location Update" max_length="40" name="last_location_update" type="glide_date_time"/>
+        <element default="5" label="Max Tasks" max_length="40" name="max_concurrent_tasks" type="integer"/>
+        <element choice="1" label="Specialty" max_length="40" name="specialty" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="一般対応 (General)" value="general"/>
+                <element inactive_on_update="false" label="医療対応(Medical)" value="medical"/>
+                <element inactive_on_update="false" label="育児対応 (Childcare)" value="childcare"/>
+                <element inactive_on_update="false" label="物流対応 (Logistics)" value="logistics"/>
+            </choice>
+        </element>
+        <index name="index">
+            <element name="volunteer"/>
+        </index>
+    </element>
+</database>

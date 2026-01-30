@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update sys_domain="global" table="sys_ux_page_property">
+    <sys_ux_page_property action="INSERT_OR_UPDATE">
+        <choices/>
+        <description>A default view for Kokoro Shelter generated</description>
+        <name>view</name>
+        <page display_value="Kokoro Shelter">c12bc2a1c602b2108b09abd5d2d15e33</page>
+        <required_translations/>
+        <route/>
+        <suffix/>
+        <sys_class_name>sys_ux_page_property</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 05:05:34</sys_created_on>
+        <sys_domain>global</sys_domain>
+        <sys_domain_path>global</sys_domain_path>
+        <sys_id>8d2bc2a13302b210d1e72da4ed30ec24</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>view</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_ux_page_property_8d2bc2a13302b210d1e72da4ed30ec24</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 05:05:34</sys_updated_on>
+        <type>string</type>
+        <unique_name>x_1821654_kokoro_0.c12bc2a1c602b2108b09abd5d2d15e33.root.view</unique_name>
+        <value>workspace-kokoro-shelter-0</value>
+    </sys_ux_page_property>
+    <sys_translated_text action="delete_multiple" query="documentkey=8d2bc2a13302b210d1e72da4ed30ec24"/>
+</record_update>

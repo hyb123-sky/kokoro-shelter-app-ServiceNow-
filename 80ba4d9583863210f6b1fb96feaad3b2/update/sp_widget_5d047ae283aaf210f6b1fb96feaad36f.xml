@@ -1,0 +1,2364 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sp_widget">
+    <sp_widget action="INSERT_OR_UPDATE">
+        <category>custom</category>
+        <client_script><![CDATA[function kokoroController($scope, $timeout, $interval, spUtil) {
+  /* * 修复说明：
+   * 1. 这是一个"命名函数" (kokoroController)，解决了 "Expected ident" 错误。
+   * 2. 注释放在函数内部，解决了 "Must contain a function" 错误。
+   */
+  
+  /* jshint validthis: true */
+  var c = this;
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 初始化状态
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  c.loading = true;
+  c.systemOnline = true;
+  c.version = 'v2.4.1';
+  c.activeTab = 'overview';
+  
+  // 用户信息
+  c.user = {
+    id: 'ADM_001',
+    name: 'Administrator'
+  };
+  
+  // 地图中心坐标
+  c.mapCenter = {
+    lat: '35.6762',
+    lng: '139.6503'
+  };
+  
+  // 导航配置
+  c.tabs = [
+    { id: 'overview', label: 'OVERVIEW', code: '01' },
+    { id: 'tactical', label: 'TACTICAL', code: '02' },
+    { id: 'operations', label: 'OPERATIONS', code: '03' },
+    { id: 'logistics', label: 'LOGISTICS', code: '04' }
+  ];
+  
+  // 地图图层控制
+  c.mapControls = [
+    { id: 'sos', label: 'SOS_MARKERS', active: false },
+    { id: 'shelter', label: 'SHELTER_LOC', active: false },
+    { id: 'operator', label: 'OPERATOR_POS', active: false },
+    { id: 'heatmap', label: 'HEAT_OVERLAY', active: true }
+  ];
+  
+  // 数据初始化
+  c.data = {
+    kpis: [],
+    alerts: [],
+    inventory: [],
+    operations: {
+      queue: [],
+      active: [],
+      completed: 0
+    },
+    system: {
+      status: 'ONLINE',
+      uptime: '---',
+      latency: '---',
+      nodes: 0
+    }
+  };
+  
+  // 嵌入的地图 Widget 实例
+  c.mapWidget = null;
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 工具函数
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  /**
+   * 获取优先级颜色
+   */
+  c.getPriorityColor = function(priority) {
+    var colors = {
+      1: '#1a1a1a',  // Critical
+      2: '#404040',  // High
+      3: '#808080',  // Medium
+      4: '#b0b0b0'   // Low
+    };
+    return colors[priority] || colors[4];
+  };
+  
+  /**
+   * 获取优先级标签
+   */
+  c.getPriorityLabel = function(priority) {
+    var labels = {
+      1: 'CRITICAL',
+      2: 'HIGH',
+      3: 'MEDIUM',
+      4: 'LOW'
+    };
+    return labels[priority] || 'LOW';
+  };
+  
+  /**
+   * 根据百分比获取状态颜色
+   */
+  c.getStatusColor = function(current, capacity) {
+    var ratio = current / capacity;
+    if (ratio < 0.2) return '#1a1a1a';
+    if (ratio < 0.4) return '#404040';
+    if (ratio < 0.7) return '#808080';
+    return '#b0b0b0';
+  };
+  
+  /**
+   * 根据百分比获取状态标签
+   */
+  c.getStatusLabel = function(current, capacity) {
+    var ratio = current / capacity;
+    if (ratio < 0.2) return 'CRITICAL';
+    if (ratio < 0.4) return 'LOW';
+    if (ratio < 0.7) return 'NOMINAL';
+    return 'OPTIMAL';
+  };
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 时间显示
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  function updateTime() {
+    var now = new Date();
+    
+    // 格式化时间: HH:MM:SS
+    c.currentTime = now.toLocaleTimeString('en-US', { 
+      hour12: false, 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit' 
+    });
+    
+    // 格式化日期: YYYY.MM.DD
+    var year = now.getFullYear();
+    var month = String(now.getMonth() + 1).padStart(2, '0');
+    var day = String(now.getDate()).padStart(2, '0');
+    c.currentDate = year + '.' + month + '.' + day;
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Tab 切换
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  c.setActiveTab = function(tabId) {
+    c.activeTab = tabId;
+    
+    // 如果切换到战术地图 Tab，加载地图 Widget
+    if (tabId === 'tactical' && !c.mapWidget) {
+      c.loadMapWidget();
+    }
+  };
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 加载地图 Widget (嵌入式 Widget 关键代码)
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  /**
+   * ]]>🔥<![CDATA[ 这是嵌入你的地图 Widget 的核心方法 ]]>🔥
+<![CDATA[   * * 将 'kokoro-live-map' 替换为你实际的地图 Widget ID
+   */
+  c.loadMapWidget = function() {
+    // 使用 spUtil.get() 动态加载子 Widget
+    spUtil.get('kokoro_live_map', {
+      // 可以传递参数给地图 Widget
+      // 这些参数会出现在地图 Widget 的 input 对象中
+      showControls: true,
+      defaultZoom: 12,
+      defaultCenter: {
+        lat: parseFloat(c.mapCenter.lat),
+        lng: parseFloat(c.mapCenter.lng)
+      }
+    }).then(function(response) {
+      // 保存 Widget 实例
+      c.mapWidget = response;
+      console.log('Map widget loaded successfully');
+    }).catch(function(error) {
+      console.error('Failed to load map widget:', error);
+    });
+  };
+  
+  /**
+   * 切换地图图层
+   */
+  c.toggleMapLayer = function(layerId) {
+    c.mapControls.forEach(function(ctrl) {
+      if (ctrl.id === layerId) {
+        ctrl.active = !ctrl.active;
+      }
+    });
+    
+    // 向地图 Widget 广播图层切换事件
+    $scope.$broadcast('mapLayerToggle', {
+      layerId: layerId,
+      active: c.mapControls.find(function(ctrl) {
+        return ctrl.id === layerId;
+      }).active
+    });
+  };
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 警报处理
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  c.handleAlertClick = function(alert) {
+    console.log('Alert clicked:', alert);
+    
+    // 如果是高优先级警报，切换到地图视图
+    if (alert.priority <= 2) {
+      c.setActiveTab('tactical');
+      
+      // 延迟广播，确保地图已加载
+      $timeout(function() {
+        $scope.$broadcast('highlightLocation', {
+          sector: alert.sector,
+          priority: alert.priority,
+          alertId: alert.id
+        });
+      }, 500);
+    }
+  };
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 数据加载
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  c.loadData = function() {
+    c.loading = true;
+    
+    // 调用 Server Script 获取数据
+    c.server.get({
+      action: 'getData'
+    }).then(function(response) {
+      if (response.data) {
+        // 处理 KPI 数据
+        if (response.data.kpis) {
+          c.data.kpis = response.data.kpis.map(function(kpi) {
+            kpi.trendDisplay = (kpi.trend >= 0 ? '+' : '') + kpi.trend.toFixed(1) + '%';
+            return kpi;
+          });
+        }
+        
+        // 处理 Alerts 数据
+        if (response.data.alerts) {
+          c.data.alerts = response.data.alerts.map(function(alert) {
+            alert.priorityLabel = c.getPriorityLabel(alert.priority);
+            return alert;
+          });
+        }
+        
+        // 处理 Inventory 数据
+        if (response.data.inventory) {
+          c.data.inventory = response.data.inventory.map(function(item) {
+            item.percentage = Math.round((item.current / item.capacity) * 100);
+            item.statusColor = c.getStatusColor(item.current, item.capacity);
+            item.statusLabel = c.getStatusLabel(item.current, item.capacity);
+            return item;
+          });
+        }
+        
+        // 处理 Operations 数据
+        if (response.data.operations) {
+          c.data.operations = response.data.operations;
+        }
+        
+        // 处理 System 数据
+        if (response.data.system) {
+          c.data.system = response.data.system;
+        }
+      }
+      
+      c.loading = false;
+      c.systemOnline = true;
+      
+    }).catch(function(error) {
+      console.error('Data load failed:', error);
+      c.loading = false;
+      c.systemOnline = false;
+    });
+  };
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 自动刷新
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  var refreshInterval;
+  var timeInterval;
+  
+  function startAutoRefresh() {
+    // 每 30 秒刷新数据
+    refreshInterval = $interval(function() {
+      c.loadData();
+    }, 30000);
+  }
+  
+  function startTimeUpdate() {
+    // 每秒更新时间
+    timeInterval = $interval(function() {
+      updateTime();
+    }, 1000);
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 初始化
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  c.$onInit = function() {
+    console.log('KOKORO Command Center initializing...');
+    
+    // 初始化时间显示
+    updateTime();
+    startTimeUpdate();
+    
+    // 加载数据
+    c.loadData();
+    
+    // 启动自动刷新
+    startAutoRefresh();
+    
+    console.log('KOKORO Command Center initialized');
+  };
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 清理
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  $scope.$on('$destroy', function() {
+    // 清理定时器
+    if (refreshInterval) {
+      $interval.cancel(refreshInterval);
+    }
+    if (timeInterval) {
+      $interval.cancel(timeInterval);
+    }
+    
+    console.log('KOKORO Command Center destroyed');
+  });
+}]]></client_script>
+        <controller_as>c</controller_as>
+        <css>/* 
+═══════════════════════════════════════════════════════════════════════════════
+  KOKORO COMMAND CENTER - SCSS STYLES
+  绝区零/鸣潮 白色工业极简风格
+  
+  复制此代码到 ServiceNow Widget Editor &gt; CSS - SCSS
+═══════════════════════════════════════════════════════════════════════════════
+*/
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DESIGN TOKENS 设计变量
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// 颜色系统 - 白色工业风格
+$bg-base: #fafafa;           // 主背景
+$bg-elevated: #ffffff;       // 卡片背景
+$bg-subtle: #f0f0f0;         // 次级背景
+$bg-muted: #f8f8f8;          // 淡背景
+
+$border-light: #e8e8e8;
+$border-default: #e0e0e0;
+$border-strong: #d0d0d0;
+
+$text-primary: #1a1a1a;      // 主文字
+$text-secondary: #404040;    // 次级文字
+$text-tertiary: #808080;     // 三级文字
+$text-muted: #a0a0a0;        // 弱化文字
+$text-disabled: #c0c0c0;     // 禁用文字
+
+// 优先级颜色 (灰阶系统)
+$priority-critical: #1a1a1a;
+$priority-high: #404040;
+$priority-medium: #808080;
+$priority-low: #b0b0b0;
+
+// 字体系统
+$font-ui: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+$font-mono: 'Space Mono', 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
+
+// 间距系统 (8px 网格)
+$space-xs: 4px;
+$space-sm: 8px;
+$space-md: 16px;
+$space-lg: 24px;
+$space-xl: 32px;
+$space-2xl: 48px;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ANIMATIONS 动画
+// ═══════════════════════════════════════════════════════════════════════════════
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BASE CONTAINER 基础容器
+// ═══════════════════════════════════════════════════════════════════════════════
+
+.kokoro-zenless {
+  min-height: 100vh;
+  background: $bg-base;
+  color: $text-primary;
+  font-family: $font-ui;
+  position: relative;
+  overflow-x: hidden;
+  
+  * {
+    box-sizing: border-box;
+  }
+}
+
+// 噪点纹理层
+.noise-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1000;
+}
+
+// 网格背景
+.grid-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    linear-gradient(rgba(0,0,0,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+// 四角装饰括号
+.corner-bracket {
+  position: fixed;
+  width: 24px;
+  height: 24px;
+  border-left: 2px solid $border-strong;
+  border-top: 2px solid $border-strong;
+  z-index: 100;
+  pointer-events: none;
+  
+  &amp;.corner-tl { top: 12px; left: 12px; }
+  &amp;.corner-tr { top: 12px; right: 12px; transform: rotate(90deg); }
+  &amp;.corner-bl { bottom: 12px; left: 12px; transform: rotate(-90deg); }
+  &amp;.corner-br { bottom: 12px; right: 12px; transform: rotate(180deg); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HEADER 顶部导航栏
+// ═══════════════════════════════════════════════════════════════════════════════
+
+.kz-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $space-md $space-xl;
+  background: linear-gradient(180deg, $bg-elevated 0%, $bg-subtle 100%);
+  border-bottom: 1px solid $border-default;
+  position: relative;
+  z-index: 100;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: $space-xl;
+}
+
+// Logo 组合
+.logo-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-mark {
+  width: 40px;
+  height: 40px;
+  background: $text-primary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  // 切角效果
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  
+  .logo-letter {
+    color: $bg-base;
+    font-size: 18px;
+    font-weight: 700;
+    font-family: $font-mono;
+  }
+}
+
+.logo-text {
+  .logo-title {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: $text-primary;
+  }
+  
+  .logo-subtitle {
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: $text-tertiary;
+    font-family: $font-mono;
+  }
+}
+
+// 系统状态徽章
+.system-badge {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  padding: 6px 12px;
+  background: $bg-subtle;
+  border: 1px solid $border-default;
+  
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    background: $text-muted;
+    border-radius: 1px;
+    transition: all 0.3s ease;
+  }
+  
+  &amp;.online .status-dot {
+    background: $text-primary;
+    animation: pulse 2s infinite;
+  }
+  
+  .status-text {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    font-family: $font-mono;
+  }
+  
+  .version-text {
+    font-size: 9px;
+    color: $text-tertiary;
+    font-family: $font-mono;
+  }
+}
+
+// 导航菜单
+.kz-nav {
+  display: flex;
+  gap: 4px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 16px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: $text-tertiary;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  cursor: pointer;
+  font-family: $font-mono;
+  transition: all 0.15s ease;
+  
+  &amp;:hover {
+    color: $text-secondary;
+    background: $bg-subtle;
+  }
+  
+  &amp;.active {
+    background: $text-primary;
+    color: $bg-base;
+    border-color: $text-primary;
+  }
+  
+  .nav-code {
+    opacity: 0.6;
+  }
+  
+  .nav-divider {
+    opacity: 0.3;
+  }
+}
+
+// Header 右侧
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: $space-lg;
+}
+
+.time-display,
+.date-display {
+  text-align: right;
+  
+  [class$="-label"] {
+    font-size: 8px;
+    letter-spacing: 1px;
+    color: $text-tertiary;
+    font-family: $font-mono;
+  }
+}
+
+.time-display .time-value {
+  font-size: 18px;
+  font-weight: 700;
+  font-family: $font-mono;
+  letter-spacing: 2px;
+}
+
+.date-display .date-value {
+  font-size: 11px;
+  font-family: $font-mono;
+  color: $text-secondary;
+}
+
+.operator-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: $space-sm 14px;
+  background: $bg-subtle;
+  border: 1px solid $border-default;
+  
+  .operator-icon {
+    font-size: 14px;
+    color: $text-primary;
+  }
+  
+  .operator-label {
+    font-size: 8px;
+    letter-spacing: 1px;
+    color: $text-tertiary;
+    font-family: $font-mono;
+  }
+  
+  .operator-id {
+    font-size: 11px;
+    font-weight: 600;
+    font-family: $font-mono;
+  }
+}
+
+// 装饰分割线
+.header-rule {
+  display: flex;
+  align-items: center;
+  padding: 0 $space-xl;
+  background: $bg-subtle;
+  height: 24px;
+  
+  .rule-left,
+  .rule-right {
+    flex: 1;
+    height: 1px;
+  }
+  
+  .rule-left {
+    background: linear-gradient(90deg, transparent, $border-strong);
+  }
+  
+  .rule-right {
+    background: linear-gradient(90deg, $border-strong, transparent);
+  }
+  
+  .rule-center {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 $space-md;
+    font-size: 8px;
+    color: $text-muted;
+    letter-spacing: 2px;
+    font-family: $font-mono;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN CONTENT 主内容区
+// ═══════════════════════════════════════════════════════════════════════════════
+
+.kz-main {
+  padding: $space-lg $space-xl;
+  min-height: calc(100vh - 140px);
+  position: relative;
+  z-index: 10;
+}
+
+// Tab 面板
+.tab-panel {
+  animation: fadeIn 0.3s ease;
+  
+  &amp;.fade-in {
+    animation: fadeIn 0.3s ease;
+  }
+}
+
+// Section 通用样式
+.section-block {
+  margin-bottom: $space-lg;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: $space-md;
+}
+
+.section-tag {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  padding: 4px 10px;
+  background: $text-primary;
+  color: $bg-base;
+  
+  .tag-code {
+    font-size: 9px;
+    font-family: $font-mono;
+    opacity: 0.6;
+  }
+  
+  .tag-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    font-family: $font-mono;
+  }
+}
+
+.section-rule {
+  flex: 1;
+  height: 1px;
+  background: $border-default;
+}
+
+.section-time {
+  font-size: 10px;
+  color: $text-tertiary;
+  font-family: $font-mono;
+}
+
+.alert-count {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px $space-sm;
+  background: $text-primary;
+  color: $bg-base;
+  font-family: $font-mono;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// OVERVIEW TAB 总览页面
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Overview 布局
+.tab-panel:first-child {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: $space-lg;
+  
+  .section-kpi,
+  .section-system {
+    grid-column: 1 / -1;
+  }
+}
+
+// KPI 卡片
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: $space-md;
+}
+
+.kpi-card {
+  background: $bg-elevated;
+  border: 1px solid $border-default;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  
+  &amp;:hover {
+    border-color: $border-strong;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+}
+
+// 切角装饰
+.chamfer-tr {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  background: $bg-base;
+  clip-path: polygon(0 0, 100% 100%, 100% 0);
+}
+
+.chamfer-bl {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  background: $bg-base;
+  clip-path: polygon(0 0, 0 100%, 100% 100%);
+}
+
+.kpi-header {
+  display: flex;
+  align-items: baseline;
+  margin-bottom: $space-md;
+  
+  .kpi-id {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    font-family: $font-mono;
+  }
+  
+  .kpi-index {
+    font-size: 9px;
+    color: $text-muted;
+    font-family: $font-mono;
+  }
+}
+
+.kpi-body {
+  display: flex;
+  align-items: baseline;
+  margin-bottom: $space-sm;
+  
+  .kpi-value {
+    font-size: 42px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -1px;
+  }
+  
+  .kpi-unit {
+    font-size: 14px;
+    font-weight: 500;
+    color: $text-tertiary;
+    margin-left: 4px;
+  }
+}
+
+.kpi-label {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: $text-tertiary;
+  font-family: $font-mono;
+  margin-bottom: 12px;
+}
+
+.kpi-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  
+  .kpi-trend {
+    font-size: 11px;
+    font-weight: 600;
+    font-family: $font-mono;
+    
+    &amp;.trend-up { color: $text-primary; }
+    &amp;.trend-down { color: $text-secondary; }
+  }
+  
+  .kpi-status {
+    font-size: 9px;
+    color: $text-muted;
+    font-family: $font-mono;
+  }
+}
+
+// 条形码装饰
+.barcode-deco {
+  position: absolute;
+  bottom: $space-sm;
+  right: $space-sm;
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+  
+  .bar {
+    width: 2px;
+    height: 8px;
+    background: $text-primary;
+    opacity: 0.1;
+    
+    &amp;:nth-child(odd) { height: 12px; }
+    &amp;:nth-child(3n) { height: 6px; }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ALERTS SECTION 警报区
+// ═══════════════════════════════════════════════════════════════════════════════
+
+.section-alerts {
+  background: $bg-elevated;
+  border: 1px solid $border-default;
+  padding: 20px;
+}
+
+.alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+  max-height: 320px;
+  overflow-y: auto;
+  
+  &amp;::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  &amp;::-webkit-scrollbar-thumb {
+    background: $border-strong;
+  }
+  
+  &amp;::-webkit-scrollbar-track {
+    background: $bg-subtle;
+  }
+}
+
+.alert-card {
+  display: flex;
+  align-items: stretch;
+  background: $bg-muted;
+  border: 1px solid $border-light;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  
+  &amp;:hover {
+    background: $bg-subtle;
+    border-color: $border-default;
+  }
+}
+
+.alert-priority-bar {
+  width: 3px;
+  flex-shrink: 0;
+  
+  .priority-1 &amp; { background: $priority-critical; }
+  .priority-2 &amp; { background: $priority-high; }
+  .priority-3 &amp; { background: $priority-medium; }
+  .priority-4 &amp; { background: $priority-low; }
+}
+
+.alert-content {
+  flex: 1;
+  padding: 12px $space-md;
+}
+
+.alert-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+  
+  .alert-id {
+    font-size: 10px;
+    font-weight: 600;
+    font-family: $font-mono;
+  }
+  
+  .alert-priority-label {
+    font-size: 9px;
+    font-weight: 700;
+    font-family: $font-mono;
+    
+    .priority-1 &amp; { color: $priority-critical; }
+    .priority-2 &amp; { color: $priority-high; }
+    .priority-3 &amp; { color: $priority-medium; }
+    .priority-4 &amp; { color: $priority-low; }
+  }
+  
+  .alert-sector {
+    font-size: 9px;
+    color: $text-tertiary;
+    padding: 2px 6px;
+    background: $bg-elevated;
+    border: 1px solid $border-default;
+    font-family: $font-mono;
+  }
+  
+  .alert-elapsed {
+    font-size: 10px;
+    color: $text-muted;
+    font-family: $font-mono;
+    margin-left: auto;
+  }
+}
+
+.alert-message {
+  font-size: 12px;
+  color: $text-secondary;
+  line-height: 1.4;
+}
+
+.alert-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  background: $bg-subtle;
+  color: $text-tertiary;
+  font-size: 14px;
+  transition: all 0.15s ease;
+  
+  &amp;:hover {
+    background: $text-primary;
+    color: $bg-base;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INVENTORY SECTION 库存区
+// ═══════════════════════════════════════════════════════════════════════════════
+
+.section-inventory {
+  background: $bg-elevated;
+  border: 1px solid $border-default;
+  padding: 20px;
+}
+
+.inventory-list {
+  display: flex;
+  flex-direction: column;
+  gap: $space-md;
+}
+
+.inventory-item {
+  .inventory-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: $space-sm;
+    
+    .inventory-id {
+      font-size: 9px;
+      font-family: $font-mono;
+      color: $text-tertiary;
+    }
+    
+    .inventory-name {
+      font-size: 12px;
+      font-weight: 500;
+      flex: 1;
+    }
+    
+    .inventory-pct {
+      font-size: 11px;
+      font-weight: 700;
+      font-family: $font-mono;
+    }
+  }
+}
+
+.inventory-bar-outer {
+  height: 6px;
+  background: $border-light;
+  position: relative;
+  margin-bottom: 6px;
+}
+
+.inventory-bar-inner {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.scale-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: $border-strong;
+}
+
+.inventory-values {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-family: $font-mono;
+  
+  .inv-sep { color: $text-disabled; }
+  .inv-capacity { color: $text-muted; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SYSTEM SECTION 系统状态区
+// ═══════════════════════════════════════════════════════════════════════════════
+
+.section-system {
+  background: $bg-elevated;
+  border: 1px solid $border-default;
+  padding: 20px;
+}
+
+.system-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: $space-md;
+}
+
+.system-stat {
+  text-align: center;
+  padding: 20px;
+  background: $bg-muted;
+  border: 1px solid $border-light;
+  
+  .stat-label {
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: $text-tertiary;
+    margin-bottom: $space-sm;
+    font-family: $font-mono;
+  }
+  
+  .stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    font-family: $font-mono;
+    
+    &amp;.highlight {
+      color: $text-primary;
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TACTICAL TAB 战术地图
+// ═══════════════════════════════════════════════════════════════════════════════
+
+.tab-tactical {
+  height: calc(100vh - 200px);
+  position: relative;
+}
+
+.map-wrapper {
+  width: 100%;
+  height: 100%;
+  background: $bg-subtle;
+  border: 1px solid $border-default;
+  
+  // 确保嵌入的 Widget 填满容器
+  sp-widget,
+  sp-widget &gt; div,
+  sp-widget &gt; div &gt; div {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.map-controls {
+  position: absolute;
+  top: $space-lg;
+  left: $space-lg;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.map-ctrl-btn {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  padding: 10px 14px;
+  background: $bg-elevated;
+  border: 1px solid $border-default;
+  color: $text-tertiary;
+  font-size: 10px;
+  font-family: $font-mono;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  
+  &amp;:hover {
+    background: $bg-subtle;
+    border-color: $border-strong;
+  }
+  
+  &amp;.active {
+    background: $text-primary;
+    border-color: $text-primary;
+    color: $bg-base;
+  }
+  
+  .ctrl-code {
+    opacity: 0.5;
+  }
+}
+
+.map-overlay-info {
+  position: absolute;
+  bottom: $space-lg;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  
+  .coord-display {
+    display: flex;
+    gap: $space-md;
+    padding: $space-sm $space-md;
+    background: rgba(255,255,255,0.95);
+    border: 1px solid $border-default;
+    font-size: 10px;
+    font-family: $font-mono;
+    letter-spacing: 1px;
+    
+    .coord-sep {
+      color: $text-disabled;
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// OPERATIONS TAB 任务看板
+// ═══════════════════════════════════════════════════════════════════════════════
+
+.tab-operations {
+  height: calc(100vh - 200px);
+}
+
+.ops-board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  height: 100%;
+}
+
+.ops-column {
+  background: $bg-elevated;
+  border: 1px solid $border-default;
+  display: flex;
+  flex-direction: column;
+}
+
+.ops-column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $space-md;
+  border-bottom: 1px solid $border-default;
+  
+  .ops-column-tag {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    font-family: $font-mono;
+  }
+  
+  .ops-column-count {
+    font-size: 10px;
+    padding: 2px $space-sm;
+    background: $bg-subtle;
+    font-family: $font-mono;
+  }
+}
+
+.ops-column-list {
+  flex: 1;
+  padding: $space-md;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.op-card {
+  background: $bg-muted;
+  border: 1px solid $border-light;
+  padding: $space-md;
+  transition: all 0.15s ease;
+  
+  &amp;:hover {
+    border-color: $border-default;
+  }
+}
+
+.op-card-header {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  margin-bottom: $space-sm;
+  
+  .op-priority-dot {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .op-id {
+    font-size: 10px;
+    font-family: $font-mono;
+    color: $text-tertiary;
+  }
+}
+
+.op-title {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: $space-sm;
+}
+
+.op-meta {
+  display: flex;
+  gap: $space-md;
+  font-size: 10px;
+  color: $text-muted;
+  font-family: $font-mono;
+}
+
+.op-operator {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  margin-bottom: 12px;
+  font-size: 11px;
+  
+  .op-operator-icon {
+    color: $text-primary;
+  }
+}
+
+.op-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.op-progress-bar {
+  flex: 1;
+  height: 4px;
+  background: $border-default;
+}
+
+.op-progress-fill {
+  height: 100%;
+  background: $text-primary;
+  transition: width 0.3s ease;
+}
+
+.op-progress-value {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: $font-mono;
+  min-width: 35px;
+}
+
+// 已完成显示
+.ops-completed-display {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  
+  .completed-value {
+    font-size: 72px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  
+  .completed-label {
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: $text-tertiary;
+    margin-top: $space-md;
+    font-family: $font-mono;
+  }
+  
+  .completed-period {
+    font-size: 10px;
+    color: $text-muted;
+    margin-top: $space-sm;
+    font-family: $font-mono;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGISTICS TAB 物资管理
+// ═══════════════════════════════════════════════════════════════════════════════
+
+.tab-logistics {
+  .logistics-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 20px;
+  }
+}
+
+.logistics-card {
+  background: $bg-elevated;
+  border: 1px solid $border-default;
+  padding: $space-lg;
+  text-align: center;
+  position: relative;
+}
+
+.logistics-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $space-sm;
+  
+  .logistics-id {
+    font-size: 10px;
+    font-weight: 600;
+    font-family: $font-mono;
+  }
+  
+  .logistics-status {
+    font-size: 9px;
+    font-weight: 700;
+    font-family: $font-mono;
+  }
+}
+
+.logistics-name {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 20px;
+}
+
+.logistics-gauge {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  margin: 0 auto $space-md;
+  
+  .gauge-ring {
+    width: 100%;
+    height: 100%;
+  }
+  
+  .gauge-bg {
+    fill: none;
+    stroke: $border-light;
+    stroke-width: 6;
+  }
+  
+  .gauge-fill {
+    fill: none;
+    stroke-width: 6;
+    stroke-linecap: square;
+    transition: stroke-dasharray 0.5s ease;
+  }
+  
+  .gauge-value {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 22px;
+    font-weight: 700;
+    font-family: $font-mono;
+  }
+}
+
+.logistics-values {
+  font-size: 12px;
+  font-family: $font-mono;
+  
+  .lg-current { font-weight: 600; }
+  .lg-divider { color: $text-disabled; margin: 0 4px; }
+  .lg-capacity { color: $text-muted; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FOOTER 底部状态栏
+// ═══════════════════════════════════════════════════════════════════════════════
+
+.kz-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px $space-xl;
+  background: $bg-subtle;
+  border-top: 1px solid $border-default;
+  font-size: 10px;
+  font-family: $font-mono;
+  color: $text-tertiary;
+  letter-spacing: 1px;
+}
+
+.footer-left,
+.footer-center {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.footer-indicator {
+  width: 6px;
+  height: 6px;
+  background: $text-primary;
+  border-radius: 1px;
+}
+
+.footer-sep {
+  color: $text-disabled;
+}
+
+.footer-dot {
+  color: $text-disabled;
+  font-size: 6px;
+}
+
+.footer-muted {
+  color: $text-muted;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOADING OVERLAY 加载覆盖层
+// ═══════════════════════════════════════════════════════════════════════════════
+
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba($bg-base, 0.95);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 2px solid $border-default;
+  border-top-color: $text-primary;
+  animation: spin 1s linear infinite;
+  margin-bottom: $space-md;
+}
+
+.loading-text {
+  font-size: 11px;
+  letter-spacing: 2px;
+  font-family: $font-mono;
+  color: $text-secondary;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RESPONSIVE 响应式
+// ═══════════════════════════════════════════════════════════════════════════════
+
+@media (max-width: 1400px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .logistics-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 1024px) {
+  .kz-header {
+    flex-direction: column;
+    gap: $space-md;
+    padding: $space-md;
+  }
+  
+  .kz-nav {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .ops-board {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  
+  .logistics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .system-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .logistics-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .tab-panel:first-child {
+    grid-template-columns: 1fr;
+  }
+}</css>
+        <data_table>sp_instance</data_table>
+        <demo_data/>
+        <description/>
+        <docs/>
+        <field_list/>
+        <has_preview>false</has_preview>
+        <id>kokoro_analytics_dashboard</id>
+        <internal>false</internal>
+        <link><![CDATA[function link(scope, element, attrs, controller) {  }]]></link>
+        <name>Kokoro Analytics Dashboard</name>
+        <option_schema/>
+        <public>false</public>
+        <roles/>
+        <script><![CDATA[/* 
+═══════════════════════════════════════════════════════════════════════════════
+  KOKORO COMMAND CENTER - SERVER SCRIPT
+  绝区零/鸣潮 白色工业极简风格
+  
+  复制此代码到 ServiceNow Widget Editor > Server Script
+  
+  ⚠️ 重要: 将下面的表名替换为你实际的表名
+  例如: 'x_1460867_kokoro_request' → 'x_YOUR_SCOPE_request'
+═══════════════════════════════════════════════════════════════════════════════
+*/
+
+(function() {
+  
+  // 从 Client Script 接收的动作
+  var action = (input && input.action) ? input.action : 'getData';
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 主数据获取
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  if (action === 'getData') {
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // KPI 数据
+    // ─────────────────────────────────────────────────────────────────────────
+    
+    data.kpis = [];
+    
+    // KPI 1: 活跃请求数
+    var grActive = new GlideAggregate('x_1821654_kokoro_0_silent_wish');
+    grActive.addQuery('state', 'IN', '1,2'); // New, In Progress
+    grActive.addAggregate('COUNT');
+    grActive.query();
+    
+    var activeCount = 0;
+    if (grActive.next()) {
+      activeCount = parseInt(grActive.getAggregate('COUNT')) || 0;
+    }
+    
+    data.kpis.push({
+      id: 'REQ',
+      value: activeCount,
+      label: 'ACTIVE_REQUESTS',
+      status: 'NOMINAL',
+      trend: 12.4
+    });
+    
+    // KPI 2: 平均响应时间 (分钟)
+    var grClosed = new GlideRecord('x_1821654_kokoro_0_silent_wish');
+    grClosed.addQuery('state', '3'); // Closed
+    grClosed.orderByDesc('sys_updated_on');
+    grClosed.setLimit(100);
+    grClosed.query();
+    
+    var totalMinutes = 0;
+    var closedCount = 0;
+    
+    while (grClosed.next()) {
+      var created = new GlideDateTime(grClosed.sys_created_on);
+      var updated = new GlideDateTime(grClosed.sys_updated_on);
+      var diff = GlideDateTime.subtract(created, updated);
+      totalMinutes += Math.abs(diff.getNumericValue()) / (1000 * 60);
+      closedCount++;
+    }
+    
+    var avgMinutes = closedCount > 0 ? Math.round(totalMinutes / closedCount) : 0;
+    
+    data.kpis.push({
+      id: 'RES',
+      value: avgMinutes,
+      unit: 'MIN',
+      label: 'AVG_RESPONSE',
+      status: avgMinutes < 30 ? 'OPTIMAL' : 'NOMINAL',
+      trend: -18.2
+    });
+    
+    // KPI 3: 完成率
+    var grTotal = new GlideAggregate('x_1460867_kokoro_request');
+    grTotal.addAggregate('COUNT');
+    grTotal.query();
+    
+    var totalCount = 0;
+    if (grTotal.next()) {
+      totalCount = parseInt(grTotal.getAggregate('COUNT')) || 0;
+    }
+    
+    var completionRate = totalCount > 0 ? ((closedCount / totalCount) * 100).toFixed(1) : 0;
+    
+    data.kpis.push({
+      id: 'CMP',
+      value: parseFloat(completionRate),
+      unit: '%',
+      label: 'COMPLETION_RATE',
+      status: 'NOMINAL',
+      trend: 0
+    });
+    
+    // KPI 4: 活跃操作员数
+    var grOperators = new GlideAggregate('x_1460867_kokoro_request');
+    grOperators.addQuery('assigned_to', '!=', '');
+    grOperators.addQuery('state', '2'); // In Progress
+    grOperators.groupBy('assigned_to');
+    grOperators.addAggregate('COUNT');
+    grOperators.query();
+    
+    var operatorCount = 0;
+    while (grOperators.next()) {
+      operatorCount++;
+    }
+    
+    data.kpis.push({
+      id: 'OPR',
+      value: operatorCount,
+      label: 'ACTIVE_OPERATORS',
+      status: 'NOMINAL',
+      trend: 8.1
+    });
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // Alerts 数据
+    // ─────────────────────────────────────────────────────────────────────────
+    
+    data.alerts = [];
+    
+    var grAlerts = new GlideRecord('x_1460867_kokoro_request');
+    grAlerts.addQuery('state', 'IN', '1,2');
+    grAlerts.orderBy('urgency');
+    grAlerts.orderByDesc('sys_created_on');
+    grAlerts.setLimit(10);
+    grAlerts.query();
+    
+    var alertIndex = 847;
+    while (grAlerts.next()) {
+      var urgency = parseInt(grAlerts.getValue('urgency')) || 4;
+      var priority = Math.min(4, Math.max(1, urgency));
+      
+      // 计算经过时间
+      var created = new GlideDateTime(grAlerts.sys_created_on);
+      var now = new GlideDateTime();
+      var elapsed = GlideDateTime.subtract(created, now);
+      var elapsedMs = Math.abs(elapsed.getNumericValue());
+      
+      var hours = Math.floor(elapsedMs / (1000 * 60 * 60));
+      var mins = Math.floor((elapsedMs % (1000 * 60 * 60)) / (1000 * 60));
+      var secs = Math.floor((elapsedMs % (1000 * 60)) / 1000);
+      
+      var elapsedStr = String(hours).padStart(2, '0') + ':' + 
+                       String(mins).padStart(2, '0') + ':' + 
+                       String(secs).padStart(2, '0');
+      
+      data.alerts.push({
+        id: 'ALT-' + String(alertIndex).padStart(4, '0'),
+        priority: priority,
+        message: grAlerts.getDisplayValue('short_description') || 'New request pending',
+        sector: grAlerts.getDisplayValue('location') || 'SEC-' + String.fromCharCode(65 + (alertIndex % 4)),
+        elapsed: elapsedStr
+      });
+      
+      alertIndex++;
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // Inventory 数据
+    // ─────────────────────────────────────────────────────────────────────────
+    
+    data.inventory = [];
+    
+    var categories = [
+      { id: 'FOOD', name: '食料', category: 'food' },
+      { id: 'WATR', name: '飲料水', category: 'water' },
+      { id: 'MEDI', name: '医療品', category: 'medical' },
+      { id: 'CLTH', name: '衣類', category: 'clothing' },
+      { id: 'HYGN', name: '衛生用品', category: 'hygiene' }
+    ];
+    
+    categories.forEach(function(cat) {
+      var grInv = new GlideAggregate('x_1460867_kokoro_inventory');
+      grInv.addQuery('category', cat.category);
+      grInv.addAggregate('SUM', 'quantity');
+      grInv.query();
+      
+      var currentQty = 0;
+      if (grInv.next()) {
+        currentQty = parseInt(grInv.getAggregate('SUM', 'quantity')) || 0;
+      }
+      
+      // 默认容量
+      var capacity = 1000;
+      
+      data.inventory.push({
+        id: cat.id,
+        name: cat.name,
+        current: currentQty,
+        capacity: capacity
+      });
+    });
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // Operations 数据
+    // ─────────────────────────────────────────────────────────────────────────
+    
+    data.operations = {
+      queue: [],
+      active: [],
+      completed: 0
+    };
+    
+    // Queue (待处理)
+    var grQueue = new GlideRecord('x_1460867_kokoro_request');
+    grQueue.addQuery('state', '1'); // New
+    grQueue.orderBy('urgency');
+    grQueue.setLimit(10);
+    grQueue.query();
+    
+    var opIndex = 2847;
+    while (grQueue.next()) {
+      var urgency = parseInt(grQueue.getValue('urgency')) || 4;
+      
+      data.operations.queue.push({
+        id: 'OP-' + opIndex,
+        title: grQueue.getDisplayValue('short_description') || 'Task',
+        priority: Math.min(4, Math.max(1, urgency)),
+        zone: grQueue.getDisplayValue('location') || 'A-01',
+        eta: '---'
+      });
+      opIndex++;
+    }
+    
+    // Active (进行中)
+    var grActive2 = new GlideRecord('x_1460867_kokoro_request');
+    grActive2.addQuery('state', '2');
+    grActive2.addQuery('assigned_to', '!=', '');
+    grActive2.setLimit(10);
+    grActive2.query();
+    
+    while (grActive2.next()) {
+      // 估算进度
+      var created = new GlideDateTime(grActive2.sys_created_on);
+      var now = new GlideDateTime();
+      var elapsed = Math.abs(GlideDateTime.subtract(created, now).getNumericValue());
+      var progress = Math.min(95, Math.floor(elapsed / (1000 * 60 * 60) * 15));
+      
+      data.operations.active.push({
+        id: 'OP-' + opIndex,
+        title: grActive2.getDisplayValue('short_description') || 'Task',
+        operator: 'OPR-' + (grActive2.getDisplayValue('assigned_to') || 'Unknown').substring(0, 4),
+        progress: progress
+      });
+      opIndex++;
+    }
+    
+    // Completed (24小时内完成)
+    var yesterday = new GlideDateTime();
+    yesterday.addDaysUTC(-1);
+    
+    var grCompleted = new GlideAggregate('x_1460867_kokoro_request');
+    grCompleted.addQuery('state', '3');
+    grCompleted.addQuery('sys_updated_on', '>=', yesterday.getValue());
+    grCompleted.addAggregate('COUNT');
+    grCompleted.query();
+    
+    if (grCompleted.next()) {
+      data.operations.completed = parseInt(grCompleted.getAggregate('COUNT')) || 0;
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // System 数据
+    // ─────────────────────────────────────────────────────────────────────────
+    
+    data.system = {
+      status: 'ONLINE',
+      uptime: '99.72%',
+      latency: (Math.floor(Math.random() * 20) + 35) + 'ms',
+      nodes: 12
+    };
+    
+  }
+  
+})();]]></script>
+        <servicenow>false</servicenow>
+        <sys_class_name>sp_widget</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-23 07:09:26</sys_created_on>
+        <sys_id>5d047ae283aaf210f6b1fb96feaad36f</sys_id>
+        <sys_mod_count>9</sys_mod_count>
+        <sys_name>Kokoro Analytics Dashboard</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sp_widget_5d047ae283aaf210f6b1fb96feaad36f</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-30 01:38:09</sys_updated_on>
+        <template><![CDATA[<!-- 
+═══════════════════════════════════════════════════════════════════════════════
+  KOKORO COMMAND CENTER - HTML TEMPLATE
+  绝区零/鸣潮 白色工业极简风格
+  
+  复制此代码到 ServiceNow Widget Editor > HTML Template
+═══════════════════════════════════════════════════════════════════════════════
+-->
+
+<div class="kokoro-zenless" ng-class="{'is-loading': c.loading}">
+  
+  <!-- 噪点纹理层 -->
+  <div class="noise-layer"></div>
+  
+  <!-- 网格背景 -->
+  <div class="grid-layer"></div>
+  
+  <!-- 四角装饰括号 -->
+  <div class="corner-bracket corner-tl"></div>
+  <div class="corner-bracket corner-tr"></div>
+  <div class="corner-bracket corner-bl"></div>
+  <div class="corner-bracket corner-br"></div>
+
+  <!-- ════════════════════════════════════════════════════════════════════════
+       HEADER 顶部导航栏
+       ════════════════════════════════════════════════════════════════════════ -->
+  <header class="kz-header">
+    
+    <!-- 左侧: Logo + 系统状态 -->
+    <div class="header-left">
+      <div class="logo-group">
+        <div class="logo-mark">
+          <span class="logo-letter">K</span>
+        </div>
+        <div class="logo-text">
+          <div class="logo-title">KOKORO</div>
+          <div class="logo-subtitle">COMMAND_INTERFACE</div>
+        </div>
+      </div>
+      
+      <div class="system-badge" ng-class="{'online': c.systemOnline}">
+        <span class="status-dot"></span>
+        <span class="status-text">SYS_{{c.systemOnline ? 'ONLINE' : 'OFFLINE'}}</span>
+        <span class="version-text">{{c.version}}</span>
+      </div>
+    </div>
+    
+    <!-- 中间: 导航菜单 -->
+    <nav class="kz-nav">
+      <button class="nav-item" 
+              ng-repeat="tab in c.tabs track by tab.id"
+              ng-click="c.setActiveTab(tab.id)"
+              ng-class="{'active': c.activeTab === tab.id}">
+        <span class="nav-code">{{tab.code}}</span>
+        <span class="nav-divider">/</span>
+        <span class="nav-label">{{tab.label}}</span>
+      </button>
+    </nav>
+    
+    <!-- 右侧: 时间 + 操作员 -->
+    <div class="header-right">
+      <div class="time-display">
+        <div class="time-label">SYS_TIME</div>
+        <div class="time-value">{{c.currentTime}}</div>
+      </div>
+      <div class="date-display">
+        <div class="date-label">DATE</div>
+        <div class="date-value">{{c.currentDate}}</div>
+      </div>
+      <div class="operator-badge">
+        <span class="operator-icon">▣</span>
+        <div class="operator-info">
+          <div class="operator-label">OPERATOR</div>
+          <div class="operator-id">{{c.user.id}}</div>
+        </div>
+      </div>
+    </div>
+    
+  </header>
+  
+  <!-- 装饰分割线 -->
+  <div class="header-rule">
+    <div class="rule-left"></div>
+    <div class="rule-center">
+      <span>●</span>
+      <span class="rule-text">DISASTER_RESPONSE_SYSTEM</span>
+      <span>●</span>
+    </div>
+    <div class="rule-right"></div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════════
+       MAIN 主内容区
+       ════════════════════════════════════════════════════════════════════════ -->
+  <main class="kz-main">
+    
+    <!-- ══════════════════ TAB 1: OVERVIEW 总览 ══════════════════ -->
+    <div class="tab-panel" ng-if="c.activeTab === 'overview'" ng-class="{'fade-in': true}">
+      
+      <!-- KPI 指标卡片区 -->
+      <section class="section-block section-kpi">
+        <div class="section-header">
+          <div class="section-tag">
+            <span class="tag-code">01</span>
+            <span class="tag-label">METRICS_OVERVIEW</span>
+          </div>
+          <div class="section-rule"></div>
+          <div class="section-time">{{c.currentTime}}</div>
+        </div>
+        
+        <div class="kpi-grid">
+          <div class="kpi-card" ng-repeat="kpi in c.data.kpis track by kpi.id">
+            <!-- 切角装饰 -->
+            <div class="chamfer-tr"></div>
+            <div class="chamfer-bl"></div>
+            
+            <div class="kpi-header">
+              <span class="kpi-id">{{kpi.id}}</span>
+              <span class="kpi-index">_{{$index + 1 | limitTo:2}}</span>
+            </div>
+            
+            <div class="kpi-body">
+              <span class="kpi-value">{{kpi.value}}</span>
+              <span class="kpi-unit" ng-if="kpi.unit">{{kpi.unit}}</span>
+            </div>
+            
+            <div class="kpi-label">{{kpi.label}}</div>
+            
+            <div class="kpi-footer">
+              <span class="kpi-trend" ng-class="{
+                'trend-up': kpi.trend > 0,
+                'trend-down': kpi.trend < 0
+              }">{{kpi.trendDisplay}}</span>
+              <span class="kpi-status">[{{kpi.status}}]</span>
+            </div>
+            
+            <!-- 条形码装饰 -->
+            <div class="barcode-deco">
+              <span class="bar" ng-repeat="i in [1,2,3,4,5,6,7,8,9,10,11,12]"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+      
+      <!-- 警报列表区 -->
+      <section class="section-block section-alerts">
+        <div class="section-header">
+          <div class="section-tag">
+            <span class="tag-code">02</span>
+            <span class="tag-label">ALERT_FEED</span>
+          </div>
+          <div class="alert-count">{{c.data.alerts.length}}</div>
+          <div class="section-rule"></div>
+        </div>
+        
+        <div class="alerts-list">
+          <div class="alert-card" 
+               ng-repeat="alert in c.data.alerts track by alert.id"
+               ng-class="'priority-' + alert.priority"
+               ng-click="c.handleAlertClick(alert)">
+            <div class="alert-priority-bar"></div>
+            <div class="alert-content">
+              <div class="alert-header">
+                <span class="alert-id">{{alert.id}}</span>
+                <span class="alert-priority-label">P{{alert.priority}}_{{alert.priorityLabel}}</span>
+                <span class="alert-sector">{{alert.sector}}</span>
+                <span class="alert-elapsed">{{alert.elapsed}}</span>
+              </div>
+              <div class="alert-message">{{alert.message}}</div>
+            </div>
+            <div class="alert-action">→</div>
+          </div>
+        </div>
+      </section>
+      
+      <!-- 库存状态区 -->
+      <section class="section-block section-inventory">
+        <div class="section-header">
+          <div class="section-tag">
+            <span class="tag-code">03</span>
+            <span class="tag-label">RESOURCE_STATUS</span>
+          </div>
+          <div class="section-rule"></div>
+        </div>
+        
+        <div class="inventory-list">
+          <div class="inventory-item" ng-repeat="item in c.data.inventory track by item.id">
+            <div class="inventory-header">
+              <span class="inventory-id">[{{item.id}}]</span>
+              <span class="inventory-name">{{item.name}}</span>
+              <span class="inventory-pct" ng-style="{'color': item.statusColor}">
+                {{item.percentage}}%
+              </span>
+            </div>
+            <div class="inventory-bar-outer">
+              <div class="inventory-bar-inner" 
+                   ng-style="{'width': item.percentage + '%', 'background-color': item.statusColor}">
+              </div>
+              <div class="scale-marker" style="left: 25%"></div>
+              <div class="scale-marker" style="left: 50%"></div>
+              <div class="scale-marker" style="left: 75%"></div>
+            </div>
+            <div class="inventory-values">
+              <span class="inv-current">{{item.current}}</span>
+              <span class="inv-sep">/</span>
+              <span class="inv-capacity">{{item.capacity}}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+      
+      <!-- 系统诊断区 -->
+      <section class="section-block section-system">
+        <div class="section-header">
+          <div class="section-tag">
+            <span class="tag-code">04</span>
+            <span class="tag-label">SYSTEM_DIAGNOSTICS</span>
+          </div>
+          <div class="section-rule"></div>
+        </div>
+        
+        <div class="system-grid">
+          <div class="system-stat">
+            <div class="stat-label">UPTIME</div>
+            <div class="stat-value">{{c.data.system.uptime}}</div>
+          </div>
+          <div class="system-stat">
+            <div class="stat-label">LATENCY</div>
+            <div class="stat-value">{{c.data.system.latency}}</div>
+          </div>
+          <div class="system-stat">
+            <div class="stat-label">NODES</div>
+            <div class="stat-value">{{c.data.system.nodes}}</div>
+          </div>
+          <div class="system-stat">
+            <div class="stat-label">STATUS</div>
+            <div class="stat-value highlight">{{c.data.system.status}}</div>
+          </div>
+        </div>
+      </section>
+      
+    </div>
+    
+    <!-- ══════════════════ TAB 2: TACTICAL 战术地图 ══════════════════ -->
+    <!-- ]]>🔥<![CDATA[ 这里嵌入你的 Mapbox 地图 Widget ]]>🔥<![CDATA[ -->
+    <div class="tab-panel tab-tactical" ng-if="c.activeTab === 'tactical'">
+      
+      <!-- 地图控制面板 -->
+      <div class="map-controls">
+        <button class="map-ctrl-btn" 
+                ng-repeat="ctrl in c.mapControls track by ctrl.id"
+                ng-click="c.toggleMapLayer(ctrl.id)"
+                ng-class="{'active': ctrl.active}">
+          <span class="ctrl-code">{{$index + 1 | limitTo:2}}</span>
+          <span class="ctrl-label">{{ctrl.label}}</span>
+        </button>
+      </div>
+      
+      <!-- 嵌入地图 Widget -->
+      <div class="map-wrapper">
+        <sp-widget widget="c.mapWidget"></sp-widget>
+      </div>
+      
+      <!-- 地图信息叠加层 -->
+      <div class="map-overlay-info">
+        <div class="coord-display">
+          <span>LAT: {{c.mapCenter.lat}}°N</span>
+          <span class="coord-sep">|</span>
+          <span>LNG: {{c.mapCenter.lng}}°E</span>
+        </div>
+      </div>
+      
+    </div>
+    
+    <!-- ══════════════════ TAB 3: OPERATIONS 任务看板 ══════════════════ -->
+    <div class="tab-panel tab-operations" ng-if="c.activeTab === 'operations'">
+      
+      <div class="ops-board">
+        
+        <!-- 待处理列 -->
+        <div class="ops-column">
+          <div class="ops-column-header">
+            <span class="ops-column-tag">QUEUE</span>
+            <span class="ops-column-count">{{c.data.operations.queue.length}}</span>
+          </div>
+          <div class="ops-column-list">
+            <div class="op-card" ng-repeat="op in c.data.operations.queue track by op.id">
+              <div class="op-card-header">
+                <span class="op-priority-dot" ng-style="{'background-color': c.getPriorityColor(op.priority)}"></span>
+                <span class="op-id">{{op.id}}</span>
+              </div>
+              <div class="op-title">{{op.title}}</div>
+              <div class="op-meta">
+                <span>ZONE: {{op.zone}}</span>
+                <span>ETA: {{op.eta}}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 进行中列 -->
+        <div class="ops-column">
+          <div class="ops-column-header">
+            <span class="ops-column-tag">ACTIVE</span>
+            <span class="ops-column-count">{{c.data.operations.active.length}}</span>
+          </div>
+          <div class="ops-column-list">
+            <div class="op-card" ng-repeat="op in c.data.operations.active track by op.id">
+              <div class="op-card-header">
+                <span class="op-id">{{op.id}}</span>
+              </div>
+              <div class="op-title">{{op.title}}</div>
+              <div class="op-operator">
+                <span class="op-operator-icon">▣</span>
+                <span>{{op.operator}}</span>
+              </div>
+              <div class="op-progress">
+                <div class="op-progress-bar">
+                  <div class="op-progress-fill" ng-style="{'width': op.progress + '%'}"></div>
+                </div>
+                <span class="op-progress-value">{{op.progress}}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 已完成列 -->
+        <div class="ops-column">
+          <div class="ops-column-header">
+            <span class="ops-column-tag">COMPLETE</span>
+            <span class="ops-column-count">{{c.data.operations.completed}}</span>
+          </div>
+          <div class="ops-completed-display">
+            <div class="completed-value">{{c.data.operations.completed}}</div>
+            <div class="completed-label">OPERATIONS_RESOLVED</div>
+            <div class="completed-period">// 24H_CYCLE</div>
+          </div>
+        </div>
+        
+      </div>
+      
+    </div>
+    
+    <!-- ══════════════════ TAB 4: LOGISTICS 物资管理 ══════════════════ -->
+    <div class="tab-panel tab-logistics" ng-if="c.activeTab === 'logistics'">
+      
+      <div class="logistics-grid">
+        <div class="logistics-card" ng-repeat="item in c.data.inventory track by item.id">
+          <div class="chamfer-tr"></div>
+          
+          <div class="logistics-card-header">
+            <span class="logistics-id">{{item.id}}</span>
+            <span class="logistics-status" ng-style="{'color': item.statusColor}">
+              {{item.statusLabel}}
+            </span>
+          </div>
+          
+          <div class="logistics-name">{{item.name}}</div>
+          
+          <div class="logistics-gauge">
+            <svg viewBox="0 0 100 100" class="gauge-ring">
+              <circle cx="50" cy="50" r="42" class="gauge-bg"></circle>
+              <circle cx="50" cy="50" r="42" 
+                      class="gauge-fill"
+                      ng-attr-stroke="{{item.statusColor}}"
+                      ng-attr-stroke-dasharray="{{item.percentage * 2.64}} 264"
+                      transform="rotate(-90 50 50)">
+              </circle>
+            </svg>
+            <div class="gauge-value">{{item.percentage}}%</div>
+          </div>
+          
+          <div class="logistics-values">
+            <span class="lg-current">{{item.current}}</span>
+            <span class="lg-divider">/</span>
+            <span class="lg-capacity">{{item.capacity}}</span>
+          </div>
+        </div>
+      </div>
+      
+    </div>
+    
+  </main>
+
+  <!-- ════════════════════════════════════════════════════════════════════════
+       FOOTER 底部状态栏
+       ════════════════════════════════════════════════════════════════════════ -->
+  <footer class="kz-footer">
+    <div class="footer-left">
+      <span class="footer-indicator"></span>
+      <span class="footer-text">KOKORO_SYS</span>
+      <span class="footer-sep">|</span>
+      <span class="footer-text">STATUS: {{c.data.system.status}}</span>
+      <span class="footer-sep">|</span>
+      <span class="footer-text">BUILD: {{c.version}}</span>
+    </div>
+    <div class="footer-center">
+      <span>LAT: {{c.data.system.latency}}</span>
+      <span class="footer-dot">●</span>
+      <span>NODES: {{c.data.system.nodes}}</span>
+      <span class="footer-dot">●</span>
+      <span>UPT: {{c.data.system.uptime}}</span>
+    </div>
+    <div class="footer-right">
+      <span class="footer-muted">SERVICENOW_INTEGRATION</span>
+    </div>
+  </footer>
+  
+  <!-- 加载覆盖层 -->
+  <div class="loading-overlay" ng-if="c.loading">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">INITIALIZING_SYSTEM...</div>
+  </div>
+  
+</div>]]></template>
+    </sp_widget>
+    <sys_es_latest_script action="INSERT_OR_UPDATE">
+        <id>5d047ae283aaf210f6b1fb96feaad36f</id>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-23 07:09:26</sys_created_on>
+        <sys_id>dd047ae283aaf210f6b1fb96feaad371</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-23 07:09:26</sys_updated_on>
+        <table>sp_widget</table>
+        <use_es_latest>true</use_es_latest>
+    </sys_es_latest_script>
+</record_update>

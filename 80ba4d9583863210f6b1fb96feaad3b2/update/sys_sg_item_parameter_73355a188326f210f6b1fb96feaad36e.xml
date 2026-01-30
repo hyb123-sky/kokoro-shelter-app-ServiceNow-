@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_sg_item_parameter">
+    <sys_sg_item_parameter action="INSERT_OR_UPDATE">
+        <default_value/>
+        <name>Request List urgency</name>
+        <parent>b3355a188326f210f6b1fb96feaad35a</parent>
+        <parent_table>sys_sg_write_back_action_item</parent_table>
+        <sys_class_name>sys_sg_item_parameter</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-16 05:08:40</sys_created_on>
+        <sys_id>73355a188326f210f6b1fb96feaad36e</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Request List urgency</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_sg_item_parameter_73355a188326f210f6b1fb96feaad36e</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-16 05:08:40</sys_updated_on>
+        <type>string</type>
+    </sys_sg_item_parameter>
+</record_update>

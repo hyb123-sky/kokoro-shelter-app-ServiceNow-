@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update sys_domain="global" table="sys_decision_multi_result">
+    <sys_decision_multi_result action="INSERT_OR_UPDATE">
+        <decision_table display_value="Kokoro Dispatch Rules">745df0db8382b210f6b1fb96feaad330</decision_table>
+        <label>Dispatch Group: Kokoro Medical Team</label>
+        <result_elements/>
+        <sys_class_name>sys_decision_multi_result</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-31 10:18:05</sys_created_on>
+        <sys_domain>global</sys_domain>
+        <sys_domain_path>/</sys_domain_path>
+        <sys_id>d4a2c99783c2b210f6b1fb96feaad36a</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Dispatch Group: Kokoro Medical Team</sys_name>
+        <sys_overrides/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_decision_multi_result_d4a2c99783c2b210f6b1fb96feaad36a</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-31 10:18:05</sys_updated_on>
+    </sys_decision_multi_result>
+    <sys_variable_value action="delete_multiple" query="document_key=d4a2c99783c2b210f6b1fb96feaad36a"/>
+    <sys_variable_value action="INSERT_OR_UPDATE">
+        <document>sys_decision_multi_result</document>
+        <document_key>d4a2c99783c2b210f6b1fb96feaad36a</document_key>
+        <order>100</order>
+        <sys_class_name>sys_variable_value</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-31 10:18:05</sys_created_on>
+        <sys_id>d8a2c99783c2b210f6b1fb96feaad36a</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-31 10:18:05</sys_updated_on>
+        <value>536f641f8342b210f6b1fb96feaad35a</value>
+        <variable display_value="Dispatch Group">f792c99783c2b210f6b1fb96feaad333</variable>
+    </sys_variable_value>
+</record_update>

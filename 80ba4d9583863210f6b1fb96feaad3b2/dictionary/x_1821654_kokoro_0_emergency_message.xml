@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="f2c5acf283aa3210f6b1fb96feaad37d" label="Emergency Message" max_length="40" name="x_1821654_kokoro_0_emergency_message" type="collection">
+        <element choice="3" label="Message type" max_length="40" name="message_type" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="Location_Info"/>
+                <element inactive_on_update="false" label="Last_Will"/>
+                <element inactive_on_update="false" label="Medical_Info"/>
+            </choice>
+        </element>
+        <element label="Message encrypted" max_length="4000" name="message_encrypted" type="string"/>
+        <element label="Created at" max_length="40" name="created_at" type="glide_date_time"/>
+        <element label="user" max_length="32" name="user" reference="sys_user" type="reference"/>
+        <element label="Accessed at" max_length="40" name="accessed_at" type="glide_date_time"/>
+        <element label="Is active" max_length="40" name="is_active" type="boolean"/>
+        <element label="Accessed by" max_length="32" name="accessed_by" reference="sys_user" type="reference"/>
+        <index name="index">
+            <element name="accessed_by"/>
+        </index>
+        <index name="index2">
+            <element name="user"/>
+        </index>
+    </element>
+</database>

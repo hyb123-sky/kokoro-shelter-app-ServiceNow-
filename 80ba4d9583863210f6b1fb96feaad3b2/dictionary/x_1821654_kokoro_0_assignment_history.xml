@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="86f3889c83b63210f6b1fb96feaad3b5" label="Assignment History" max_length="40" name="x_1821654_kokoro_0_assignment_history" type="collection">
+        <element label="Assigned To" max_length="32" name="assigned_to" reference="sys_user" type="reference"/>
+        <element label="Reason" max_length="500" name="assignment_reason" type="string"/>
+        <element label="Previous Assignee" max_length="32" name="previous_assignee" reference="sys_user" type="reference"/>
+        <element label="Related Wish" max_length="32" name="related_wish" reference="x_1821654_kokoro_0_silent_wish" type="reference"/>
+        <element label="Score" max_length="40" name="assignment_score" type="integer"/>
+        <element label="Timestamp" max_length="40" name="timestamp" type="glide_date_time"/>
+        <element choice="1" label="Assignment Type" max_length="40" name="assignment_type" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="Escalation" value="escalation"/>
+                <element inactive_on_update="false" label="Manual" value="manual"/>
+                <element inactive_on_update="false" label="Automatic" value="auto"/>
+                <element inactive_on_update="false" label="Reassign" value="reassign"/>
+            </choice>
+        </element>
+        <element label="Assigned by" max_length="32" name="assigned_by" reference="sys_user" type="reference"/>
+        <index name="index">
+            <element name="assigned_by"/>
+        </index>
+        <index name="index2">
+            <element name="assigned_to"/>
+        </index>
+        <index name="index3">
+            <element name="previous_assignee"/>
+        </index>
+        <index name="index4">
+            <element name="related_wish"/>
+        </index>
+    </element>
+</database>

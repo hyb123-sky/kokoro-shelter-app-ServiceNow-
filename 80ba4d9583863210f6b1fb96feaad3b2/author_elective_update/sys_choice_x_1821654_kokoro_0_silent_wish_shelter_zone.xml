@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update>
+    <sys_choice action="INSERT_OR_UPDATE" field="shelter_zone" table="x_1821654_kokoro_0_silent_wish" version="3">
+        <sys_choice_set action="INSERT_OR_UPDATE">
+            <element>shelter_zone</element>
+            <name>x_1821654_kokoro_0_silent_wish</name>
+            <sys_class_name>sys_choice_set</sys_class_name>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2025-12-25 06:39:19</sys_created_on>
+            <sys_mod_count>0</sys_mod_count>
+            <sys_name>shelter_zone</sys_name>
+            <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+            <sys_policy/>
+            <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+            <sys_update_name>sys_choice_x_1821654_kokoro_0_silent_wish_shelter_zone</sys_update_name>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2025-12-25 06:39:19</sys_updated_on>
+        </sys_choice_set>
+        <sys_choice action="INSERT_OR_UPDATE">
+            <dependent_value/>
+            <element>shelter_zone</element>
+            <hint/>
+            <inactive>false</inactive>
+            <label>ファミリーエリア（家族）</label>
+            <language>en</language>
+            <name>x_1821654_kokoro_0_silent_wish</name>
+            <sequence>0</sequence>
+            <synonyms/>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2025-12-25 07:28:25</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_mod_count>1</sys_mod_count>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-01-19 00:48:28</sys_updated_on>
+            <value>a</value>
+        </sys_choice>
+        <sys_choice action="INSERT_OR_UPDATE">
+            <dependent_value/>
+            <element>shelter_zone</element>
+            <hint/>
+            <inactive>false</inactive>
+            <label>単身エリア</label>
+            <language>en</language>
+            <name>x_1821654_kokoro_0_silent_wish</name>
+            <sequence>1</sequence>
+            <synonyms/>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2025-12-25 07:28:25</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_mod_count>1</sys_mod_count>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-01-19 00:48:29</sys_updated_on>
+            <value>b</value>
+        </sys_choice>
+        <sys_choice action="INSERT_OR_UPDATE">
+            <dependent_value/>
+            <element>shelter_zone</element>
+            <hint/>
+            <inactive>false</inactive>
+            <label>医療・ケアエリア</label>
+            <language>en</language>
+            <name>x_1821654_kokoro_0_silent_wish</name>
+            <sequence>2</sequence>
+            <synonyms/>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2025-12-25 07:28:25</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_mod_count>1</sys_mod_count>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-01-19 00:48:29</sys_updated_on>
+            <value>c</value>
+        </sys_choice>
+    </sys_choice>
+</record_update>

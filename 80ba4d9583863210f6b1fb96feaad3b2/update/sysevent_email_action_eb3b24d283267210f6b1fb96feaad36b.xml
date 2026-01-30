@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update sys_domain="global" table="sysevent_email_action">
+    <sysevent_email_action action="INSERT_OR_UPDATE">
+        <action_insert>false</action_insert>
+        <action_update>false</action_update>
+        <active>true</active>
+        <advanced_condition/>
+        <affected_field_on_event/>
+        <category display_value="Uncategorized" name="Uncategorized">c97d83137f4432005f58108c3ffa917a</category>
+        <collection>x_1821654_kokoro_0_x_1821654_kokoro_0_heartbeat</collection>
+        <condition/>
+        <content_type>text/html</content_type>
+        <default_digest>false</default_digest>
+        <default_interval/>
+        <description/>
+        <digest_from/>
+        <digest_html/>
+        <digest_reply_to/>
+        <digest_separator_html><![CDATA[<p>&nbsp;</p>
+<hr>
+<p>&nbsp;</p>]]></digest_separator_html>
+        <digest_separator_text><![CDATA[\n--------------------------------------------------------------------------------\n]]></digest_separator_text>
+        <digest_subject/>
+        <digest_template/>
+        <digest_text/>
+        <digest_type>single</digest_type>
+        <digestable>false</digestable>
+        <enable_dynamic_translation>false</enable_dynamic_translation>
+        <event_name>x_1821654_kokoro.heartbeat_timeout</event_name>
+        <event_parm_1>false</event_parm_1>
+        <event_parm_2>false</event_parm_2>
+        <exclude_delegates>false</exclude_delegates>
+        <force_delivery>false</force_delivery>
+        <from/>
+        <generation_type>event</generation_type>
+        <importance/>
+        <include_attachments>false</include_attachments>
+        <item>event.parm1</item>
+        <item_table/>
+        <mandatory>false</mandatory>
+        <message/>
+        <message_html><![CDATA[<p>&lt;p&gt;&lt;strong&gt;{{${u_user.name}}} 様&lt;/strong&gt;&lt;/p&gt;</p>
+<p>&lt;p&gt;Kokoro Shelter の自動監視システムです。&lt;/p&gt;<br>&lt;p&gt;過去 24 時間、あなたの「生存シグナル」が確認できていません。&lt;br /&gt;<br>システムはあなたのステータスを &lt;strong&gt;「警告 (Warning)」&lt;/strong&gt; に変更しました。&lt;/p&gt;</p>
+<p>&lt;hr /&gt;</p>
+<p>&lt;p&gt;&lt;strong&gt;▼ もしご無事であれば、下のリンクをクリックしてください：&lt;/strong&gt;&lt;br /&gt;<br>&lt;a href="<a href="https://dev269536.service-now.com/sp?id=kokoro_public&amp;sys_id=2dd8915983c63210f6b1fb96feaad377">https://dev269536.service-now.com/sp?id=kokoro_public&amp;sys_id=2dd8915983c63210f6b1fb96feaad377</a><a href="https://devXXXXX.service-now.com/sp?id=kokoro_checkin&amp;token=${sys_id}">}</a>"&gt;<br>&nbsp; &gt;&gt;&gt; ここをクリックして安全を報告 (I am Safe) &lt;&lt;&lt;<br>&lt;/a&gt;&lt;/p&gt;</p>
+<p>&lt;hr /&gt;</p>
+<p>&lt;p&gt;※ このまま応答がない場合、自動的に救援リクエストが作成され、以下のメッセージが救助隊に送信されます：&lt;/p&gt;<br>&lt;div style="background-color: #fce4ec; padding: 10px; border-radius: 5px;"&gt;<br>&nbsp; &lt;em&gt;「${u_last_message}」&lt;/em&gt;<br>&lt;/div&gt;</p>
+<p>&lt;p&gt;Kokoro Shelter Team&lt;/p&gt;</p>]]></message_html>
+        <message_list/>
+        <message_text/>
+        <name>Kokoro Heartbeat Warning</name>
+        <omit_watermark>false</omit_watermark>
+        <order>100</order>
+        <push_message_only>false</push_message_only>
+        <recipient_fields>u_user</recipient_fields>
+        <recipient_groups/>
+        <recipient_users/>
+        <reply_to/>
+        <send_self>true</send_self>
+        <sms_alternate/>
+        <style/>
+        <subject>【重要】Kokoro Shelter: あなたの安否を確認しています (Safety Check)</subject>
+        <subscribable>false</subscribable>
+        <sys_class_name>sysevent_email_action</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-22 02:38:14</sys_created_on>
+        <sys_domain>global</sys_domain>
+        <sys_domain_path>/</sys_domain_path>
+        <sys_id>eb3b24d283267210f6b1fb96feaad36b</sys_id>
+        <sys_mod_count>2</sys_mod_count>
+        <sys_name>Kokoro Heartbeat Warning</sys_name>
+        <sys_overrides/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sysevent_email_action_eb3b24d283267210f6b1fb96feaad36b</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-22 04:02:53</sys_updated_on>
+        <sys_version>2</sys_version>
+        <template display_value="Unsubscribe and Preferences">7ed0481f3b0b2200c869c2c703efc487</template>
+        <type>email</type>
+        <weight>0</weight>
+    </sysevent_email_action>
+    <sys_es_latest_script action="INSERT_OR_UPDATE">
+        <id>eb3b24d283267210f6b1fb96feaad36b</id>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-22 02:54:11</sys_created_on>
+        <sys_id>e000b45a83267210f6b1fb96feaad3f2</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-22 02:54:11</sys_updated_on>
+        <table>sysevent_email_action</table>
+        <use_es_latest>true</use_es_latest>
+    </sys_es_latest_script>
+</record_update>

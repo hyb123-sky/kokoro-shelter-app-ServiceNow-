@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_user_role">
+    <sys_user_role action="DELETE">
+        <assignable_by/>
+        <can_delegate>true</can_delegate>
+        <description/>
+        <elevated_privilege>false</elevated_privilege>
+        <encryption_context/>
+        <grantable>true</grantable>
+        <includes_roles/>
+        <name>x_1821654_kokoro_0.KokoroAutoAssignment</name>
+        <scoped_admin>false</scoped_admin>
+        <suffix>KokoroAutoAssignment</suffix>
+        <sys_class_name>sys_user_role</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-28 05:46:40</sys_created_on>
+        <sys_id>ece05450837a3210f6b1fb96feaad375</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>x_1821654_kokoro_0.KokoroAutoAssignment</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_user_role_ece05450837a3210f6b1fb96feaad375</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-28 05:46:40</sys_updated_on>
+    </sys_user_role>
+    <sys_update_version action="INSERT_OR_UPDATE">
+        <action>DELETE</action>
+        <application display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</application>
+        <file_path/>
+        <instance_id>26f701431b4a8650168f4089bd4bcbef</instance_id>
+        <instance_name>dev269536</instance_name>
+        <name>sys_user_role_ece05450837a3210f6b1fb96feaad375</name>
+        <payload><![CDATA[<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_user_role"><sys_user_role action="INSERT_OR_UPDATE"><assignable_by/><can_delegate>true</can_delegate><description/><elevated_privilege>false</elevated_privilege><encryption_context/><grantable>true</grantable><includes_roles/><name>x_1821654_kokoro_0.KokoroAutoAssignment</name><scoped_admin>false</scoped_admin><suffix>KokoroAutoAssignment</suffix><sys_class_name>sys_user_role</sys_class_name><sys_created_by>admin</sys_created_by><sys_created_on>2026-01-28 05:46:40</sys_created_on><sys_id>ece05450837a3210f6b1fb96feaad375</sys_id><sys_mod_count>0</sys_mod_count><sys_name>x_1821654_kokoro_0.KokoroAutoAssignment</sys_name><sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package><sys_policy/><sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope><sys_update_name>sys_user_role_ece05450837a3210f6b1fb96feaad375</sys_update_name><sys_updated_by>admin</sys_updated_by><sys_updated_on>2026-01-28 05:46:40</sys_updated_on></sys_user_role></record_update>]]></payload>
+        <payload_hash>-340821309</payload_hash>
+        <record_name>x_1821654_kokoro_0.KokoroAutoAssignment</record_name>
+        <reverted_from/>
+        <source>48ba4d9583863210f6b1fb96feaad3b6</source>
+        <source_table>sys_update_set</source_table>
+        <state>previous</state>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-28 05:46:40</sys_created_on>
+        <sys_id>ed01d850837a3210f6b1fb96feaad386</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_recorded_at>19c0323bf880000001</sys_recorded_at>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-28 05:46:40</sys_updated_on>
+        <type>Role</type>
+        <update_guid>6501d850f37a32100376023f9cbce586</update_guid>
+        <update_guid_history>6501d850f37a32100376023f9cbce586:-340821309</update_guid_history>
+    </sys_update_version>
+    <sys_metadata_delete action="INSERT_OR_UPDATE">
+        <sys_audit_delete display_value="x_1821654_kokoro_0.KokoroAutoAssignment">de119090837a3210f6b1fb96feaad343</sys_audit_delete>
+        <sys_class_name>sys_metadata_delete</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-28 05:46:59</sys_created_on>
+        <sys_db_object display_value="" name="sys_user_role">sys_user_role</sys_db_object>
+        <sys_id>194091f47b9c431a83141018aa274eb9</sys_id>
+        <sys_metadata>ece05450837a3210f6b1fb96feaad375</sys_metadata>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>x_1821654_kokoro_0.KokoroAutoAssignment</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_parent/>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_scope_delete display_value="">b5b651695bd14f99aee30f38068ac3c1</sys_scope_delete>
+        <sys_update_name>sys_user_role_ece05450837a3210f6b1fb96feaad375</sys_update_name>
+        <sys_update_version display_value="sys_user_role_ece05450837a3210f6b1fb96feaad375">ed01d850837a3210f6b1fb96feaad386</sys_update_version>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-28 05:46:59</sys_updated_on>
+    </sys_metadata_delete>
+</record_update>

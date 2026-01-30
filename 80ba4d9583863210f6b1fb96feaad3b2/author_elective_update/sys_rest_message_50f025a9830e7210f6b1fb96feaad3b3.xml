@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_rest_message">
+    <sys_rest_message action="DELETE">
+        <access>package_private</access>
+        <authentication_type>no_authentication</authentication_type>
+        <basic_auth_password/>
+        <basic_auth_profile/>
+        <basic_auth_user/>
+        <description/>
+        <name>Gemini AI</name>
+        <oauth2_profile/>
+        <protocol_name/>
+        <rest_endpoint>https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent</rest_endpoint>
+        <sys_class_name>sys_rest_message</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 02:01:49</sys_created_on>
+        <sys_id>50f025a9830e7210f6b1fb96feaad3b3</sys_id>
+        <sys_mod_count>6</sys_mod_count>
+        <sys_name>Gemini AI</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_rest_message_50f025a9830e7210f6b1fb96feaad3b3</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 02:54:44</sys_updated_on>
+        <use_basic_auth>false</use_basic_auth>
+        <use_mutual_auth>false</use_mutual_auth>
+    </sys_rest_message>
+    <sys_update_version action="INSERT_OR_UPDATE">
+        <action>DELETE</action>
+        <application display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</application>
+        <file_path/>
+        <instance_id>26f701431b4a8650168f4089bd4bcbef</instance_id>
+        <instance_name>dev269536</instance_name>
+        <name>sys_rest_message_50f025a9830e7210f6b1fb96feaad3b3</name>
+        <payload><![CDATA[<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_rest_message"><sys_rest_message action="INSERT_OR_UPDATE"><access>package_private</access><authentication_type>no_authentication</authentication_type><basic_auth_password/><basic_auth_profile/><basic_auth_user/><description/><name>Gemini AI</name><oauth2_profile/><protocol_name/><rest_endpoint>https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent</rest_endpoint><sys_class_name>sys_rest_message</sys_class_name><sys_created_by>admin</sys_created_by><sys_created_on>2025-12-26 02:01:49</sys_created_on><sys_id>50f025a9830e7210f6b1fb96feaad3b3</sys_id><sys_mod_count>6</sys_mod_count><sys_name>Gemini AI</sys_name><sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package><sys_policy/><sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope><sys_update_name>sys_rest_message_50f025a9830e7210f6b1fb96feaad3b3</sys_update_name><sys_updated_by>admin</sys_updated_by><sys_updated_on>2025-12-26 02:54:44</sys_updated_on><use_basic_auth>false</use_basic_auth><use_mutual_auth>false</use_mutual_auth></sys_rest_message></record_update>]]></payload>
+        <payload_hash>1159176240</payload_hash>
+        <record_name>Gemini AI</record_name>
+        <reverted_from/>
+        <source>48ba4d9583863210f6b1fb96feaad3b6</source>
+        <source_table>sys_update_set</source_table>
+        <state>previous</state>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 02:54:44</sys_created_on>
+        <sys_id>dd3de9a9834e7210f6b1fb96feaad367</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_recorded_at>19b589479ed0000001</sys_recorded_at>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 02:54:44</sys_updated_on>
+        <type>REST Message</type>
+        <update_guid>553de9a9c44e72108c39b2f709e29667</update_guid>
+        <update_guid_history>553de9a9c44e72108c39b2f709e29667:1159176240,79ccad69594e7210570516def560fd00:-125257098,d97ce9692b4e7210c54f72da86a6c6c9:-1698793653,652b2129d74e7210a7dab6a971769850:920988633,c1c525ed00ca72100509cc297c668db6:-2011353143,23946dad0e0e72100f098f1f283ed2fa:1840865653,1a1125a9d80e72107edf06c765c619f8:920988633</update_guid_history>
+    </sys_update_version>
+    <sys_metadata_delete action="INSERT_OR_UPDATE">
+        <sys_audit_delete/>
+        <sys_class_name>sys_metadata_delete</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 03:56:34</sys_created_on>
+        <sys_db_object display_value="" name="sys_rest_message">sys_rest_message</sys_db_object>
+        <sys_id>48a0da83681e440e881300afce275861</sys_id>
+        <sys_metadata>50f025a9830e7210f6b1fb96feaad3b3</sys_metadata>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Gemini AI</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_parent/>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_scope_delete display_value="">b5b651695bd14f99aee30f38068ac3c1</sys_scope_delete>
+        <sys_update_name>sys_rest_message_50f025a9830e7210f6b1fb96feaad3b3</sys_update_name>
+        <sys_update_version display_value="sys_rest_message_50f025a9830e7210f6b1fb96feaad3b3">dd3de9a9834e7210f6b1fb96feaad367</sys_update_version>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 03:56:34</sys_updated_on>
+    </sys_metadata_delete>
+</record_update>

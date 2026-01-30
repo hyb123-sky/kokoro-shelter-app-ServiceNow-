@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_push_notif_app_install">
+    <sys_push_notif_app_install action="INSERT_OR_UPDATE">
+        <active>true</active>
+        <last_registered_on>2026-01-17 03:22:29</last_registered_on>
+        <send_badge_count>false</send_badge_count>
+        <sys_class_name>sys_push_notif_app_install</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-16 06:22:16</sys_created_on>
+        <sys_id>86162a9c8366f210f6b1fb96feaad3cf</sys_id>
+        <sys_mod_count>13</sys_mod_count>
+        <sys_name>cro8nJa2R6a-3KQQ5-opaF:APA91bFReI8BvbjYs0on7sxQhZbfgKJoi0dYRK6aSEYKSSMxzOnmA9XONd_iprqYUgxHy8pxDr73LI_Y5Et3hCXpEIlUqCr5KfcIdrA4D5_RASW8fi2MrXc</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_push_application_id display_value="ServiceNow Request Application">ac7f61d273122300d63a566a4cf6a78b</sys_push_application_id>
+        <sys_push_platform_id display_value="Google">53e75f30ff0002009738ffffffffff12</sys_push_platform_id>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_push_notif_app_install_86162a9c8366f210f6b1fb96feaad3cf</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-17 03:22:29</sys_updated_on>
+        <sys_user_id display_value="System Administrator">6816f79cc0a8016401c5a33be04be441</sys_user_id>
+        <token>cro8nJa2R6a-3KQQ5-opaF:APA91bFReI8BvbjYs0on7sxQhZbfgKJoi0dYRK6aSEYKSSMxzOnmA9XONd_iprqYUgxHy8pxDr73LI_Y5Et3hCXpEIlUqCr5KfcIdrA4D5_RASW8fi2MrXc</token>
+    </sys_push_notif_app_install>
+</record_update>

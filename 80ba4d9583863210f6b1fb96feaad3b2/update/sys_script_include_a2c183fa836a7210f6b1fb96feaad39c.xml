@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_script_include">
+    <sys_script_include action="INSERT_OR_UPDATE">
+        <access>public</access>
+        <active>true</active>
+        <api_name>x_1821654_kokoro_0.MigrateUserSettings</api_name>
+        <caller_access/>
+        <client_callable>false</client_callable>
+        <description/>
+        <mobile_callable>false</mobile_callable>
+        <name>MigrateUserSettings</name>
+        <sandbox_callable>false</sandbox_callable>
+        <script><![CDATA[var MigrateUserSettings = Class.create();
+MigrateUserSettings.prototype = {
+    initialize: function() {},
+
+    migrate: function() {
+        var count = 0;
+        var errorCount = 0;
+        gs.info('[Kokoro Migration] Starting Dynamic Migration...');
+
+        // ---------------------------------------------------------
+        // Step 1: 动态查找 Heartbeat 表名 (防止拼写错误)
+        // ---------------------------------------------------------
+        var sourceTable = '';
+        var dbObj = new GlideRecord('sys_db_object');
+        // 搜索名字包含 'heartbeat' 且在你的应用范围内的表
+        dbObj.addQuery('name', 'CONTAINS', 'heartbeat'); 
+        dbObj.addQuery('sys_scope.scope', 'x_1821654_kokoro_0'); 
+        dbObj.query();
+        
+        if (dbObj.next()) {
+            sourceTable = dbObj.getValue('name');
+            gs.info('[Kokoro Migration] Found Source Table: ' + sourceTable);
+        } else {
+            gs.error('[Kokoro Migration] CRITICAL: Could not find any table containing "heartbeat"!');
+            return 0;
+        }
+
+        // ---------------------------------------------------------
+        // Step 2: 动态查找 User Profile 表名
+        // ---------------------------------------------------------
+        var targetProfileTable = '';
+        var dbObj2 = new GlideRecord('sys_db_object');
+        dbObj2.addQuery('name', 'CONTAINS', 'user_profile');
+        dbObj2.addQuery('sys_scope.scope', 'x_1821654_kokoro_0');
+        dbObj2.query();
+        
+        if (dbObj2.next()) {
+            targetProfileTable = dbObj2.getValue('name');
+            gs.info('[Kokoro Migration] Found Target Table: ' + targetProfileTable);
+        } else {
+            // 如果找不到，尝试使用截图中的硬编码名字作为备选
+            targetProfileTable = 'x_1821654_kokoro_0_x_kokoro_user_profile';
+            gs.warn('[Kokoro Migration] Warning: Could not dynamically find profile table, trying hardcoded: ' + targetProfileTable);
+        }
+
+        // ---------------------------------------------------------
+        // Step 3: 执行迁移
+        // ---------------------------------------------------------
+        var hb = new GlideRecord(sourceTable);
+        
+        // 智能字段探测: 检查是 'emergency_email' 还是 'u_emergency_email'
+        var fieldEmail = hb.isValidField('emergency_email') ? 'emergency_email' : 'u_emergency_email';
+        var fieldWill = hb.isValidField('saved_will') ? 'saved_will' : 'u_saved_will';
+        var fieldUser = hb.isValidField('user') ? 'user' : 'u_user';
+        
+        gs.info('[Kokoro Migration] Field Mapping -> Email: ' + fieldEmail + ', Will: ' + fieldWill + ', User: ' + fieldUser);
+
+        // 使用 addQuery('!=', '') 替代 addNotNullQuery，以规避某些可能的底层校验bug
+        var qc = hb.addQuery(fieldEmail, '!=', '');
+        qc.addOrCondition(fieldWill, '!=', '');
+        hb.orderByDesc('sys_created_on');
+        hb.query();
+
+        var userSettings = {};
+
+        while (hb.next()) {
+            var userId = hb.getValue(fieldUser);
+            var email = hb.getValue(fieldEmail);
+            var will = hb.getValue(fieldWill);
+
+            if (!userId) continue;
+
+            if (!userSettings[userId]) {
+                userSettings[userId] = {
+                    email: email,
+                    will: will
+                };
+            }
+        }
+
+        // ---------------------------------------------------------
+        // Step 4: 写入数据
+        // ---------------------------------------------------------
+        for (var uid in userSettings) {
+            try {
+                // User Profile 处理
+                var profile = new GlideRecord(targetProfileTable);
+                profile.addQuery('user', uid);
+                profile.query();
+
+                if (!profile.next()) {
+                    profile.initialize();
+                    profile.setValue('user', uid);
+                }
+
+                // 这里的字段名是基于你的截图 image_506115.png (typo included)
+                // 建议：如果你已经修好了那个 typo，请把下面的 'emergency_conact_email' 改为 'emergency_contact_email'
+                if (userSettings[uid].email) {
+                    // 尝试写入，如果字段不存在 (isValidField检查)，则尝试带 'u_' 的
+                     if (profile.isValidField('emergency_conact_email')) {
+                        profile.setValue('emergency_conact_email', userSettings[uid].email);
+                     } else if (profile.isValidField('u_emergency_conact_email')) {
+                         profile.setValue('u_emergency_conact_email', userSettings[uid].email);
+                     } else {
+                         // 最后的尝试：也许你修正了拼写错误？
+                         profile.setValue('emergency_contact_email', userSettings[uid].email);
+                     }
+                }
+                
+                if (profile.isNewRecord()) {
+                    profile.insert();
+                } else {
+                    profile.update();
+                }
+
+                // Emergency Message 处理 (使用确定的名字)
+                if (userSettings[uid].will) {
+                    var emsg = new GlideRecord('x_1821654_kokoro_0_emergency_message');
+                    emsg.initialize();
+                    emsg.setValue('user', uid); 
+                    
+                    var plainText = userSettings[uid].will;
+                    var encoded = GlideStringUtil.base64Encode(plainText); 
+                    
+                    emsg.setValue('message_encrypted', encoded); 
+                    emsg.setValue('message_type', 'Last_Will');
+                    emsg.setValue('is_active', true);
+                    emsg.insert();
+                }
+                count++;
+            } catch (e) {
+                gs.error('[Kokoro Migration] Error processing user ' + uid + ': ' + e.message);
+                errorCount++;
+            }
+        }
+
+        gs.info('[Kokoro Migration] SUCCESS. Migrated: ' + count + ' users. Errors: ' + errorCount);
+        return count;
+    },
+
+    type: 'MigrateUserSettings'
+};]]></script>
+        <sys_class_name>sys_script_include</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-24 02:49:07</sys_created_on>
+        <sys_id>a2c183fa836a7210f6b1fb96feaad39c</sys_id>
+        <sys_mod_count>2</sys_mod_count>
+        <sys_name>MigrateUserSettings</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy>read</sys_policy>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_script_include_a2c183fa836a7210f6b1fb96feaad39c</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-24 03:03:06</sys_updated_on>
+    </sys_script_include>
+</record_update>

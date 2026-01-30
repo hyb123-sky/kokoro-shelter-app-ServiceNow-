@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_script_fix">
+    <sys_script_fix action="INSERT_OR_UPDATE">
+        <before>false</before>
+        <description/>
+        <name>Generate Seed Data</name>
+        <record_for_rollback>true</record_for_rollback>
+        <script><![CDATA[// 专家级数据播种脚本 - 用于初始化开发环境
+// 自动适配当前的 User (你)
+
+var seed = function() {
+    gs.info('[Kokoro Seed] Starting data generation...');
+    
+    // 1. 获取当前用户 (System Administrator 或你的用户)
+    var currentUser = gs.getUserID();
+    var userName = gs.getUserName();
+    
+    // --------------------------------------------------
+    // A. 创建/更新 User Profile
+    // --------------------------------------------------
+    // 表名来源: (Double Prefix)
+    var profileTable = 'x_1821654_kokoro_0_x_kokoro_user_profile'; 
+    
+    var prof = new GlideRecord(profileTable);
+    prof.addQuery('user', currentUser);
+    prof.query();
+    
+    if (!prof.next()) {
+        prof.initialize();
+        prof.setValue('user', currentUser);
+        gs.info('[Kokoro Seed] Creating new profile for ' + userName);
+    } else {
+        gs.info('[Kokoro Seed] Updating existing profile for ' + userName);
+    }
+    
+    // 设置字段 (包含 image_506115.png 中的拼写错误兼容)
+    // 尝试写入正确的 email
+    if (prof.isValidField('emergency_conact_email')) {
+        prof.setValue('emergency_conact_email', 'test_guardian@example.com'); // Typo
+    } else {
+        // 如果你修好了拼写，这里会自动通过
+        prof.setValue('emergency_contact_email', 'test_guardian@example.com'); 
+    }
+    
+    prof.setValue('blood_type', 'O+');
+    prof.setValue('mobility_status', 'Mobile');
+    prof.setValue('preferred_language', 'ja');
+    prof.setValue('special_needs', 'None');
+    prof.setValue('medical_conditions', 'Mild Asthma');
+    
+    var profId = prof.update(); // insert or update
+    
+    if (!profId && prof.isNewRecord()) {
+        profId = prof.insert();
+    }
+    
+    // --------------------------------------------------
+    // B. 创建 Emergency Message (模拟遗言)
+    // --------------------------------------------------
+    // 表名来源:
+    var msgTable = 'x_1821654_kokoro_0_emergency_message';
+    
+    // 先清理旧数据，防止重复堆积
+    var oldMsg = new GlideRecord(msgTable);
+    oldMsg.addQuery('user', currentUser);
+    oldMsg.deleteMultiple();
+    
+    var msg = new GlideRecord(msgTable);
+    msg.initialize();
+    msg.setValue('user', currentUser);
+    msg.setValue('message_type', 'Last_Will');
+    msg.setValue('is_active', true);
+    
+    // 模拟加密内容 (Base64)
+    var rawText = "To my family: I am safe at the shelter. Please take care of the cat.";
+    var encoded = GlideStringUtil.base64Encode(rawText);
+    msg.setValue('message_encrypted', encoded);
+    
+    var msgId = msg.insert();
+    
+    gs.info('[Kokoro Seed] SUCCESS! \nProfile ID: ' + profId + '\nMessage ID: ' + msgId);
+};
+
+seed();]]></script>
+        <sys_class_name>sys_script_fix</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-24 03:09:20</sys_created_on>
+        <sys_id>269647b283aa7210f6b1fb96feaad3f9</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Generate Seed Data</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_script_fix_269647b283aa7210f6b1fb96feaad3f9</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-24 03:09:20</sys_updated_on>
+        <unloadable>false</unloadable>
+    </sys_script_fix>
+</record_update>

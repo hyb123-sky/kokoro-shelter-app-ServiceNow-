@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="5df9b67e832a7210f6b1fb96feaad379" label="Rate Limit" max_length="40" name="x_1821654_kokoro_0_rate_limit" type="collection">
+        <element label="user" max_length="32" name="user" reference="sys_user" type="reference"/>
+        <element label="timestamp" max_length="40" name="timestamp" type="glide_date_time"/>
+        <element label="IP address" max_length="45" name="ip_address" type="string"/>
+        <element label="action" max_length="50" name="action" type="string"/>
+        <index name="index">
+            <element name="user"/>
+        </index>
+    </element>
+</database>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_platform_encryption_configuration">
+    <sys_platform_encryption_configuration action="INSERT_OR_UPDATE">
+        <active>true</active>
+        <column>medical_information</column>
+        <crypto_module/>
+        <encrypt_by_default>false</encrypt_by_default>
+        <encryption_context/>
+        <equality_preserving>false</equality_preserving>
+        <method>multikmfmodule</method>
+        <migration_state/>
+        <name>x_1821654_kokoro_0_x_kokoro_user_profile-Column-medical_information-multikmfmodule</name>
+        <sys_class_name>sys_platform_encryption_configuration</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-22 07:42:00</sys_created_on>
+        <sys_id>a4e1799683aa7210f6b1fb96feaad361</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_platform_encryption_configuration_a4e1799683aa7210f6b1fb96feaad361</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-22 07:42:00</sys_updated_on>
+        <table>x_1821654_kokoro_0_x_kokoro_user_profile</table>
+        <type>Column</type>
+    </sys_platform_encryption_configuration>
+</record_update>

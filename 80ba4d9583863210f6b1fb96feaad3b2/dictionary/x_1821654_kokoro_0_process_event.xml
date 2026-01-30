@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="a96d7a32836a7210f6b1fb96feaad3da" label="Process event" max_length="40" name="x_1821654_kokoro_0_process_event" type="collection">
+        <element label="resource" max_length="100" name="resource" type="string"/>
+        <element label="User" max_length="32" name="user" reference="sys_user" type="reference"/>
+        <element label="Payload" max_length="8000" name="payload" type="string"/>
+        <element label="Duration seconds" max_length="40" name="duration_seconds" type="integer"/>
+        <element label="timestamp" max_length="40" name="timestamp" type="glide_date_time"/>
+        <element label="Case ID" max_length="32" name="case_id" type="string"/>
+        <element label="Activity" max_length="200" name="activity" type="string"/>
+        <index name="index">
+            <element name="user"/>
+        </index>
+    </element>
+</database>

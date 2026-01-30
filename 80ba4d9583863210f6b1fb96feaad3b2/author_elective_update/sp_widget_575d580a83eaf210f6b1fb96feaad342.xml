@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sp_widget">
+    <sp_widget action="DELETE">
+        <category>custom</category>
+        <client_script><![CDATA[function ctrl($scope, $timeout) {
+    //  ^ 注意这里：我加了一个名字 "ctrl"
+    var c = this;
+
+    $timeout(function() {
+        var ctx = document.getElementById('categoryChart');
+        
+        // 增加安全性检查
+        if (ctx && c.data && c.data.categoryStats) {
+            // 注意：Chart 是外部库，必须通过 Widget Dependencies 引入
+            if (typeof Chart === 'undefined') {
+                console.error("Chart.js library is missing!");
+                return;
+            }
+
+            new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: c.data.categoryStats.map(function(s) { return s.category; }),
+                    datasets: [{
+                        data: c.data.categoryStats.map(function(s) { return s.count; }),
+                        backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    title: { display: true, text: 'リクエスト種別分布' }
+                }
+            });
+        }
+    }, 500);
+}]]></client_script>
+        <controller_as>c</controller_as>
+        <css/>
+        <data_table>sp_instance</data_table>
+        <demo_data/>
+        <description/>
+        <docs/>
+        <field_list/>
+        <has_preview>false</has_preview>
+        <id>kokoro_analytics</id>
+        <internal>false</internal>
+        <link><![CDATA[function link(scope, element, attrs, controller) {
+  
+}]]></link>
+        <name>Kokoro Analytics Dashboard</name>
+        <option_schema/>
+        <public>false</public>
+        <roles/>
+        <script><![CDATA[(function() {
+       
+       // 获取总请求数
+       var totalGr = new GlideAggregate('x_1821654_kokoro_0_silent_wish');
+       totalGr.addAggregate('COUNT');
+       totalGr.query();
+       if (totalGr.next()) {
+           data.totalRequests = totalGr.getAggregate('COUNT');
+       }
+       
+       // 计算平均响应时间
+       var avgGr = new GlideAggregate('x_1821654_kokoro_0_silent_wish');
+       avgGr.addQuery('state', '4'); // 只统计完成的
+       avgGr.addAggregate('AVG', 'calendar_duration');
+       avgGr.query();
+       if (avgGr.next()) {
+           var avgSeconds = avgGr.getAggregate('AVG', 'calendar_duration');
+           data.avgResponseTime = Math.round(avgSeconds / 60) + '分';
+       }
+       
+       // 计算完成率
+       var completedGr = new GlideAggregate('x_1821654_kokoro_0_silent_wish');
+       completedGr.addQuery('state', '4');
+       completedGr.addAggregate('COUNT');
+       completedGr.query();
+       if (completedGr.next()) {
+           var completed = completedGr.getAggregate('COUNT');
+           data.completionRate = Math.round((completed / data.totalRequests) * 100);
+       }
+       
+       // 按类别统计
+       data.categoryStats = [];
+       var catGr = new GlideAggregate('x_1821654_kokoro_0_silent_wish');
+       catGr.addAggregate('COUNT');
+       catGr.groupBy('u_category');
+       catGr.query();
+       while (catGr.next()) {
+           data.categoryStats.push({
+               category: catGr.getValue('u_category'),
+               count: catGr.getAggregate('COUNT')
+           });
+       }
+       
+   })();]]></script>
+        <servicenow>false</servicenow>
+        <sys_class_name>sp_widget</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-21 07:10:12</sys_created_on>
+        <sys_id>575d580a83eaf210f6b1fb96feaad342</sys_id>
+        <sys_mod_count>2</sys_mod_count>
+        <sys_name>Kokoro Analytics Dashboard</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sp_widget_575d580a83eaf210f6b1fb96feaad342</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-21 07:29:19</sys_updated_on>
+        <template><![CDATA[<div class="analytics-dashboard">
+       <h2>]]>📊<![CDATA[ 災害対応分析ダッシュボード</h2>
+       
+       <div class="metrics-grid">
+           <!-- 总请求数 -->
+           <div class="metric-card">
+               <div class="metric-value">{{c.data.totalRequests}}</div>
+               <div class="metric-label">総リクエスト数</div>
+           </div>
+           
+           <!-- 平均响应时间 -->
+           <div class="metric-card">
+               <div class="metric-value">{{c.data.avgResponseTime}}</div>
+               <div class="metric-label">平均対応時間</div>
+           </div>
+           
+           <!-- 完成率 -->
+           <div class="metric-card">
+               <div class="metric-value">{{c.data.completionRate}}%</div>
+               <div class="metric-label">完了率</div>
+           </div>
+           
+           <!-- 库存周转率 -->
+           <div class="metric-card">
+               <div class="metric-value">{{c.data.inventoryTurnover}}</div>
+               <div class="metric-label">在庫回転率</div>
+           </div>
+       </div>
+       
+       <!-- 图表区域 -->
+       <div class="charts-section">
+           <canvas id="requestsChart"></canvas>
+           <canvas id="categoryChart"></canvas>
+       </div>
+   </div>]]></template>
+    </sp_widget>
+    <sys_update_version action="INSERT_OR_UPDATE">
+        <action>DELETE</action>
+        <application display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</application>
+        <file_path/>
+        <instance_id>26f701431b4a8650168f4089bd4bcbef</instance_id>
+        <instance_name>dev269536</instance_name>
+        <name>sp_widget_575d580a83eaf210f6b1fb96feaad342</name>
+        <payload>&lt;?xml version="1.0" encoding="UTF-8"?&gt;&lt;record_update table="sp_widget"&gt;&lt;sp_widget action="INSERT_OR_UPDATE"&gt;&lt;category&gt;custom&lt;/category&gt;&lt;client_script&gt;&lt;![CDATA[function ctrl($scope, $timeout) {
+    //  ^ 注意这里：我加了一个名字 "ctrl"
+    var c = this;
+
+    $timeout(function() {
+        var ctx = document.getElementById('categoryChart');
+        
+        // 增加安全性检查
+        if (ctx &amp;&amp; c.data &amp;&amp; c.data.categoryStats) {
+            // 注意：Chart 是外部库，必须通过 Widget Dependencies 引入
+            if (typeof Chart === 'undefined') {
+                console.error("Chart.js library is missing!");
+                return;
+            }
+
+            new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: c.data.categoryStats.map(function(s) { return s.category; }),
+                    datasets: [{
+                        data: c.data.categoryStats.map(function(s) { return s.count; }),
+                        backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    title: { display: true, text: 'リクエスト種別分布' }
+                }
+            });
+        }
+    }, 500);
+}]]&gt;&lt;/client_script&gt;&lt;controller_as&gt;c&lt;/controller_as&gt;&lt;css/&gt;&lt;data_table&gt;sp_instance&lt;/data_table&gt;&lt;demo_data/&gt;&lt;description/&gt;&lt;docs/&gt;&lt;field_list/&gt;&lt;has_preview&gt;false&lt;/has_preview&gt;&lt;id&gt;kokoro_analytics&lt;/id&gt;&lt;internal&gt;false&lt;/internal&gt;&lt;link&gt;&lt;![CDATA[function link(scope, element, attrs, controller) {
+  
+}]]&gt;&lt;/link&gt;&lt;name&gt;Kokoro Analytics Dashboard&lt;/name&gt;&lt;option_schema/&gt;&lt;public&gt;false&lt;/public&gt;&lt;roles/&gt;&lt;script&gt;&lt;![CDATA[(function() {
+       
+       // 获取总请求数
+       var totalGr = new GlideAggregate('x_1821654_kokoro_0_silent_wish');
+       totalGr.addAggregate('COUNT');
+       totalGr.query();
+       if (totalGr.next()) {
+           data.totalRequests = totalGr.getAggregate('COUNT');
+       }
+       
+       // 计算平均响应时间
+       var avgGr = new GlideAggregate('x_1821654_kokoro_0_silent_wish');
+       avgGr.addQuery('state', '4'); // 只统计完成的
+       avgGr.addAggregate('AVG', 'calendar_duration');
+       avgGr.query();
+       if (avgGr.next()) {
+           var avgSeconds = avgGr.getAggregate('AVG', 'calendar_duration');
+           data.avgResponseTime = Math.round(avgSeconds / 60) + '分';
+       }
+       
+       // 计算完成率
+       var completedGr = new GlideAggregate('x_1821654_kokoro_0_silent_wish');
+       completedGr.addQuery('state', '4');
+       completedGr.addAggregate('COUNT');
+       completedGr.query();
+       if (completedGr.next()) {
+           var completed = completedGr.getAggregate('COUNT');
+           data.completionRate = Math.round((completed / data.totalRequests) * 100);
+       }
+       
+       // 按类别统计
+       data.categoryStats = [];
+       var catGr = new GlideAggregate('x_1821654_kokoro_0_silent_wish');
+       catGr.addAggregate('COUNT');
+       catGr.groupBy('u_category');
+       catGr.query();
+       while (catGr.next()) {
+           data.categoryStats.push({
+               category: catGr.getValue('u_category'),
+               count: catGr.getAggregate('COUNT')
+           });
+       }
+       
+   })();]]&gt;&lt;/script&gt;&lt;servicenow&gt;false&lt;/servicenow&gt;&lt;sys_class_name&gt;sp_widget&lt;/sys_class_name&gt;&lt;sys_created_by&gt;admin&lt;/sys_created_by&gt;&lt;sys_created_on&gt;2026-01-21 07:10:12&lt;/sys_created_on&gt;&lt;sys_id&gt;575d580a83eaf210f6b1fb96feaad342&lt;/sys_id&gt;&lt;sys_mod_count&gt;2&lt;/sys_mod_count&gt;&lt;sys_name&gt;Kokoro Analytics Dashboard&lt;/sys_name&gt;&lt;sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0"&gt;80ba4d9583863210f6b1fb96feaad3b2&lt;/sys_package&gt;&lt;sys_policy/&gt;&lt;sys_scope display_value="Kokoro Shelter"&gt;80ba4d9583863210f6b1fb96feaad3b2&lt;/sys_scope&gt;&lt;sys_update_name&gt;sp_widget_575d580a83eaf210f6b1fb96feaad342&lt;/sys_update_name&gt;&lt;sys_updated_by&gt;admin&lt;/sys_updated_by&gt;&lt;sys_updated_on&gt;2026-01-21 07:29:19&lt;/sys_updated_on&gt;&lt;template&gt;&lt;![CDATA[&lt;div class="analytics-dashboard"&gt;
+       &lt;h2&gt;]]&gt;📊&lt;![CDATA[ 災害対応分析ダッシュボード&lt;/h2&gt;
+       
+       &lt;div class="metrics-grid"&gt;
+           &lt;!-- 总请求数 --&gt;
+           &lt;div class="metric-card"&gt;
+               &lt;div class="metric-value"&gt;{{c.data.totalRequests}}&lt;/div&gt;
+               &lt;div class="metric-label"&gt;総リクエスト数&lt;/div&gt;
+           &lt;/div&gt;
+           
+           &lt;!-- 平均响应时间 --&gt;
+           &lt;div class="metric-card"&gt;
+               &lt;div class="metric-value"&gt;{{c.data.avgResponseTime}}&lt;/div&gt;
+               &lt;div class="metric-label"&gt;平均対応時間&lt;/div&gt;
+           &lt;/div&gt;
+           
+           &lt;!-- 完成率 --&gt;
+           &lt;div class="metric-card"&gt;
+               &lt;div class="metric-value"&gt;{{c.data.completionRate}}%&lt;/div&gt;
+               &lt;div class="metric-label"&gt;完了率&lt;/div&gt;
+           &lt;/div&gt;
+           
+           &lt;!-- 库存周转率 --&gt;
+           &lt;div class="metric-card"&gt;
+               &lt;div class="metric-value"&gt;{{c.data.inventoryTurnover}}&lt;/div&gt;
+               &lt;div class="metric-label"&gt;在庫回転率&lt;/div&gt;
+           &lt;/div&gt;
+       &lt;/div&gt;
+       
+       &lt;!-- 图表区域 --&gt;
+       &lt;div class="charts-section"&gt;
+           &lt;canvas id="requestsChart"&gt;&lt;/canvas&gt;
+           &lt;canvas id="categoryChart"&gt;&lt;/canvas&gt;
+       &lt;/div&gt;
+   &lt;/div&gt;]]&gt;&lt;/template&gt;&lt;/sp_widget&gt;&lt;/record_update&gt;</payload>
+        <payload_hash>1898608926</payload_hash>
+        <record_name>Kokoro Analytics Dashboard</record_name>
+        <reverted_from/>
+        <source>48ba4d9583863210f6b1fb96feaad3b6</source>
+        <source_table>sys_update_set</source_table>
+        <state>previous</state>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-21 07:29:19</sys_created_on>
+        <sys_id>f065a0c2832ef210f6b1fb96feaad310</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_recorded_at>19bdf7536040000001</sys_recorded_at>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-21 07:29:19</sys_updated_on>
+        <type>Widget</type>
+        <update_guid>3865ec025a2ef2105c7a1193aa54b784</update_guid>
+        <update_guid_history>3865ec025a2ef2105c7a1193aa54b784:1898608926,1f91ac4ec0eaf2105661a348c3e494b9:1165844710,f001e44e5deaf2106bb5274f6144336e:1256008412</update_guid_history>
+    </sys_update_version>
+    <sys_metadata_delete action="INSERT_OR_UPDATE">
+        <sys_audit_delete display_value="Kokoro Analytics Dashboard">1c7ca17483b23210f6b1fb96feaad3d3</sys_audit_delete>
+        <sys_class_name>sys_metadata_delete</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-30 01:43:02</sys_created_on>
+        <sys_db_object display_value="" name="sp_widget">sp_widget</sys_db_object>
+        <sys_id>8c27525c2437406098e83d01560e6040</sys_id>
+        <sys_metadata>575d580a83eaf210f6b1fb96feaad342</sys_metadata>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Kokoro Analytics Dashboard</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_parent/>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_scope_delete display_value="">b5b651695bd14f99aee30f38068ac3c1</sys_scope_delete>
+        <sys_update_name>sp_widget_575d580a83eaf210f6b1fb96feaad342</sys_update_name>
+        <sys_update_version display_value="sp_widget_575d580a83eaf210f6b1fb96feaad342">f065a0c2832ef210f6b1fb96feaad310</sys_update_version>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-30 01:43:02</sys_updated_on>
+    </sys_metadata_delete>
+</record_update>

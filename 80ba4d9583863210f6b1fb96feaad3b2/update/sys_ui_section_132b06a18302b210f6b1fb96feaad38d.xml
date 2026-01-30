@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update>
+    <sys_ui_section caption="" section_id="132b06a18302b210f6b1fb96feaad38d" sys_domain="global" table="x_1821654_kokoro_0_silent_wish" version="3" view="workspace-kokoro-shelter-0">
+        <sys_ui_element action="INSERT_OR_UPDATE">
+            <element>request_category</element>
+            <position>0</position>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2025-12-31 15:45:22</sys_created_on>
+            <sys_id>ea8d8e5b834ab210f6b1fb96feaad352</sys_id>
+            <sys_mod_count>0</sys_mod_count>
+            <sys_ui_formatter/>
+            <sys_ui_section caption="NULL" display_value="" name="x_1821654_kokoro_0_silent_wish" sys_domain="global" view="8d2bc2a1f302b210801fdcffe67c8c2a">132b06a18302b210f6b1fb96feaad38d</sys_ui_section>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2025-12-31 15:45:22</sys_updated_on>
+            <sys_user/>
+            <type/>
+        </sys_ui_element>
+        <sys_ui_element action="INSERT_OR_UPDATE">
+            <element>shelter_zone</element>
+            <position>1</position>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2025-12-31 15:45:22</sys_created_on>
+            <sys_id>e28d8e5b834ab210f6b1fb96feaad353</sys_id>
+            <sys_mod_count>0</sys_mod_count>
+            <sys_ui_formatter/>
+            <sys_ui_section caption="NULL" display_value="" name="x_1821654_kokoro_0_silent_wish" sys_domain="global" view="8d2bc2a1f302b210801fdcffe67c8c2a">132b06a18302b210f6b1fb96feaad38d</sys_ui_section>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2025-12-31 15:45:22</sys_updated_on>
+            <sys_user/>
+            <type/>
+        </sys_ui_element>
+        <sys_ui_element action="INSERT_OR_UPDATE">
+            <element>urgency</element>
+            <position>2</position>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2025-12-31 15:45:22</sys_created_on>
+            <sys_id>ea8d8e5b834ab210f6b1fb96feaad353</sys_id>
+            <sys_mod_count>0</sys_mod_count>
+            <sys_ui_formatter/>
+            <sys_ui_section caption="NULL" display_value="" name="x_1821654_kokoro_0_silent_wish" sys_domain="global" view="8d2bc2a1f302b210801fdcffe67c8c2a">132b06a18302b210f6b1fb96feaad38d</sys_ui_section>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2025-12-31 15:45:22</sys_updated_on>
+            <sys_user/>
+            <type/>
+        </sys_ui_element>
+        <sys_ui_element action="INSERT_OR_UPDATE">
+            <element>wish_content</element>
+            <position>3</position>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2025-12-31 15:45:22</sys_created_on>
+            <sys_id>e28d8e5b834ab210f6b1fb96feaad354</sys_id>
+            <sys_mod_count>0</sys_mod_count>
+            <sys_ui_formatter/>
+            <sys_ui_section caption="NULL" display_value="" name="x_1821654_kokoro_0_silent_wish" sys_domain="global" view="8d2bc2a1f302b210801fdcffe67c8c2a">132b06a18302b210f6b1fb96feaad38d</sys_ui_section>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2025-12-31 15:45:22</sys_updated_on>
+            <sys_user/>
+            <type/>
+        </sys_ui_element>
+        <sys_ui_element action="INSERT_OR_UPDATE">
+            <element>assignment_group</element>
+            <position>4</position>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2025-12-31 15:45:22</sys_created_on>
+            <sys_id>ea8d8e5b834ab210f6b1fb96feaad354</sys_id>
+            <sys_mod_count>0</sys_mod_count>
+            <sys_ui_formatter/>
+            <sys_ui_section caption="NULL" display_value="" name="x_1821654_kokoro_0_silent_wish" sys_domain="global" view="8d2bc2a1f302b210801fdcffe67c8c2a">132b06a18302b210f6b1fb96feaad38d</sys_ui_section>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2025-12-31 15:45:22</sys_updated_on>
+            <sys_user/>
+            <type/>
+        </sys_ui_element>
+        <sys_ui_element action="INSERT_OR_UPDATE">
+            <element>priority</element>
+            <position>5</position>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2025-12-31 15:45:22</sys_created_on>
+            <sys_id>e28d8e5b834ab210f6b1fb96feaad355</sys_id>
+            <sys_mod_count>0</sys_mod_count>
+            <sys_ui_formatter/>
+            <sys_ui_section caption="NULL" display_value="" name="x_1821654_kokoro_0_silent_wish" sys_domain="global" view="8d2bc2a1f302b210801fdcffe67c8c2a">132b06a18302b210f6b1fb96feaad38d</sys_ui_section>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2025-12-31 15:45:22</sys_updated_on>
+            <sys_user/>
+            <type/>
+        </sys_ui_element>
+        <sys_ui_element action="INSERT_OR_UPDATE">
+            <element>state</element>
+            <position>6</position>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2025-12-31 15:45:22</sys_created_on>
+            <sys_id>ea8d8e5b834ab210f6b1fb96feaad355</sys_id>
+            <sys_mod_count>0</sys_mod_count>
+            <sys_ui_formatter/>
+            <sys_ui_section caption="NULL" display_value="" name="x_1821654_kokoro_0_silent_wish" sys_domain="global" view="8d2bc2a1f302b210801fdcffe67c8c2a">132b06a18302b210f6b1fb96feaad38d</sys_ui_section>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2025-12-31 15:45:22</sys_updated_on>
+            <sys_user/>
+            <type/>
+        </sys_ui_element>
+        <sys_ui_element action="INSERT_OR_UPDATE">
+            <element>activity.xml</element>
+            <position>7</position>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2025-12-31 15:45:22</sys_created_on>
+            <sys_id>e28d8e5b834ab210f6b1fb96feaad356</sys_id>
+            <sys_mod_count>0</sys_mod_count>
+            <sys_ui_formatter display_value="Activities (filtered)">444ea5c6bf310100e628555b3f0739d6</sys_ui_formatter>
+            <sys_ui_section caption="NULL" display_value="" name="x_1821654_kokoro_0_silent_wish" sys_domain="global" view="8d2bc2a1f302b210801fdcffe67c8c2a">132b06a18302b210f6b1fb96feaad38d</sys_ui_section>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2025-12-31 15:45:22</sys_updated_on>
+            <sys_user/>
+            <type>formatter</type>
+        </sys_ui_element>
+        <sys_ui_section action="INSERT_OR_UPDATE">
+            <caption/>
+            <header>false</header>
+            <name>x_1821654_kokoro_0_silent_wish</name>
+            <roles/>
+            <sys_class_name>sys_ui_section</sys_class_name>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2025-12-26 05:05:41</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_id>132b06a18302b210f6b1fb96feaad38d</sys_id>
+            <sys_mod_count>0</sys_mod_count>
+            <sys_name>x_1821654_kokoro_0_silent_wish</sys_name>
+            <sys_overrides/>
+            <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+            <sys_policy/>
+            <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+            <sys_update_name>sys_ui_section_132b06a18302b210f6b1fb96feaad38d</sys_update_name>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2025-12-26 05:05:41</sys_updated_on>
+            <sys_user/>
+            <title>true</title>
+            <view display_value="Workspace Kokoro Shelter 0" name="workspace-kokoro-shelter-0">8d2bc2a1f302b210801fdcffe67c8c2a</view>
+            <view_name/>
+        </sys_ui_section>
+    </sys_ui_section>
+</record_update>

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_sg_icon_section">
+    <sys_sg_icon_section action="DELETE">
+        <access_control_type>user_roles</access_control_type>
+        <active>true</active>
+        <applets>7f355a188326f210f6b1fb96feaad34b</applets>
+        <card_size/>
+        <column_count/>
+        <custom_height/>
+        <custom_width/>
+        <data_item/>
+        <display_feed_count>true</display_feed_count>
+        <hide_header>false</hide_header>
+        <hide_section_if_empty>false</hide_section_if_empty>
+        <is_custom_size>false</is_custom_size>
+        <is_hidden_preference_name/>
+        <orientation>vertical</orientation>
+        <required_roles>x_1821654_kokoro_0.admin,x_1821654_kokoro_0.kokoro_inventory_user,x_1821654_kokoro_0.user</required_roles>
+        <row_count/>
+        <sys_class_name>sys_sg_icon_section</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-16 05:08:41</sys_created_on>
+        <sys_id>cc455a188326f210f6b1fb96feaad3ef</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Silent Wish</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_sg_icon_section_cc455a188326f210f6b1fb96feaad3ef</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-16 05:08:41</sys_updated_on>
+        <table/>
+        <title>Silent Wish</title>
+        <visible_condition/>
+        <wide_column_count/>
+    </sys_sg_icon_section>
+    <sys_update_version action="INSERT_OR_UPDATE">
+        <action>DELETE</action>
+        <application display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</application>
+        <file_path/>
+        <instance_id>26f701431b4a8650168f4089bd4bcbef</instance_id>
+        <instance_name>dev269536</instance_name>
+        <name>sys_sg_icon_section_cc455a188326f210f6b1fb96feaad3ef</name>
+        <payload><![CDATA[<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_sg_icon_section"><sys_sg_icon_section action="INSERT_OR_UPDATE"><access_control_type>user_roles</access_control_type><active>true</active><applets>7f355a188326f210f6b1fb96feaad34b</applets><card_size/><column_count/><custom_height/><custom_width/><data_item/><display_feed_count>true</display_feed_count><hide_header>false</hide_header><hide_section_if_empty>false</hide_section_if_empty><is_custom_size>false</is_custom_size><is_hidden_preference_name/><orientation>vertical</orientation><required_roles>x_1821654_kokoro_0.admin,x_1821654_kokoro_0.kokoro_inventory_user,x_1821654_kokoro_0.user</required_roles><row_count/><sys_class_name>sys_sg_icon_section</sys_class_name><sys_created_by>admin</sys_created_by><sys_created_on>2026-01-16 05:08:41</sys_created_on><sys_id>cc455a188326f210f6b1fb96feaad3ef</sys_id><sys_mod_count>0</sys_mod_count><sys_name>Silent Wish</sys_name><sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package><sys_policy/><sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope><sys_update_name>sys_sg_icon_section_cc455a188326f210f6b1fb96feaad3ef</sys_update_name><sys_updated_by>admin</sys_updated_by><sys_updated_on>2026-01-16 05:08:41</sys_updated_on><table/><title>Silent Wish</title><visible_condition/><wide_column_count/></sys_sg_icon_section></record_update>]]></payload>
+        <payload_hash>-1718745616</payload_hash>
+        <record_name>Silent Wish</record_name>
+        <reverted_from/>
+        <source>48ba4d9583863210f6b1fb96feaad3b6</source>
+        <source_table>sys_update_set</source_table>
+        <state>previous</state>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-16 05:08:41</sys_created_on>
+        <sys_id>00459a188326f210f6b1fb96feaad330</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_recorded_at>19bc534a8ce0000001</sys_recorded_at>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-16 05:08:41</sys_updated_on>
+        <type>Legacy icon section</type>
+        <update_guid>84459a183326f2106dd3ee3284860b2f</update_guid>
+        <update_guid_history>84459a183326f2106dd3ee3284860b2f:-1718745616</update_guid_history>
+    </sys_update_version>
+    <sys_metadata_delete action="INSERT_OR_UPDATE">
+        <sys_audit_delete/>
+        <sys_class_name>sys_metadata_delete</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-16 05:39:46</sys_created_on>
+        <sys_db_object display_value="" name="sys_sg_icon_section">sys_sg_icon_section</sys_db_object>
+        <sys_id>18754d65367448adb8ecc9c268f6cf79</sys_id>
+        <sys_metadata>cc455a188326f210f6b1fb96feaad3ef</sys_metadata>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Silent Wish</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_parent/>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_scope_delete display_value="">b5b651695bd14f99aee30f38068ac3c1</sys_scope_delete>
+        <sys_update_name>sys_sg_icon_section_cc455a188326f210f6b1fb96feaad3ef</sys_update_name>
+        <sys_update_version display_value="sys_sg_icon_section_cc455a188326f210f6b1fb96feaad3ef">00459a188326f210f6b1fb96feaad330</sys_update_version>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-16 05:39:46</sys_updated_on>
+    </sys_metadata_delete>
+</record_update>

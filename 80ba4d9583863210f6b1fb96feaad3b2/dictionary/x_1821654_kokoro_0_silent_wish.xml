@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element audit="true" db_object_id="334b0dd583863210f6b1fb96feaad32f" label="Silent Wish" max_length="40" name="x_1821654_kokoro_0_silent_wish" text_index="true" type="collection">
+        <element label="Precise Location" max_length="4000" name="precise_location" type="string"/>
+        <element label="Geocode Status" max_length="5000" name="geocode_status" type="string"/>
+        <element label="longitude" max_length="40" name="longitude" type="float"/>
+        <element label="担当ボランティア" max_length="32" name="assigned_to" reference="sys_user" type="reference"/>
+        <element label="到着予定じ時刻" max_length="255" name="u_eta" type="glide_date_time"/>
+        <element choice="3" label="Shelter Zone" max_length="40" name="shelter_zone" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="医療・ケアエリア" sequence="2" value="c"/>
+                <element inactive_on_update="false" label="ファミリーエリア（家族）" sequence="0" value="a"/>
+                <element inactive_on_update="false" label="単身エリア" sequence="1" value="b"/>
+            </choice>
+        </element>
+        <element choice="3" label="Request  Category" max_length="40" name="request_category" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="電源・充電" sequence="4" value="Power"/>
+                <element inactive_on_update="false" label="その他" sequence="5" value="Other"/>
+                <element inactive_on_update="false" label="食料" sequence="1" value="Food"/>
+                <element inactive_on_update="false" label="お水" sequence="0" value="Water"/>
+                <element inactive_on_update="false" label="医療・薬" sequence="2" value="Medical"/>
+                <element inactive_on_update="false" label="乳幼児用品" sequence="3" value="Baby"/>
+            </choice>
+        </element>
+        <element display="true" label="Wish Content" max_length="1000" name="wish_content" type="string"/>
+        <element label="latitude" max_length="40" name="latitude" type="float"/>
+        <element choice="3" label="Triage Level" max_length="40" name="triage_level" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="Green" sequence="0" value="green"/>
+                <element inactive_on_update="false" label="Yellow" sequence="1" value="yellow"/>
+                <element inactive_on_update="false" label="Red" sequence="2" value="red"/>
+            </choice>
+        </element>
+        <element label="Estimated Arrival" max_length="40" name="u_estimated_arrival" type="glide_date_time"/>
+        <element active="false" attributes="edge_encryption_enabled=true" default="javascript:global.getNextObjNumberPadded();" label="Number" max_length="40" name="number" type="string"/>
+        <element label="AI Sentiment" max_length="500" name="ai_sentiment" type="string"/>
+        <element choice="3" label="Count" max_length="40" name="count" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="2~4" sequence="1" value="2-4"/>
+                <element inactive_on_update="false" label="５人以上" sequence="2" value="5⁺"/>
+                <element inactive_on_update="false" label="1" sequence="0" value="1"/>
+            </choice>
+        </element>
+        <element label="Work notes" max_length="4000" name="work_notes" type="journal"/>
+        <element choice="1" default="40" label="Priority" max_length="40" name="priority" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="Medium" sequence="2" value="2"/>
+                <element inactive_on_update="false" label="Low" sequence="3" value="3"/>
+                <element inactive_on_update="false" label="High" sequence="1" value="1"/>
+            </choice>
+        </element>
+        <element label="assignment Group" max_length="32" name="assignment_group" reference="sys_user_group" type="reference"/>
+        <element default="1" label="Qty" max_length="255" name="qty" type="integer"/>
+        <element label="Mood Color" max_length="40" name="mood_color" type="string"/>
+        <element label="Additional comments" max_length="4000" name="additional_comments" type="journal_input"/>
+        <element choice="3" label="Urgency" max_length="40" name="urgency" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="急ぎません" sequence="0" value="Low"/>
+                <element inactive_on_update="false" label="普通" sequence="1" value="Medium"/>
+                <element inactive_on_update="false" label="困っています" sequence="2" value="High"/>
+                <element inactive_on_update="false" label="限界/今すぐ" sequence="3" value="Critical"/>
+            </choice>
+        </element>
+        <element choice="3" default="10" label="State" max_length="40" name="state" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="下書き" sequence="100" value="1"/>
+                <element inactive_on_update="false" label="提出済み" sequence="200" value="10"/>
+                <element inactive_on_update="false" label="保留中" sequence="700" value="6"/>
+                <element inactive_on_update="false" label="担当者決定" sequence="300" value="11"/>
+                <element inactive_on_update="false" label="配送中" sequence="400" value="2"/>
+                <element inactive_on_update="false" label="完了" sequence="500" value="4"/>
+                <element inactive_on_update="false" label="キャンセル" sequence="600" value="5"/>
+            </choice>
+        </element>
+        <index name="index">
+            <element name="assigned_to"/>
+        </index>
+        <index name="index2">
+            <element name="assignment_group"/>
+        </index>
+    </element>
+</database>

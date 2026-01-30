@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update sys_domain="global" table="sys_script">
+    <sys_script action="INSERT_OR_UPDATE">
+        <abort_action>false</abort_action>
+        <access>package_private</access>
+        <action_delete>false</action_delete>
+        <action_insert>true</action_insert>
+        <action_query>false</action_query>
+        <action_update>true</action_update>
+        <active>true</active>
+        <add_message>false</add_message>
+        <advanced>true</advanced>
+        <change_fields>false</change_fields>
+        <client_callable>false</client_callable>
+        <collection>x_1821654_kokoro_0_silent_wish</collection>
+        <condition/>
+        <description/>
+        <execute_function>false</execute_function>
+        <filter_condition table="x_1821654_kokoro_0_silent_wish">precise_locationVALCHANGES^EQ<item endquery="false" field="precise_location" goto="false" newquery="false" operator="VALCHANGES" or="false" value=""/>
+            <item endquery="true" field="" goto="false" newquery="false" operator="=" or="false" value=""/>
+        </filter_condition>
+        <is_rest>false</is_rest>
+        <message/>
+        <name>Auto Geocode Silent Wish Location</name>
+        <order>100</order>
+        <priority>100</priority>
+        <rest_method/>
+        <rest_method_text/>
+        <rest_service/>
+        <rest_service_text/>
+        <rest_variables/>
+        <role_conditions/>
+        <script><![CDATA[(function executeRule(current, previous) {
+
+    // 1. 构建地址
+    var address = buildAddress(current);
+    if (!address) return;
+
+    // 2. 调用 Mapbox (在后台执行)
+    var geocoder = new x_1821654_kokoro_0.MapboxGeocoder();
+    var result = geocoder.geocode(address);
+
+    // 3. 处理结果
+    if (result.success) {
+        // ✅ 成功 - 设置坐标
+        // 请确保这里的字段名和你表里的真实字段名一致 (latitude vs u_latitude)
+        current.setValue('latitude', result.lat); 
+        current.setValue('longitude', result.lng);
+        current.setValue('geocode_status', 'success');
+        current.setValue('precise_location', result.place_name || address);
+        
+        // ⚠️ Async 规则必须手动保存！
+        current.update(); 
+        
+        gs.info('[Geo] Background update success: ' + current.number);
+    } else {
+        // ❌ 失败
+        current.setValue('geocode_status', 'failed');
+        
+        // ⚠️ Async 规则必须手动保存！
+        current.update(); 
+        
+        gs.warn('[Geo] Background update failed: ' + result.error);
+    }
+
+    function buildAddress(record) {
+        var parts = [];
+        var zone = record.getValue('shelter_zone');
+        var detail = record.getValue('detail_loc');
+
+        if (detail) parts.push(detail);
+        if (zone) parts.push(zone);
+        if (parts.length === 0) return null;
+        
+        parts.push('Tokyo, Japan'); // 默认后缀
+        return parts.join(', ');
+    }
+
+})(current, previous);]]></script>
+        <sys_class_name>sys_script</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-23 05:12:09</sys_created_on>
+        <sys_domain>global</sys_domain>
+        <sys_domain_path>/</sys_domain_path>
+        <sys_id>67a85a2a83e6f210f6b1fb96feaad324</sys_id>
+        <sys_mod_count>1</sys_mod_count>
+        <sys_name>Auto Geocode Silent Wish Location</sys_name>
+        <sys_overrides/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_script_67a85a2a83e6f210f6b1fb96feaad324</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-23 05:17:50</sys_updated_on>
+        <template/>
+        <when>async_always</when>
+    </sys_script>
+    <sys_translated_text action="delete_multiple" query="documentkey=67a85a2a83e6f210f6b1fb96feaad324"/>
+</record_update>

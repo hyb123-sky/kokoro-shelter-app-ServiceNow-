@@ -1,0 +1,1075 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update sys_domain="global" table="sys_hub_flow">
+    <sys_hub_flow action="INSERT_OR_UPDATE">
+        <access>public</access>
+        <acls/>
+        <active>false</active>
+        <annotation/>
+        <attributes>browserActivatedIn=chrome,integrationActivatedIn=standalone,labelCacheCleanUpExecuted=true,timeFromCreateToActivate=12147000,viewActivatedIn=naturalLanguage</attributes>
+        <authored_on_release_version>28100</authored_on_release_version>
+        <callable_by_client_api>false</callable_by_client_api>
+        <category/>
+        <copied_from/>
+        <copied_from_name/>
+        <description/>
+        <display_name_after_preview/>
+        <flow_priority>MEDIUM</flow_priority>
+        <generation_source/>
+        <internal_name>kokoro_empathy_engine</internal_name>
+        <label_cache>[{"name":"Created_1.current","label":"Trigger - Record Created➛Silent Wish Record","reference":"x_1821654_kokoro_0_silent_wish","reference_display":"Silent Wish","type":"reference","base_type":"reference","usedInstances":{"52a4025a-9410-4174-b575-a317df714c01":["record"],"9266b8e5-96fc-4579-b145-56e45061bc78":["record"],"6d111913-3162-40b6-a6b7-34b027265dad":["record"],"e54cc6c1-5dba-41d8-bb3b-9f90e4a01b73":["record"]},"attributes":{}},{"name":"Created_1.current.wish_content","label":"Trigger - Record Created➛Silent Wish Record➛Wish Content","reference":"","reference_display":"Wish Content","type":"string","base_type":"string","parent_table_name":"x_1821654_kokoro_0_silent_wish","column_name":"wish_content","usedInstances":{"5ef2aa11-d00c-4840-ac94-9bce101d2c4c":["condition"],"34e3601a-9946-4cb8-a7ab-bfc57bb95dc1":["condition"],"9266b8e5-96fc-4579-b145-56e45061bc78":[null],"63607a28-3ddd-4381-911a-96e5336a7466":["condition"],"bd198d4b-340a-46a5-a273-ad4ce4a46334":["condition"]}},{"name":"52a4025a-9410-4174-b575-a317df714c01.record.shelter_zone","label":"2 - Update Record➛Silent Wish Record➛Shelter Zone","reference":"","reference_display":"Shelter Zone","type":"choice","base_type":"choice","parent_table_name":"x_1821654_kokoro_0_silent_wish","column_name":"shelter_zone","choices":[{"used":false,"label":"Aゾーン","image":"","reference":false,"rawLabel":"Aゾーン","selected":false,"missing":false,"value":"a","parameters":{"name":"x_1821654_kokoro_0_silent_wish","dependent_values":[""]}},{"used":false,"label":"Bゾーン","image":"","reference":false,"rawLabel":"Bゾーン","selected":false,"missing":false,"value":"b","parameters":{"name":"x_1821654_kokoro_0_silent_wish","dependent_values":[""]}},{"used":false,"label":"Cゾーン","image":"","reference":false,"rawLabel":"Cゾーン","selected":false,"missing":false,"value":"c","parameters":{"name":"x_1821654_kokoro_0_silent_wish","dependent_values":[""]}}],"usedInstances":{"9266b8e5-96fc-4579-b145-56e45061bc78":["ah_subject"]}}]</label_cache>
+        <master_snapshot>b1074ee983ce7210f6b1fb96feaad311</master_snapshot>
+        <master_snapshot_digest/>
+        <name>Kokoro Empathy Engine</name>
+        <natlang/>
+        <outputs/>
+        <pre_compiled>false</pre_compiled>
+        <remote_trigger_id>de074ee983ce7210f6b1fb96feaad353</remote_trigger_id>
+        <run_as>system</run_as>
+        <run_with_roles/>
+        <sc_callable>false</sc_callable>
+        <show_draft_actions>false</show_draft_actions>
+        <show_triggered_flows>false</show_triggered_flows>
+        <status>published</status>
+        <substatus/>
+        <sys_class_name>sys_hub_flow</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 01:25:06</sys_created_on>
+        <sys_domain>global</sys_domain>
+        <sys_domain_path>/</sys_domain_path>
+        <sys_id>18b8d5ed83ca7210f6b1fb96feaad37d</sys_id>
+        <sys_mod_count>66</sys_mod_count>
+        <sys_name>Kokoro Empathy Engine</sys_name>
+        <sys_overrides/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_hub_flow_18b8d5ed83ca7210f6b1fb96feaad37d</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-05 05:45:17</sys_updated_on>
+        <type>flow</type>
+        <updation_source/>
+        <version>2</version>
+        <version_record display_value="Created 2026-01-04 21:45:17">c9243d3483963210f6b1fb96feaad3ca</version_record>
+    </sys_hub_flow>
+    <sys_translated_text action="delete_multiple" query="documentkey=18b8d5ed83ca7210f6b1fb96feaad37d"/>
+    <sys_variable_value action="delete_multiple" query="document_key=18b8d5ed83ca7210f6b1fb96feaad37d"/>
+    <sys_flow_record_trigger action="INSERT_OR_UPDATE">
+        <active>true</active>
+        <condition table="x_1821654_kokoro_0_silent_wish">^EQ<item endquery="true" field="" goto="false" newquery="false" operator="=" or="false" value=""/>
+        </condition>
+        <name/>
+        <on_delete>false</on_delete>
+        <on_insert>true</on_insert>
+        <on_update>false</on_update>
+        <published_version/>
+        <run_flow_in>background</run_flow_in>
+        <run_on_extended>false</run_on_extended>
+        <run_when_setting>both</run_when_setting>
+        <run_when_user_list/>
+        <run_when_user_setting>any</run_when_user_setting>
+        <sys_class_name>sys_flow_record_trigger</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:47:35</sys_created_on>
+        <sys_domain>global</sys_domain>
+        <sys_domain_path>/</sys_domain_path>
+        <sys_id>de074ee983ce7210f6b1fb96feaad353</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_overrides/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:35</sys_updated_on>
+        <table>x_1821654_kokoro_0_silent_wish</table>
+        <trigger_definition/>
+    </sys_flow_record_trigger>
+    <sys_trigger_runner_mapping action="INSERT_OR_UPDATE">
+        <active>false</active>
+        <data>{"run_on_extended":"false","run_flow_in":"background","run_when_user_list":[],"run_when_setting":"both","run_when_user_setting":"any"}</data>
+        <identifier>18b8d5ed83ca7210f6b1fb96feaad37d</identifier>
+        <runner>FDTriggerRunner</runner>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:47:35</sys_created_on>
+        <sys_id>56074ee983ce7210f6b1fb96feaad361</sys_id>
+        <sys_mod_count>3</sys_mod_count>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-05 05:45:17</sys_updated_on>
+        <trigger display_value="">de074ee983ce7210f6b1fb96feaad353</trigger>
+    </sys_trigger_runner_mapping>
+    <sys_trigger_runner_mapping action="delete_multiple" query="identifier=18b8d5ed83ca7210f6b1fb96feaad37d^sys_idNOT IN56074ee983ce7210f6b1fb96feaad361"/>
+    <sys_hub_flow_stage action="delete_multiple" query="flow=18b8d5ed83ca7210f6b1fb96feaad37d"/>
+    <sys_flow_cat_variable_model action="delete_multiple" query="id=18b8d5ed83ca7210f6b1fb96feaad37d^sys_idNOT IN9cb8d5ed83ca7210f6b1fb96feaad37f"/>
+    <sys_flow_cat_variable_model action="INSERT_OR_UPDATE">
+        <id>18b8d5ed83ca7210f6b1fb96feaad37d</id>
+        <name>Kokoro Empathy Engine</name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 01:25:06</sys_created_on>
+        <sys_id>9cb8d5ed83ca7210f6b1fb96feaad37f</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_scope/>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 01:25:06</sys_updated_on>
+    </sys_flow_cat_variable_model>
+    <sys_flow_cat_variable action="delete_multiple" query="flow_catalog_model=9cb8d5ed83ca7210f6b1fb96feaad37f"/>
+    <sys_hub_flow_input action="delete_multiple" query="model=18b8d5ed83ca7210f6b1fb96feaad37d^sys_idNOT IN23b899ed83ca7210f6b1fb96feaad358,e7b859ed83ca7210f6b1fb96feaad3a8"/>
+    <sys_hub_flow_input action="INSERT_OR_UPDATE">
+        <active>true</active>
+        <array>false</array>
+        <array_denormalized>false</array_denormalized>
+        <attributes>element_mapping_provider=com.glide.flow_design.action.data.FlowDesignVariableMapper,test_input_hidden=true,uiType=table_name,uiTypeLabel=Table Name</attributes>
+        <audit>false</audit>
+        <calculation><![CDATA[(function calculatedFieldValue(current) {
+
+	// Add your code here
+	return '';  // return the calculated value
+
+})(current);]]></calculation>
+        <choice/>
+        <choice_field/>
+        <choice_table/>
+        <column_label/>
+        <comments/>
+        <create_roles/>
+        <default_value/>
+        <defaultsort/>
+        <delete_roles/>
+        <dependent/>
+        <dependent_on_field/>
+        <display>false</display>
+        <dynamic_creation>false</dynamic_creation>
+        <dynamic_creation_script/>
+        <dynamic_default_value/>
+        <dynamic_ref_qual/>
+        <element>table_name</element>
+        <element_reference>false</element_reference>
+        <foreign_database/>
+        <formula/>
+        <function_definition/>
+        <function_field>false</function_field>
+        <help/>
+        <hint/>
+        <internal_type display_value="">table_name</internal_type>
+        <label>Table Name</label>
+        <mandatory>false</mandatory>
+        <max_length>200</max_length>
+        <model display_value="Kokoro Empathy Engine">18b8d5ed83ca7210f6b1fb96feaad37d</model>
+        <model_id>18b8d5ed83ca7210f6b1fb96feaad37d</model_id>
+        <model_table>sys_hub_flow</model_table>
+        <name>var__m_sys_hub_flow_input_18b8d5ed83ca7210f6b1fb96feaad37d</name>
+        <next_element/>
+        <order>101</order>
+        <primary>false</primary>
+        <read_only>false</read_only>
+        <read_roles/>
+        <reference/>
+        <reference_cascade_rule/>
+        <reference_floats>false</reference_floats>
+        <reference_key/>
+        <reference_qual/>
+        <reference_qual_condition/>
+        <reference_type/>
+        <sizeclass/>
+        <spell_check>false</spell_check>
+        <staged>false</staged>
+        <sys_class_name>sys_hub_flow_input</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 01:25:20</sys_created_on>
+        <sys_id>23b899ed83ca7210f6b1fb96feaad358</sys_id>
+        <sys_mod_count>1</sys_mod_count>
+        <sys_name/>
+        <sys_package/>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name/>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:31</sys_updated_on>
+        <table_reference>false</table_reference>
+        <text_index>false</text_index>
+        <unique>false</unique>
+        <use_dependent_field>false</use_dependent_field>
+        <use_dynamic_default>false</use_dynamic_default>
+        <use_reference_qualifier>simple</use_reference_qualifier>
+        <virtual>false</virtual>
+        <virtual_type>script</virtual_type>
+        <widget/>
+        <write_roles/>
+        <xml_view>false</xml_view>
+    </sys_hub_flow_input>
+    <sys_hub_action_input_action_instance action="delete_multiple" query="action_input=23b899ed83ca7210f6b1fb96feaad358"/>
+    <sys_hub_flow_input action="INSERT_OR_UPDATE">
+        <active>true</active>
+        <array>false</array>
+        <array_denormalized>false</array_denormalized>
+        <attributes>element_mapping_provider=com.glide.flow_design.action.data.FlowDesignVariableMapper,uiType=document_id,uiTypeLabel=Document ID</attributes>
+        <audit>false</audit>
+        <calculation><![CDATA[(function calculatedFieldValue(current) {
+
+	// Add your code here
+	return '';  // return the calculated value
+
+})(current);]]></calculation>
+        <choice/>
+        <choice_field/>
+        <choice_table/>
+        <column_label/>
+        <comments/>
+        <create_roles/>
+        <default_value/>
+        <defaultsort/>
+        <delete_roles/>
+        <dependent>table_name</dependent>
+        <dependent_on_field>table_name</dependent_on_field>
+        <display>false</display>
+        <dynamic_creation>false</dynamic_creation>
+        <dynamic_creation_script/>
+        <dynamic_default_value/>
+        <dynamic_ref_qual/>
+        <element>current</element>
+        <element_reference>false</element_reference>
+        <foreign_database/>
+        <formula/>
+        <function_definition/>
+        <function_field>false</function_field>
+        <help/>
+        <hint/>
+        <internal_type display_value="">document_id</internal_type>
+        <label>Record</label>
+        <mandatory>true</mandatory>
+        <max_length>200</max_length>
+        <model display_value="Kokoro Empathy Engine">18b8d5ed83ca7210f6b1fb96feaad37d</model>
+        <model_id>18b8d5ed83ca7210f6b1fb96feaad37d</model_id>
+        <model_table>sys_hub_flow</model_table>
+        <name>var__m_sys_hub_flow_input_18b8d5ed83ca7210f6b1fb96feaad37d</name>
+        <next_element/>
+        <order>100</order>
+        <primary>false</primary>
+        <read_only>false</read_only>
+        <read_roles/>
+        <reference/>
+        <reference_cascade_rule/>
+        <reference_floats>false</reference_floats>
+        <reference_key/>
+        <reference_qual/>
+        <reference_qual_condition/>
+        <reference_type/>
+        <sizeclass/>
+        <spell_check>false</spell_check>
+        <staged>false</staged>
+        <sys_class_name>sys_hub_flow_input</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 01:25:19</sys_created_on>
+        <sys_id>e7b859ed83ca7210f6b1fb96feaad3a8</sys_id>
+        <sys_mod_count>1</sys_mod_count>
+        <sys_name/>
+        <sys_package/>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name/>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:31</sys_updated_on>
+        <table_reference>false</table_reference>
+        <text_index>false</text_index>
+        <unique>false</unique>
+        <use_dependent_field>true</use_dependent_field>
+        <use_dynamic_default>false</use_dynamic_default>
+        <use_reference_qualifier>simple</use_reference_qualifier>
+        <virtual>false</virtual>
+        <virtual_type>script</virtual_type>
+        <widget/>
+        <write_roles/>
+        <xml_view>false</xml_view>
+    </sys_hub_flow_input>
+    <sys_hub_action_input_action_instance action="delete_multiple" query="action_input=e7b859ed83ca7210f6b1fb96feaad3a8"/>
+    <sys_hub_flow_output action="delete_multiple" query="model=18b8d5ed83ca7210f6b1fb96feaad37d"/>
+    <sys_hub_alias_mapping action="delete_multiple" query="source_id=18b8d5ed83ca7210f6b1fb96feaad37d"/>
+    <sys_hub_trigger_instance_v2 action="delete_multiple" query="flow=18b8d5ed83ca7210f6b1fb96feaad37d^sys_idNOT IN9bb859ed83ca7210f6b1fb96feaad3a2"/>
+    <sys_hub_trigger_instance_v2 action="INSERT_OR_UPDATE">
+        <comment/>
+        <display_text/>
+        <flow display_value="Kokoro Empathy Engine">18b8d5ed83ca7210f6b1fb96feaad37d</flow>
+        <generation_source/>
+        <name>Created</name>
+        <published_version/>
+        <remote_sys_id/>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 01:25:18</sys_created_on>
+        <sys_id>9bb859ed83ca7210f6b1fb96feaad3a2</sys_id>
+        <sys_mod_count>2</sys_mod_count>
+        <sys_scope/>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:33</sys_updated_on>
+        <trigger_definition display_value="Created">798916a0c31322002841b63b12d3ae7c</trigger_definition>
+        <trigger_inputs>H4sIAAAAAAAA/9VY227jNhD9FUFPLeACuviat62TRQOkCWp7uw9BKlASaROhSVeilHgX+fcOdbFlSXZ8kVPnKRBJc84cnjlD5vGnzpCLmX6lT5DLsN7SKZc44IhNlgsMw1INOxzN1dwccR9JESz1KxlEuKWTQMwneL5gSMJiglgIgyLwcaBfmS09RizC42V468NO8Ptkm2xPPZuG71fH7Ftmt9N2nsWzCIRjOCFlmEvnhYYzWOjTEEIs/87Wj5NJ7Xs66c0o8wPM9avHp5a+QAEEkQrAz9KUhIycjXS1+zQvqvB5xEMDCxuebdqWZRhWv226Xds1Ld9G2DBgXZmrUj6yhrI1GfhVYu5jf8VThc0AI/+Bs+VqxQwOI2Vujl5D+gN27xtqHcGQlYfTudWnk/GUDnszQT38sJBU8HQkxZlOChbN+X2KXzGMCYqYzBmGkSiE/fBCQVYgMkRkPBMvozzgV8qT7LJJJjzEVl9IyoC6kcShOgpCGRyKk3ITiihI0I9uhg+ja+f7l8nwj5uRM7oZT0a3w8nNtf6W5OX8G6kdU4QZFidN520li68UM3WASiyOJ0C/ALilh15AF/KLJ2mca/Ottdb7UHCfJtxUNO/lU+Gm5nMOdoneMLbK3itEzKX/z81fVX2ng8fpeljEnui620XIx2iLrl1S0HWRkxrQsoaeYt67FJ6N7CPxtmH8TyLPTO1Yjb8gLkNHCgf5vlNgCSwBNlYpCh+z63U8GKfTKZQF5YtIhu+KPs3t7V1tBxGHHzir86gqPKFtxd8dDQHNI1Rpzk0GmNxlO44irgmueVEQKOuFc9Xy3bUEldICuZ2jacYsGWOGPVkQA/kWFr/+pGFI+bSAfhU8GalGZ8sihNx0Twn61GR5V0mPS/mUyvz4Gs9PL6lv0yTExcQyeqq6TcN2iWn0jA4ivm0YnlWo7yrErdhlSShnqfPDqjxMJMr20ESZ+Ay8UayRvRQdb5ZDToISTmYmw2agmQ1BsxS0kinaB7niSqzp8PWmZnel1vCNAfkxgl/4eY773Aj28EXCxAv47RGeSESAp4GIuF/2JrWnRuHvxoqG3NBF3vPusOsV2i/Zsf16ac64pj0XLuLLs3miTUx3gNvYACu0wQXdzmDgesgipNftYcsseeIaXC3iT+GF74ghrlPTNl+s1XNcVwYHOOIJACvueDDA030xk2utK6Zzn8P/XmaYOwA1cJhyuIoNThn1cT7XrAdUQsfrqm/KB+6ypFR00h94HbPX83rw6gEXIG3sIrNtddCg17X7nZILVODtgi5r2PqQt1C4DBMgWxziWzp1WY//c0o5xFKqxnV4P0/WozRAobOqI9ESkxGBpujUbtcLtTGGPpm8hhvr70LOKp0dQv8O4xuh1T3wXvDfauA0+fri8BDYh5otUC7t4lESSbzJ+pmeZLjd7wyIXW88ZFBnPGuI28Ff/EVkT4HEW6VWdyPZtyDj2rreeoU4osRK4ineLXZcfpoixWycFOt8pNgnX7jyCt36Dj0G7CdqbMlt4/juJjh2BKl1b0q07B+P2NfcpSZnGMhkcKeGUJqK22Q/SS/HlfYGw1p2j2mucymay2lfCw0mtOBDEj9P+ypJ4SNe0NjvoU7H3nJ3HpRf0HUw38ni4pvZwcKJ63S4s6Mdtm95z9qeVqirTZ3s2a0azbq+ZZ2WdW3Tei/r09vRrvd/DYoLbTRP/wFUbBV28h8AAA==</trigger_inputs>
+        <trigger_outputs/>
+        <trigger_type>record_create</trigger_type>
+        <updation_source/>
+    </sys_hub_trigger_instance_v2>
+    <sys_hub_action_instance_v2 action="delete_multiple" query="flow=18b8d5ed83ca7210f6b1fb96feaad37d^sys_idNOT IN17f4426983ce7210f6b1fb96feaad362,806c95ed838a7210f6b1fb96feaad32e,f5d6c6e983ce7210f6b1fb96feaad3fb,f7c282a583ce7210f6b1fb96feaad3fe"/>
+    <sys_hub_action_instance_v2 action="INSERT_OR_UPDATE">
+        <action_type display_value="Update Record">f9d01dd2c31332002841b63b12d3aea1</action_type>
+        <action_type_parent display_value="Update Record">baf174c8c3c232002841b63b12d3aee4</action_type_parent>
+        <attributes/>
+        <comment/>
+        <compiled_snapshot>f9d01dd2c31332002841b63b12d3aea1</compiled_snapshot>
+        <display_text/>
+        <flow display_value="Kokoro Empathy Engine">18b8d5ed83ca7210f6b1fb96feaad37d</flow>
+        <generation_source/>
+        <order>5</order>
+        <parent_ui_id>bd198d4b-340a-46a5-a273-ad4ce4a46334</parent_ui_id>
+        <sys_class_name>sys_hub_action_instance_v2</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:38:39</sys_created_on>
+        <sys_id>17f4426983ce7210f6b1fb96feaad362</sys_id>
+        <sys_mod_count>4</sys_mod_count>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:49:26</sys_updated_on>
+        <ui_id>6d111913-3162-40b6-a6b7-34b027265dad</ui_id>
+        <updation_source/>
+        <values>H4sIAAAAAAAA/+VVW0sbQRT+K2GfQ7qbxKB5KwahYBW02Adrl8nuJBmcvXRmNpqGgIlilUqxF0prKS2IRaGlrS3UgtAfs01in/wLPbO7WYNaUfAlNE85t5nvfHO+s7N1hZhKXsliU9VGtJyR0TKZtKqmh7NaMZcpamkzgzDWlKRiIwtDJsOGw0ywq4h60lGvjzKMBDZ1LWV4jGFbNBoQNwl3KarNRGngMSqEmhBX8rNzScVFDE4UmCn5+qnQZSFRVMQUUqd6mE5jFDVX2qZjeBbg0knPOR5VFqJI4lYBIlAk4WhqUsGLAtsmBiAlRDlOKhayTSQcVlPygnnggKbNSZvW4owKsUXYqIUWOXkIN2dVmVfC0JkRkRCbekRQ6C4VkEDTcLIhPBbz5RAD85ATE5eQR8Vovy9MmHQFceywRKAi7VU71LPsiZARJT6g7z08DiCwK/uUyMO2StMVZ2GqB3KM2AElUYvUMRCNLSQEI0VPSDh1BVMccGwh1yV2WXeZUyVBMUCxUmUKRqpEnQW4k5OynUKGxJ0CVlFqDPyFwD2DGJFN3IZjoLiRVHiNj1LE+UkrwKH+wJNIwsaiFvSAhYACPZgEWWww4oqbcFUVx8BDpwQdTQr8Oyex0WgkI30Uhy4aRmPkZPb6rj/RyKKuDae13FBWn3fmHeboqs4JlZAXCK+cFct0EEzcDYNX080loPZ0cyeYlvOhR9I54xvvr01MhIFIOEPXJpzhQRJO1MbAK+cfeolFoKYv3Mh9kxTMPe8TALSLylinuIrpPU9VM2YNU0B+HxGdAwAiCQgD/tKG3/rht376y6v+8vujT6/aazvHh1vdF++6m6vdrZXOx/3O19bx4Vp3fe/o26Mbv3+97RzsHR+u+0utzuc37YNlv7XyZ3u/8/J158t3v/Wss9H0m9t+80N786nffOw3V/3mc7+5K0NPdts7u1B4VoODAPlqm+ES79fbDGMEU5Of86C9tYAt4EpgPXzgU6shCiZmomD8Xb22/aDl1OA3QFvif/m8Nub+AllnrbtVCgAA</values>
+    </sys_hub_action_instance_v2>
+    <sys_hub_alias_mapping action="delete_multiple" query="source_id=17f4426983ce7210f6b1fb96feaad362"/>
+    <sys_hub_action_instance_v2 action="INSERT_OR_UPDATE">
+        <action_type display_value="Update Record">f9d01dd2c31332002841b63b12d3aea1</action_type>
+        <action_type_parent/>
+        <attributes/>
+        <comment/>
+        <compiled_snapshot>f9d01dd2c31332002841b63b12d3aea1</compiled_snapshot>
+        <display_text/>
+        <flow display_value="Kokoro Empathy Engine">18b8d5ed83ca7210f6b1fb96feaad37d</flow>
+        <generation_source/>
+        <order>2</order>
+        <parent_ui_id>5ef2aa11-d00c-4840-ac94-9bce101d2c4c</parent_ui_id>
+        <sys_class_name>sys_hub_action_instance_v2</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 01:41:12</sys_created_on>
+        <sys_id>806c95ed838a7210f6b1fb96feaad32e</sys_id>
+        <sys_mod_count>6</sys_mod_count>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:49:26</sys_updated_on>
+        <ui_id>52a4025a-9410-4174-b575-a317df714c01</ui_id>
+        <updation_source/>
+        <values>H4sIAAAAAAAA/+1UW0sbQRT+K2GfQ9hNYtC8FYNQsAoq9sHaZbI7SQZnL52ZjaYh4G7aQpFiLb08tKAtVSjFFqFQSu2vmUbbp/6Fnr0lqVpR8EHBfViYc5vv++acs9BWiKmUlSI2VW1MKxkFrVDIq2p+tKhVS4WqljcLCGNNySo2sjBEMmw4zIRzE1EvNLTb4wwjgU1dyxkeY9gWnQ74TcJdilrzSRhYjAahJviV8sJiVnERg4oCM6XcPuI6KySKqphC6EyK6ShG0XLDs+kYngW4dJIaJ5PMSuLJ3KyAB5JCOJqaVfCKwLaJAUgNUY6zioVsEwmHtZSyYB4YgLQ5bdNWP6JBbBETtdAKJ/fh5qIaxtUwMDMSEfpHPREoNtcqSKBZqGwIj/X1coiBeayJiWvIo2J82BYHTLuCOHacIlCVptkO9Sx7KlZE6RcYeg+PAwjshjxD5DGt2mzDWZ5JQU4QO5IkoUgdA9H+CQnBSNUTIZy2gimONLaQ6xK7rrvMaZIoGaBYuTqFQ65GnWW4k5O6nUNGiDsHqqLcBNgrkXkeMRKSuAVlILmTVXiLj1PE+YAKaKjf80IkMbGEgh6pEEmgR50QJhuMuOIGXNXECfBONml6NX9qh+FBQ0W9zoeaHoijOtYpbmJ6x1PVAjSveRcRnQMOEuoQW+XqUxl8lcE32X0ku1u/dnd6W3tydePw+WZv44f0P/We7B182JT+x98v38lgXQZrMtiV3X3Z/Rz9H8vg2cH7N4eb23I1OHz9RfpvIfjn97Xew23pv5L+jvTXpb8l/RfSf/Bn3z8+eZca6/l2whleLN0JEwRTk5/whMlOENgCkQTW4yf9dy3MJc7MfOLsb4YLWw1aSY2+6wVxeRdEdeS0djPGBt01VHOwJFZ0bTSvlUaK+pKz5DBHV3VOaIhjmfDG8UGdjZyZ27HzfJNxBqjpZMxFLXAy9HQ4jtomh3MzU7EjGYqRC5uJ0as0DQmNKz8O/xuCxb8RPry8HAoAAA==</values>
+    </sys_hub_action_instance_v2>
+    <sys_hub_alias_mapping action="delete_multiple" query="source_id=806c95ed838a7210f6b1fb96feaad32e"/>
+    <sys_hub_action_instance_v2 action="INSERT_OR_UPDATE">
+        <action_type display_value="Update Record">f9d01dd2c31332002841b63b12d3aea1</action_type>
+        <action_type_parent display_value="Update Record">baf174c8c3c232002841b63b12d3aee4</action_type_parent>
+        <attributes/>
+        <comment/>
+        <compiled_snapshot>f9d01dd2c31332002841b63b12d3aea1</compiled_snapshot>
+        <display_text/>
+        <flow display_value="Kokoro Empathy Engine">18b8d5ed83ca7210f6b1fb96feaad37d</flow>
+        <generation_source/>
+        <order>7</order>
+        <parent_ui_id>6b13825a-de00-4d83-b1aa-3fd80673797a</parent_ui_id>
+        <sys_class_name>sys_hub_action_instance_v2</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:46:44</sys_created_on>
+        <sys_id>f5d6c6e983ce7210f6b1fb96feaad3fb</sys_id>
+        <sys_mod_count>4</sys_mod_count>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:49:26</sys_updated_on>
+        <ui_id>e54cc6c1-5dba-41d8-bb3b-9f90e4a01b73</ui_id>
+        <updation_source/>
+        <values>H4sIAAAAAAAA/+VVW0sbQRT+K2GfQ9hNYtC8lQShYBW02Adrl8nuJBmcvXRmNpqGgLspVtqX0pdaK/RGC9UWH1qoLUV/zDSYPvUv9OwtBhWr4Evovs25zfd9c87ZpY5CTKWsFLGpalNayShohUJeVfOTRa1WKtS0vFlAGGtKVrGRhSGSYcNhJpxbiHqhodOpMIwENnUtZ3iMYVt0u+A3CXcpai8mYWAxmoSa4FfKS8tZxUUMKgrMlHLnlOuykCiqYQqh8ymm0xhF2w3PpmN4FuDSSWqcSTKriSdzswoeSArhaGpWwWsC2yYGIHVEOc4qFrJNJBzWVsqCeWAA0uacTdvDiCaxRUzUQmucPICbi2oYV8fAzEhEGB71RKDYXK8igRagsiE8NtTLIQbmsSYmriOPisqoLQ6YcwVx7DhFoBpNsx3qWfZsrIgyLDDyHh4HENgNeYbIY1r1haazOp+CnCZ2JElCkToGosMTEoKRmidCOB0FUxxpbCHXJXZDd5nTIlEyQLFyDQqHXJ06q3AnJw07h4wQdw5URblpsFcj8yJiJCRxC8pAcjer8DavUMT5CRXQUL/vhUhiYgkFPVIhkkCPOiFMNhhxxQ24qoUT4N1s0vS1iYs6zJg6aaiRmieNv6Zrk3mtNFHUV5wVhzm6qnNCQxyrhDfPTsBC5MzciZ1XG4ZLQE2H4XbUAudDT+bhjG1mNDczGzuSaZi4tmmYHKdpSGiM/Tj8awjU/IVrdqSTor7nIwMAdFED6xS3ML3rqWrBbDCM7XuI6BzuJyH/2C6DbzL4Lnsbsvd68Hmrv/n+z8/tXwfrg81Px9sPpb97/PJgsPdI+ofSfyX9/f5R7/jpBrj6weHA/yrXA9nbkb2PsvclLBK8k8Fb6e/JYFMGTwYfdgc/9qBIf/+wf7Qjg2fSf/z7zZb0ofLzqOYLqHB2IMcO/9V2xiVeNt0Z0wRTk5/z1OnCwBYIJ7AeP/2ppZE4M4uJc/gbvbbNoZXU6Buj/fHf/E2X/wLGTS+GRAoAAA==</values>
+    </sys_hub_action_instance_v2>
+    <sys_hub_alias_mapping action="delete_multiple" query="source_id=f5d6c6e983ce7210f6b1fb96feaad3fb"/>
+    <sys_hub_action_instance_v2 action="INSERT_OR_UPDATE">
+        <action_type display_value="Send Email">c1806bf4a70323008299b39f087901cb</action_type>
+        <action_type_parent display_value="Send Email">98c181d20b100300d97d8bf637673ab5</action_type_parent>
+        <attributes/>
+        <comment/>
+        <compiled_snapshot>c1806bf4a70323008299b39f087901cb</compiled_snapshot>
+        <display_text/>
+        <flow display_value="Kokoro Empathy Engine">18b8d5ed83ca7210f6b1fb96feaad37d</flow>
+        <generation_source/>
+        <order>3</order>
+        <parent_ui_id>5ef2aa11-d00c-4840-ac94-9bce101d2c4c</parent_ui_id>
+        <sys_class_name>sys_hub_action_instance_v2</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:29:07</sys_created_on>
+        <sys_id>f7c282a583ce7210f6b1fb96feaad3fe</sys_id>
+        <sys_mod_count>5</sys_mod_count>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:49:26</sys_updated_on>
+        <ui_id>9266b8e5-96fc-4579-b145-56e45061bc78</ui_id>
+        <updation_source/>
+        <values>H4sIAAAAAAAA/+1Zz2/bNhT+VwjtarmSJdtxelmXIFiB/hiaoD00hUBRlM2GFjWRauIGBtrDgAE77DhgA3beaacdt39mxbDe9i/sUaIk/4hdu0m3dMsliR4fHz8+ft97ovL03GKRtWv50Y7TC2Mf9x2v4znOTmcwCL1B7Oz0B45LIqtlJXhMwTOjRGT6+QXmuTacn+9lFCsaBW6b5FlGEzWdwnjEZMrx5LFxAwsZMR7BuLX79FnLSnEGERXNrN3zhaFNIXEcUg6uRzgbUoUeVdAWoapJqp8jQfIxwAtYZbxnAuybEXR3H0ZgkkbltCx6pmgSUYATYy5pyxrjJMJKZJPaAnuPHia8MYxYoiDkHSkFYZAXidSIIjrGjKNTpkYIoxJY29LxziR7CeC8jg4VU8gB0VhZQlgEiKwZc2BSCsN3m+F4Hyt8qLKcqDyrMy0YobLMZkRjnHO1N2srHR6miomknKJwyKvZgufj5EGZRKsOMHOSuQQwNNW50ZuFxWHj8eFInD6qwB6wpMiiyQoXBPP6KT6kOCOjA0a5PuokH4fg27KwUhkLc6VhAik4eDXrBAVUvRZ4Uk6LoxzjNGXJMEgz8YIVCwL8cXvI4aEdc3EK8yUbJm1M9F7bcHq4fQD2/cL8GGdMb/w+hIHJ05YlJ3KPYymb7UP+gy9zjb5MxjwcPTsoCKcnk4yl6g4s9YLWmy2NekOGkPDXBY7T6bRl1OgO1lE/8huKzyzfKPIscHc6bq/rByfiRGQicALJuIZ8yuRoWZqHxSB6Ug5up9INoDYq1Qy7GLpR6JLt3uxc9KAcMPp0t9RnyVIjzyPQpCrLRnkqSBl4tSR3nHlJrpDi9ZBgLayNNTivtQ+jJyCJDEqum70Vi7+Hzlaoq5aM0+uFYS/s9r2GhwMSR/0w7uE+8RrenUJNzsY4OwmKmjyjG3dZGqbabKeJDbBUmoA6zvOIoicVqHU4jUhCIaAwJosKAaS3Dors1grpXKqDldRESiA4TD6BvlVD0samq6kRVohJJOG02uhIIGZ2NTOjhSYiR+NcKnBTMDInvrlW6F9f3Rk6GOv+hVz5KIR59QLsrm8EuCE2HgVKzMhu0h7lOBl+SlJbCt4mov08XVbiCq/tlLkByLpbiWXERoASzicZLujvsDIa7XnrtVc2oyXpzTQf5/rK4GNhuQbO2ZgVhCj1efXEj9ZyijpzNCJkhvhXcEnaYPGK0Ht7y0i2IbT/fs3khtEfHaPdtTdv2pvjUXjVlN5g9YrSny1wOtya1N0bUv9PSN1dTysyRySZh88pUXNfubod7DudLrYHvuvYvtv3bXjF79rYc/tR3Hd94rht8zorR5TDboKXIqEXfQy7ZLQtX3revfNKUIf1vi/KxTbC6t28/vzrurp6EeG1VIo789VYRJMZBR3njuORFGnMtmLJZExoJoQKITEnxWB0bB2XbrR0JgIukYV/itXIVsJOwFL5dryW13Jb3ZZzbJVeOuFn8HPOrVfF/OPb7/58/dvbV1+9ef3z259+efP6679+/b5c6BapJlBUWmSKE0R06qo4eoUAtKaTlTLOYVGpJrxex3ByF26/nCX0NowTkYAEFI1YQa7Ks8hphVmHKlJUjZ6fx1GgMpzIWGTj3a7rkX7f79mxF1Lb9/rU3oHc277f63lk4PsddzCdzudtFXhYCiFMCE2VbJYI4jwp6CQBEwAtslhNdP7hbRh6UKlYVIXS+v4C4t+NNtlmAcU2mIvfGI4je9dUPUtu4gTgzlQNVAiuWGo3YIu7YmE8Eumim0FV+R5lbDikGbLNvy6Q+U9KwcFOb6huo5lvs5VTM1hY90zMTaBLhbPac9XqRhI6xAYhcZaJ083Ppeg0NgEZvRPx4qS5lX7/8YcVOGcM7Xb7miHaLrdQmqvoc0f9vstAv1EiQQ1Zl2tAEGOCIxpsolddGmYxr4yGEjFTbvTXRAY0s5BuV2UqqxAPoR2h2hVVcVDKyAlQFYxoFW0h/8tiAeM2IilLt122QJuBXC+YcXHVT0RR8w0XXn2z8SGVh7LdQS4b0vJp+VXTtN3FtrqqJZbF5ZOzOHbx7Q/ZHK+mX12bdnBTfG+K70dVfP/7hXC7W/IGV5v6s1N5sVm66Zj78UiN+cLt+POj+/eau3H/kh+det2u17u5HV/6q1N6GnWiTKSp2dsVf3l69jfqfPhCXSUAAA==</values>
+    </sys_hub_action_instance_v2>
+    <sys_hub_alias_mapping action="delete_multiple" query="source_id=f7c282a583ce7210f6b1fb96feaad3fe"/>
+    <sys_hub_sub_flow_instance_v2 action="delete_multiple" query="flow=18b8d5ed83ca7210f6b1fb96feaad37d"/>
+    <sys_hub_flow_logic_instance_v2 action="delete_multiple" query="flow=18b8d5ed83ca7210f6b1fb96feaad37d^sys_idNOT IN54c682e983ce7210f6b1fb96feaad39c,822b5da1830e7210f6b1fb96feaad321,cf54c22983ce7210f6b1fb96feaad3d0"/>
+    <sys_hub_flow_logic_instance_v2 action="INSERT_OR_UPDATE">
+        <attributes/>
+        <block display_value="">31070ee983ce7210f6b1fb96feaad3bf</block>
+        <comment/>
+        <connected_to>5ef2aa11-d00c-4840-ac94-9bce101d2c4c</connected_to>
+        <decision_table/>
+        <display_text/>
+        <flow display_value="Kokoro Empathy Engine">18b8d5ed83ca7210f6b1fb96feaad37d</flow>
+        <flow_variables_assigned/>
+        <generation_source/>
+        <logic_definition display_value="Else">1f781bf3c32232002841b63b12d3aee6</logic_definition>
+        <order>6</order>
+        <outputs_assigned/>
+        <parent_ui_id/>
+        <sys_class_name>sys_hub_flow_logic_instance_v2</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:46:21</sys_created_on>
+        <sys_id>54c682e983ce7210f6b1fb96feaad39c</sys_id>
+        <sys_mod_count>4</sys_mod_count>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:33</sys_updated_on>
+        <ui_id>6b13825a-de00-4d83-b1aa-3fd80673797a</ui_id>
+        <updation_source/>
+        <values>H4sIAAAAAAAA/6tWyi8tKSgtKQ7JdywuzkzPU7KKjtVRyswDiUHYZYlFmYlJOalQbkpqcmZxZn5eCEjME0ldSmVeYm5mMrJQeX5RdlpOfjlCrBYAD1ouqHEAAAA=</values>
+        <workflow_reference/>
+    </sys_hub_flow_logic_instance_v2>
+    <sys_hub_flow_logic_instance_v2 action="INSERT_OR_UPDATE">
+        <attributes/>
+        <block display_value="">8a2b5da1830e7210f6b1fb96feaad320</block>
+        <comment/>
+        <connected_to/>
+        <decision_table/>
+        <display_text/>
+        <flow display_value="Kokoro Empathy Engine">18b8d5ed83ca7210f6b1fb96feaad37d</flow>
+        <flow_variables_assigned/>
+        <generation_source/>
+        <logic_definition display_value="If">af4e1945c3e232002841b63b12d3ae3e</logic_definition>
+        <order>1</order>
+        <outputs_assigned/>
+        <parent_ui_id/>
+        <sys_class_name>sys_hub_flow_logic_instance_v2</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 01:35:52</sys_created_on>
+        <sys_id>822b5da1830e7210f6b1fb96feaad321</sys_id>
+        <sys_mod_count>8</sys_mod_count>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:33</sys_updated_on>
+        <ui_id>5ef2aa11-d00c-4840-ac94-9bce101d2c4c</ui_id>
+        <updation_source/>
+        <values>H4sIAAAAAAAA/+1WTW8TMRD9K5HP0Wo3aSKaW9VSqWppBY16QWU16/UmFl57sb1JQxSJ3ipuPSAOnEECiV/Az6kof4PxfqQRScWCEKfe4uc3M2/Gz97MicptllszVDvG8JEkg+fnbcKlw/D3nEhIGRkQqmTMLVeStMkERO6w+XxXM7AsDgOP5lozab0pN+MQyRYXi8XRweHjF8dPmxF/vP/QmHv75mNz7rvr5tyv3/5Aw5fbq+apv7/9fHN5fXP5qXEEjjrmJhMwO3uY+P+aOB1zEeN2eREy0Oh/yzQZzH/ZsrOMhQIiJvBgTq3mcoThPMbVNvSSXuD3aLfT73Z8v/NoK4j63SjoxF1gW33k1YG7K/dqw1VzRRAydXqlY6el47cJu0DdMcN6CQjD2iQFGYNVekYGVucIYMPxiRSzJWPMpcVsxHEvDH/NXCbfd8yEYWOUlbvLZVj5r4TpWHHKTrJCW4FYiEQVQ5XIU3lctuCcyxLIha2di0huMB/LnGgno9KUnI7V9FldcJ/LosFqUygKYrkCi2OIcsuMOw0mWIqJwhSyDIcTZlpNeBGMWlJvJHDhJUJNsah72TygTriHMwJvH/G9Aj4DzV0XTzANBuMJmtBQzbO6t6I4WRRTCV/lTk/ZX9VJWA4DCWXYDpaZsEr0or3+goYFcPeM7qG/qG0NNeQptA7ZbIqnbNYv/728f2HZxIck2KbBZstCd5NlW0cFsm7cusN73Bv8xr0V0si+vd6De1fd62RGYDgNi284pnNvwV/b99zZtCxhSg/FjHKDSoYOO6j/J7iNGZ46p6sQGvSl6+EOW/wEfKRPxXEIAAA=</values>
+        <workflow_reference/>
+    </sys_hub_flow_logic_instance_v2>
+    <sys_hub_flow_logic_instance_v2 action="INSERT_OR_UPDATE">
+        <attributes/>
+        <block display_value="">71070ee983ce7210f6b1fb96feaad3bd</block>
+        <comment/>
+        <connected_to>5ef2aa11-d00c-4840-ac94-9bce101d2c4c</connected_to>
+        <decision_table/>
+        <display_text/>
+        <flow display_value="Kokoro Empathy Engine">18b8d5ed83ca7210f6b1fb96feaad37d</flow>
+        <flow_variables_assigned/>
+        <generation_source/>
+        <logic_definition display_value="Else If">666e5545c3e232002841b63b12d3ae99</logic_definition>
+        <order>4</order>
+        <outputs_assigned/>
+        <parent_ui_id/>
+        <sys_class_name>sys_hub_flow_logic_instance_v2</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:35:53</sys_created_on>
+        <sys_id>cf54c22983ce7210f6b1fb96feaad3d0</sys_id>
+        <sys_mod_count>5</sys_mod_count>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:33</sys_updated_on>
+        <ui_id>bd198d4b-340a-46a5-a273-ad4ce4a46334</ui_id>
+        <updation_source/>
+        <values>H4sIAAAAAAAA/+1VzW7UMBB+lcrnKEqytIK9VS2VKspW0KoXVCzHnuxaOHawnd0uqzwFEk/AkQMHngnBWzDOz3YFWxFxQELiFn/z933jGWdDTO2r2rtrc+ycnGsyfXUbEakDht8bIgWZkiJhRfqEp3ySHU2yJMkeP0rzo0meZmLCgGUkIpqVgJ7caCG9NJq2QESWTNXBcAoeuD+YAQiHsJCuUmx9s9/KF1IJCz2bilnM5cGS6eYnk19XQBXLQWGSK2+lnmP4WM5D4MlA+uCiRR5WE+oh7oZKxopAK00iAncetAAsXTDlICIl04J5Y9dbxAITl1rdAwupPaYjwfnOyXeYOzs8DI4FoEYOnXF7pH3bOpgvjORwWQWCHeJZrvoYblRd6lmnIzQcClYrPzQckdphPqgC6cCip1RcLczq5VDwTOpWYG9UhjO1PTGPbchrDy5cDCgoMREtWVVhc2hlzVK2wciljOcKD3GhzAqLhkmLGQ/EY+wRi88QP23hG2ZlUPEc02BwRzNnTnLaTiWm8xYlNG1b6Ns6EOoE9lJo1w10cNzKyh9jnSX0rJto3Eine4ZgZ5o3mxO8TA+CpjGvLfbKxyvpFhSdcQx801ycP3v6evZinOP3j+9H+379/GW077cPn37dtX+K+194CdJ9L8H+639g/bPfrH8Y2JHbnyTJ//XfXX/paLfGvba2+B9v/21Y4a6C6+ZGAJcOiVwH7Hz47wXDGgdA8l1oZeybIOEea34AyVpNKUEHAAA=</values>
+        <workflow_reference/>
+    </sys_hub_flow_logic_instance_v2>
+    <sys_hub_pill_compound action="delete_multiple" query="attached_to=18b8d5ed83ca7210f6b1fb96feaad37d^sys_idNOT IN4cb3c2e583ce7210f6b1fb96feaad3ef"/>
+    <sys_hub_pill_compound action="INSERT_OR_UPDATE">
+        <attached_to>18b8d5ed83ca7210f6b1fb96feaad37d</attached_to>
+        <extra_info/>
+        <order>0</order>
+        <prescription>{{Created_1.current.wish_content}}</prescription>
+        <source_ui_id/>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:32:57</sys_created_on>
+        <sys_id>4cb3c2e583ce7210f6b1fb96feaad3ef</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:32:57</sys_updated_on>
+        <transform_compositions>[]</transform_compositions>
+        <transform_definition_id/>
+        <ui_id>513c7746-f3be-437e-8323-44663c944219</ui_id>
+    </sys_hub_pill_compound>
+    <sys_hub_flow_variable action="delete_multiple" query="model=18b8d5ed83ca7210f6b1fb96feaad37d"/>
+    <sys_documentation action="INSERT_OR_UPDATE">
+        <element>table_name</element>
+        <help/>
+        <hint/>
+        <label>Table Name</label>
+        <language>en</language>
+        <name>var__m_sys_hub_flow_input_18b8d5ed83ca7210f6b1fb96feaad37d</name>
+        <plural/>
+        <sys_class_name>sys_documentation</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 01:25:20</sys_created_on>
+        <sys_id>6fb899ed83ca7210f6b1fb96feaad368</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name/>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 01:25:20</sys_updated_on>
+        <url/>
+        <url_target/>
+    </sys_documentation>
+    <sys_documentation action="INSERT_OR_UPDATE">
+        <element>current</element>
+        <help/>
+        <hint/>
+        <label>Record</label>
+        <language>en</language>
+        <name>var__m_sys_hub_flow_input_18b8d5ed83ca7210f6b1fb96feaad37d</name>
+        <plural/>
+        <sys_class_name>sys_documentation</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 01:25:20</sys_created_on>
+        <sys_id>afb899ed83ca7210f6b1fb96feaad354</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name/>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 01:25:20</sys_updated_on>
+        <url/>
+        <url_target/>
+    </sys_documentation>
+    <sys_choice action="delete_multiple" query="name=var__m_sys_hub_flow_input_18b8d5ed83ca7210f6b1fb96feaad37d"/>
+    <sys_choice action="delete_multiple" query="name=var__m_sys_hub_flow_output_18b8d5ed83ca7210f6b1fb96feaad37d"/>
+    <sys_hub_flow_snapshot action="INSERT_OR_UPDATE">
+        <access>public</access>
+        <acls/>
+        <active>true</active>
+        <annotation/>
+        <attributes>browserActivatedIn=chrome,integrationActivatedIn=standalone,labelCacheCleanUpExecuted=true,viewActivatedIn=naturalLanguage</attributes>
+        <authored_on_release_version>28100</authored_on_release_version>
+        <callable_by_client_api>false</callable_by_client_api>
+        <category/>
+        <copied_from/>
+        <copied_from_name/>
+        <description/>
+        <flow_priority>MEDIUM</flow_priority>
+        <internal_name>kokoro_empathy_engine</internal_name>
+        <label_cache>[{"name":"Created_1.current","label":"Trigger - Record Created➛Silent Wish Record","reference":"x_1821654_kokoro_0_silent_wish","reference_display":"Silent Wish","type":"reference","base_type":"reference","usedInstances":{"52a4025a-9410-4174-b575-a317df714c01":["record"],"9266b8e5-96fc-4579-b145-56e45061bc78":["record"],"6d111913-3162-40b6-a6b7-34b027265dad":["record"],"e54cc6c1-5dba-41d8-bb3b-9f90e4a01b73":["record"]},"attributes":{}},{"name":"Created_1.current.wish_content","label":"Trigger - Record Created➛Silent Wish Record➛Wish Content","reference":"","reference_display":"Wish Content","type":"string","base_type":"string","parent_table_name":"x_1821654_kokoro_0_silent_wish","column_name":"wish_content","usedInstances":{"5ef2aa11-d00c-4840-ac94-9bce101d2c4c":["condition"],"34e3601a-9946-4cb8-a7ab-bfc57bb95dc1":["condition"],"9266b8e5-96fc-4579-b145-56e45061bc78":[null],"63607a28-3ddd-4381-911a-96e5336a7466":["condition"],"bd198d4b-340a-46a5-a273-ad4ce4a46334":["condition"]}},{"name":"52a4025a-9410-4174-b575-a317df714c01.record.shelter_zone","label":"2 - Update Record➛Silent Wish Record➛Shelter Zone","reference":"","reference_display":"Shelter Zone","type":"choice","base_type":"choice","parent_table_name":"x_1821654_kokoro_0_silent_wish","column_name":"shelter_zone","choices":[{"used":false,"label":"Aゾーン","image":"","reference":false,"rawLabel":"Aゾーン","selected":false,"missing":false,"value":"a","parameters":{"name":"x_1821654_kokoro_0_silent_wish","dependent_values":[""]}},{"used":false,"label":"Bゾーン","image":"","reference":false,"rawLabel":"Bゾーン","selected":false,"missing":false,"value":"b","parameters":{"name":"x_1821654_kokoro_0_silent_wish","dependent_values":[""]}},{"used":false,"label":"Cゾーン","image":"","reference":false,"rawLabel":"Cゾーン","selected":false,"missing":false,"value":"c","parameters":{"name":"x_1821654_kokoro_0_silent_wish","dependent_values":[""]}}],"usedInstances":{"9266b8e5-96fc-4579-b145-56e45061bc78":["ah_subject"]}}]</label_cache>
+        <master>true</master>
+        <name>Kokoro Empathy Engine</name>
+        <natlang/>
+        <outputs/>
+        <parent_flow display_value="Kokoro Empathy Engine">18b8d5ed83ca7210f6b1fb96feaad37d</parent_flow>
+        <remote_trigger_id/>
+        <run_as>system</run_as>
+        <run_with_roles/>
+        <sc_callable>false</sc_callable>
+        <status>published</status>
+        <sys_class_name>sys_hub_flow_snapshot</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:47:33</sys_created_on>
+        <sys_domain>global</sys_domain>
+        <sys_domain_path>/</sys_domain_path>
+        <sys_id>b1074ee983ce7210f6b1fb96feaad311</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name/>
+        <sys_overrides/>
+        <sys_package/>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name/>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:33</sys_updated_on>
+        <type>flow</type>
+        <version>2</version>
+    </sys_hub_flow_snapshot>
+    <sys_translated_text action="delete_multiple" query="documentkey=b1074ee983ce7210f6b1fb96feaad311"/>
+    <sys_variable_value action="delete_multiple" query="document_key=b1074ee983ce7210f6b1fb96feaad311"/>
+    <sys_hub_flow_stage action="delete_multiple" query="flow=b1074ee983ce7210f6b1fb96feaad311"/>
+    <sys_flow_cat_variable_model action="delete_multiple" query="id=b1074ee983ce7210f6b1fb96feaad311^sys_idNOT INf5074ee983ce7210f6b1fb96feaad312"/>
+    <sys_flow_cat_variable_model action="INSERT_OR_UPDATE">
+        <id>b1074ee983ce7210f6b1fb96feaad311</id>
+        <name>Kokoro Empathy Engine</name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:47:33</sys_created_on>
+        <sys_id>f5074ee983ce7210f6b1fb96feaad312</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_scope/>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:33</sys_updated_on>
+    </sys_flow_cat_variable_model>
+    <sys_flow_cat_variable action="delete_multiple" query="flow_catalog_model=f5074ee983ce7210f6b1fb96feaad312"/>
+    <sys_hub_flow_input action="delete_multiple" query="model=b1074ee983ce7210f6b1fb96feaad311^sys_idNOT IN8a074ee983ce7210f6b1fb96feaad321,b9074ee983ce7210f6b1fb96feaad313"/>
+    <sys_hub_flow_input action="INSERT_OR_UPDATE">
+        <active>true</active>
+        <array>false</array>
+        <array_denormalized>false</array_denormalized>
+        <attributes>element_mapping_provider=com.glide.flow_design.action.data.FlowDesignVariableMapper,test_input_hidden=true,uiType=table_name,uiTypeLabel=Table Name</attributes>
+        <audit>false</audit>
+        <calculation><![CDATA[(function calculatedFieldValue(current) {
+
+	// Add your code here
+	return '';  // return the calculated value
+
+})(current);]]></calculation>
+        <choice/>
+        <choice_field/>
+        <choice_table/>
+        <column_label/>
+        <comments/>
+        <create_roles/>
+        <default_value/>
+        <defaultsort/>
+        <delete_roles/>
+        <dependent/>
+        <dependent_on_field/>
+        <display>false</display>
+        <dynamic_creation>false</dynamic_creation>
+        <dynamic_creation_script/>
+        <dynamic_default_value/>
+        <dynamic_ref_qual/>
+        <element>table_name</element>
+        <element_reference>false</element_reference>
+        <foreign_database/>
+        <formula/>
+        <function_definition/>
+        <function_field>false</function_field>
+        <help/>
+        <hint/>
+        <internal_type display_value="">table_name</internal_type>
+        <label>Table Name</label>
+        <mandatory>false</mandatory>
+        <max_length>200</max_length>
+        <model display_value="Kokoro Empathy Engine">b1074ee983ce7210f6b1fb96feaad311</model>
+        <model_id>b1074ee983ce7210f6b1fb96feaad311</model_id>
+        <model_table>sys_hub_flow_snapshot</model_table>
+        <name>var__m_sys_hub_flow_input_b1074ee983ce7210f6b1fb96feaad311</name>
+        <next_element/>
+        <order>101</order>
+        <primary>false</primary>
+        <read_only>false</read_only>
+        <read_roles/>
+        <reference/>
+        <reference_cascade_rule/>
+        <reference_floats>false</reference_floats>
+        <reference_key/>
+        <reference_qual/>
+        <reference_qual_condition/>
+        <reference_type/>
+        <sizeclass/>
+        <spell_check>false</spell_check>
+        <staged>false</staged>
+        <sys_class_name>sys_hub_flow_input</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:47:34</sys_created_on>
+        <sys_id>8a074ee983ce7210f6b1fb96feaad321</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name/>
+        <sys_package/>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name/>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:34</sys_updated_on>
+        <table_reference>false</table_reference>
+        <text_index>false</text_index>
+        <unique>false</unique>
+        <use_dependent_field>false</use_dependent_field>
+        <use_dynamic_default>false</use_dynamic_default>
+        <use_reference_qualifier>simple</use_reference_qualifier>
+        <virtual>false</virtual>
+        <virtual_type>script</virtual_type>
+        <widget/>
+        <write_roles/>
+        <xml_view>false</xml_view>
+    </sys_hub_flow_input>
+    <sys_hub_action_input_action_instance action="delete_multiple" query="action_input=8a074ee983ce7210f6b1fb96feaad321"/>
+    <sys_hub_flow_input action="INSERT_OR_UPDATE">
+        <active>true</active>
+        <array>false</array>
+        <array_denormalized>false</array_denormalized>
+        <attributes>element_mapping_provider=com.glide.flow_design.action.data.FlowDesignVariableMapper,uiType=document_id,uiTypeLabel=Document ID</attributes>
+        <audit>false</audit>
+        <calculation><![CDATA[(function calculatedFieldValue(current) {
+
+	// Add your code here
+	return '';  // return the calculated value
+
+})(current);]]></calculation>
+        <choice/>
+        <choice_field/>
+        <choice_table/>
+        <column_label/>
+        <comments/>
+        <create_roles/>
+        <default_value/>
+        <defaultsort/>
+        <delete_roles/>
+        <dependent>table_name</dependent>
+        <dependent_on_field>table_name</dependent_on_field>
+        <display>false</display>
+        <dynamic_creation>false</dynamic_creation>
+        <dynamic_creation_script/>
+        <dynamic_default_value/>
+        <dynamic_ref_qual/>
+        <element>current</element>
+        <element_reference>false</element_reference>
+        <foreign_database/>
+        <formula/>
+        <function_definition/>
+        <function_field>false</function_field>
+        <help/>
+        <hint/>
+        <internal_type display_value="">document_id</internal_type>
+        <label>Record</label>
+        <mandatory>true</mandatory>
+        <max_length>200</max_length>
+        <model display_value="Kokoro Empathy Engine">b1074ee983ce7210f6b1fb96feaad311</model>
+        <model_id>b1074ee983ce7210f6b1fb96feaad311</model_id>
+        <model_table>sys_hub_flow_snapshot</model_table>
+        <name>var__m_sys_hub_flow_input_b1074ee983ce7210f6b1fb96feaad311</name>
+        <next_element/>
+        <order>100</order>
+        <primary>false</primary>
+        <read_only>false</read_only>
+        <read_roles/>
+        <reference/>
+        <reference_cascade_rule/>
+        <reference_floats>false</reference_floats>
+        <reference_key/>
+        <reference_qual/>
+        <reference_qual_condition/>
+        <reference_type/>
+        <sizeclass/>
+        <spell_check>false</spell_check>
+        <staged>false</staged>
+        <sys_class_name>sys_hub_flow_input</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:47:33</sys_created_on>
+        <sys_id>b9074ee983ce7210f6b1fb96feaad313</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name/>
+        <sys_package/>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name/>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:33</sys_updated_on>
+        <table_reference>false</table_reference>
+        <text_index>false</text_index>
+        <unique>false</unique>
+        <use_dependent_field>true</use_dependent_field>
+        <use_dynamic_default>false</use_dynamic_default>
+        <use_reference_qualifier>simple</use_reference_qualifier>
+        <virtual>false</virtual>
+        <virtual_type>script</virtual_type>
+        <widget/>
+        <write_roles/>
+        <xml_view>false</xml_view>
+    </sys_hub_flow_input>
+    <sys_hub_action_input_action_instance action="delete_multiple" query="action_input=b9074ee983ce7210f6b1fb96feaad313"/>
+    <sys_hub_flow_output action="delete_multiple" query="model=b1074ee983ce7210f6b1fb96feaad311"/>
+    <sys_hub_alias_mapping action="delete_multiple" query="source_id=b1074ee983ce7210f6b1fb96feaad311"/>
+    <sys_hub_trigger_instance_v2 action="delete_multiple" query="flow=b1074ee983ce7210f6b1fb96feaad311^sys_idNOT IN46074ee983ce7210f6b1fb96feaad341"/>
+    <sys_hub_trigger_instance_v2 action="INSERT_OR_UPDATE">
+        <comment/>
+        <display_text/>
+        <flow display_value="Kokoro Empathy Engine">b1074ee983ce7210f6b1fb96feaad311</flow>
+        <generation_source/>
+        <name>Created</name>
+        <published_version/>
+        <remote_sys_id/>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:47:34</sys_created_on>
+        <sys_id>46074ee983ce7210f6b1fb96feaad341</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_scope/>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:34</sys_updated_on>
+        <trigger_definition display_value="Created">798916a0c31322002841b63b12d3ae7c</trigger_definition>
+        <trigger_inputs>H4sIAAAAAAAA/9VY227jNhD9FUFPLeACuviat62TRQOkCWp7uw9BKlASaROhSVeilHgX+fcOdbFlSXZ8kVPnKRBJc84cnjlD5vGnzpCLmX6lT5DLsN7SKZc44IhNlgsMw1INOxzN1dwccR9JESz1KxlEuKWTQMwneL5gSMJiglgIgyLwcaBfmS09RizC42V468NO8Ptkm2xPPZuG71fH7Ftmt9N2nsWzCIRjOCFlmEvnhYYzWOjTEEIs/87Wj5NJ7Xs66c0o8wPM9avHp5a+QAEEkQrAz9KUhIycjXS1+zQvqvB5xEMDCxuebdqWZRhWv226Xds1Ld9G2DBgXZmrUj6yhrI1GfhVYu5jf8VThc0AI/+Bs+VqxQwOI2Vujl5D+gN27xtqHcGQlYfTudWnk/GUDnszQT38sJBU8HQkxZlOChbN+X2KXzGMCYqYzBmGkSiE/fBCQVYgMkRkPBMvozzgV8qT7LJJJjzEVl9IyoC6kcShOgpCGRyKk3ITiihI0I9uhg+ja+f7l8nwj5uRM7oZT0a3w8nNtf6W5OX8G6kdU4QZFidN520li68UM3WASiyOJ0C/ALilh15AF/KLJ2mca/Ottdb7UHCfJtxUNO/lU+Gm5nMOdoneMLbK3itEzKX/z81fVX2ng8fpeljEnui620XIx2iLrl1S0HWRkxrQsoaeYt67FJ6N7CPxtmH8TyLPTO1Yjb8gLkNHCgf5vlNgCSwBNlYpCh+z63U8GKfTKZQF5YtIhu+KPs3t7V1tBxGHHzir86gqPKFtxd8dDQHNI1Rpzk0GmNxlO44irgmueVEQKOuFc9Xy3bUEldICuZ2jacYsGWOGPVkQA/kWFr/+pGFI+bSAfhU8GalGZ8sihNx0Twn61GR5V0mPS/mUyvz4Gs9PL6lv0yTExcQyeqq6TcN2iWn0jA4ivm0YnlWo7yrErdhlSShnqfPDqjxMJMr20ESZ+Ay8UayRvRQdb5ZDToISTmYmw2agmQ1BsxS0kinaB7niSqzp8PWmZnel1vCNAfkxgl/4eY773Aj28EXCxAv47RGeSESAp4GIuF/2JrWnRuHvxoqG3NBF3vPusOsV2i/Zsf16ac64pj0XLuLLs3miTUx3gNvYACu0wQXdzmDgesgipNftYcsseeIaXC3iT+GF74ghrlPTNl+s1XNcVwYHOOIJACvueDDA030xk2utK6Zzn8P/XmaYOwA1cJhyuIoNThn1cT7XrAdUQsfrqm/KB+6ypFR00h94HbPX83rw6gEXIG3sIrNtddCg17X7nZILVODtgi5r2PqQt1C4DBMgWxziWzp1WY//c0o5xFKqxnV4P0/WozRAobOqI9ESkxGBpujUbtcLtTGGPpm8hhvr70LOKp0dQv8O4xuh1T3wXvDfauA0+fri8BDYh5otUC7t4lESSbzJ+pmeZLjd7wyIXW88ZFBnPGuI28Ff/EVkT4HEW6VWdyPZtyDj2rreeoU4osRK4ineLXZcfpoixWycFOt8pNgnX7jyCt36Dj0G7CdqbMlt4/juJjh2BKl1b0q07B+P2NfcpSZnGMhkcKeGUJqK22Q/SS/HlfYGw1p2j2mucymay2lfCw0mtOBDEj9P+ypJ4SNe0NjvoU7H3nJ3HpRf0HUw38ni4pvZwcKJ63S4s6Mdtm95z9qeVqirTZ3s2a0azbq+ZZ2WdW3Tei/r09vRrvd/DYoLbTRP/wFUbBV28h8AAA==</trigger_inputs>
+        <trigger_outputs/>
+        <trigger_type>record_create</trigger_type>
+        <updation_source/>
+    </sys_hub_trigger_instance_v2>
+    <sys_hub_action_instance_v2 action="delete_multiple" query="flow=b1074ee983ce7210f6b1fb96feaad311^sys_idNOT IN06074ee983ce7210f6b1fb96feaad33d,46074ee983ce7210f6b1fb96feaad33f,4e074ee983ce7210f6b1fb96feaad33e,4e074ee983ce7210f6b1fb96feaad33f"/>
+    <sys_hub_action_instance_v2 action="INSERT_OR_UPDATE">
+        <action_type display_value="Update Record">f9d01dd2c31332002841b63b12d3aea1</action_type>
+        <action_type_parent display_value="Update Record">baf174c8c3c232002841b63b12d3aee4</action_type_parent>
+        <attributes/>
+        <comment/>
+        <compiled_snapshot>f9d01dd2c31332002841b63b12d3aea1</compiled_snapshot>
+        <display_text/>
+        <flow display_value="Kokoro Empathy Engine">b1074ee983ce7210f6b1fb96feaad311</flow>
+        <generation_source/>
+        <order>2</order>
+        <parent_ui_id>5ef2aa11-d00c-4840-ac94-9bce101d2c4c</parent_ui_id>
+        <sys_class_name>sys_hub_action_instance_v2</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:47:34</sys_created_on>
+        <sys_id>06074ee983ce7210f6b1fb96feaad33d</sys_id>
+        <sys_mod_count>1</sys_mod_count>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:34</sys_updated_on>
+        <ui_id>52a4025a-9410-4174-b575-a317df714c01</ui_id>
+        <updation_source/>
+        <values>H4sIAAAAAAAA/+1UW0sbQRT+K2GfQ9hNYtC8FYNQsAoq9sHaZbI7SQZnL52ZjaYh4G7aQpFiLb08tKAtVSjFFqFQSu2vmUbbp/6Fnr0lqVpR8EHBfViYc5vv++acs9BWiKmUlSI2VW1MKxkFrVDIq2p+tKhVS4WqljcLCGNNySo2sjBEMmw4zIRzE1EvNLTb4wwjgU1dyxkeY9gWnQ74TcJdilrzSRhYjAahJviV8sJiVnERg4oCM6XcPuI6KySKqphC6EyK6ShG0XLDs+kYngW4dJIaJ5PMSuLJ3KyAB5JCOJqaVfCKwLaJAUgNUY6zioVsEwmHtZSyYB4YgLQ5bdNWP6JBbBETtdAKJ/fh5qIaxtUwMDMSEfpHPREoNtcqSKBZqGwIj/X1coiBeayJiWvIo2J82BYHTLuCOHacIlCVptkO9Sx7KlZE6RcYeg+PAwjshjxD5DGt2mzDWZ5JQU4QO5IkoUgdA9H+CQnBSNUTIZy2gimONLaQ6xK7rrvMaZIoGaBYuTqFQ65GnWW4k5O6nUNGiDsHqqLcBNgrkXkeMRKSuAVlILmTVXiLj1PE+YAKaKjf80IkMbGEgh6pEEmgR50QJhuMuOIGXNXECfBONml6NX9qh+FBQ0W9zoeaHoijOtYpbmJ6x1PVAjSveRcRnQMOEuoQW+XqUxl8lcE32X0ku1u/dnd6W3tydePw+WZv44f0P/We7B182JT+x98v38lgXQZrMtiV3X3Z/Rz9H8vg2cH7N4eb23I1OHz9RfpvIfjn97Xew23pv5L+jvTXpb8l/RfSf/Bn3z8+eZca6/l2whleLN0JEwRTk5/whMlOENgCkQTW4yf9dy3MJc7MfOLsb4YLWw1aSY2+6wVxeRdEdeS0djPGBt01VHOwJFZ0bTSvlUaK+pKz5DBHV3VOaIhjmfDG8UGdjZyZ27HzfJNxBqjpZMxFLXAy9HQ4jtomh3MzU7EjGYqRC5uJ0as0DQmNKz8O/xuCxb8RPry8HAoAAA==</values>
+    </sys_hub_action_instance_v2>
+    <sys_hub_alias_mapping action="delete_multiple" query="source_id=06074ee983ce7210f6b1fb96feaad33d"/>
+    <sys_hub_action_instance_v2 action="INSERT_OR_UPDATE">
+        <action_type display_value="Update Record">f9d01dd2c31332002841b63b12d3aea1</action_type>
+        <action_type_parent display_value="Update Record">baf174c8c3c232002841b63b12d3aee4</action_type_parent>
+        <attributes/>
+        <comment/>
+        <compiled_snapshot>f9d01dd2c31332002841b63b12d3aea1</compiled_snapshot>
+        <display_text/>
+        <flow display_value="Kokoro Empathy Engine">b1074ee983ce7210f6b1fb96feaad311</flow>
+        <generation_source/>
+        <order>5</order>
+        <parent_ui_id>bd198d4b-340a-46a5-a273-ad4ce4a46334</parent_ui_id>
+        <sys_class_name>sys_hub_action_instance_v2</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:47:34</sys_created_on>
+        <sys_id>46074ee983ce7210f6b1fb96feaad33f</sys_id>
+        <sys_mod_count>1</sys_mod_count>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:34</sys_updated_on>
+        <ui_id>6d111913-3162-40b6-a6b7-34b027265dad</ui_id>
+        <updation_source/>
+        <values>H4sIAAAAAAAA/+VVW0sbQRT+K2GfQ7qbxKB5KwahYBW02Adrl8nuJBmcvXRmNpqGgIlilUqxF0prKS2IRaGlrS3UgtAfs01in/wLPbO7WYNaUfAlNE85t5nvfHO+s7N1hZhKXsliU9VGtJyR0TKZtKqmh7NaMZcpamkzgzDWlKRiIwtDJsOGw0ywq4h60lGvjzKMBDZ1LWV4jGFbNBoQNwl3KarNRGngMSqEmhBX8rNzScVFDE4UmCn5+qnQZSFRVMQUUqd6mE5jFDVX2qZjeBbg0knPOR5VFqJI4lYBIlAk4WhqUsGLAtsmBiAlRDlOKhayTSQcVlPygnnggKbNSZvW4owKsUXYqIUWOXkIN2dVmVfC0JkRkRCbekRQ6C4VkEDTcLIhPBbz5RAD85ATE5eQR8Vovy9MmHQFceywRKAi7VU71LPsiZARJT6g7z08DiCwK/uUyMO2StMVZ2GqB3KM2AElUYvUMRCNLSQEI0VPSDh1BVMccGwh1yV2WXeZUyVBMUCxUmUKRqpEnQW4k5OynUKGxJ0CVlFqDPyFwD2DGJFN3IZjoLiRVHiNj1LE+UkrwKH+wJNIwsaiFvSAhYACPZgEWWww4oqbcFUVx8BDpwQdTQr8Oyex0WgkI30Uhy4aRmPkZPb6rj/RyKKuDae13FBWn3fmHeboqs4JlZAXCK+cFct0EEzcDYNX080loPZ0cyeYlvOhR9I54xvvr01MhIFIOEPXJpzhQRJO1MbAK+cfeolFoKYv3Mh9kxTMPe8TALSLylinuIrpPU9VM2YNU0B+HxGdAwAiCQgD/tKG3/rht376y6v+8vujT6/aazvHh1vdF++6m6vdrZXOx/3O19bx4Vp3fe/o26Mbv3+97RzsHR+u+0utzuc37YNlv7XyZ3u/8/J158t3v/Wss9H0m9t+80N786nffOw3V/3mc7+5K0NPdts7u1B4VoODAPlqm+ES79fbDGMEU5Of86C9tYAt4EpgPXzgU6shCiZmomD8Xb22/aDl1OA3QFvif/m8Nub+AllnrbtVCgAA</values>
+    </sys_hub_action_instance_v2>
+    <sys_hub_alias_mapping action="delete_multiple" query="source_id=46074ee983ce7210f6b1fb96feaad33f"/>
+    <sys_hub_action_instance_v2 action="INSERT_OR_UPDATE">
+        <action_type display_value="Send Email">c1806bf4a70323008299b39f087901cb</action_type>
+        <action_type_parent display_value="Send Email">98c181d20b100300d97d8bf637673ab5</action_type_parent>
+        <attributes/>
+        <comment/>
+        <compiled_snapshot>c1806bf4a70323008299b39f087901cb</compiled_snapshot>
+        <display_text/>
+        <flow display_value="Kokoro Empathy Engine">b1074ee983ce7210f6b1fb96feaad311</flow>
+        <generation_source/>
+        <order>3</order>
+        <parent_ui_id>5ef2aa11-d00c-4840-ac94-9bce101d2c4c</parent_ui_id>
+        <sys_class_name>sys_hub_action_instance_v2</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:47:34</sys_created_on>
+        <sys_id>4e074ee983ce7210f6b1fb96feaad33e</sys_id>
+        <sys_mod_count>1</sys_mod_count>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:34</sys_updated_on>
+        <ui_id>9266b8e5-96fc-4579-b145-56e45061bc78</ui_id>
+        <updation_source/>
+        <values>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</values>
+    </sys_hub_action_instance_v2>
+    <sys_hub_alias_mapping action="delete_multiple" query="source_id=4e074ee983ce7210f6b1fb96feaad33e"/>
+    <sys_hub_action_instance_v2 action="INSERT_OR_UPDATE">
+        <action_type display_value="Update Record">f9d01dd2c31332002841b63b12d3aea1</action_type>
+        <action_type_parent display_value="Update Record">baf174c8c3c232002841b63b12d3aee4</action_type_parent>
+        <attributes/>
+        <comment/>
+        <compiled_snapshot>f9d01dd2c31332002841b63b12d3aea1</compiled_snapshot>
+        <display_text/>
+        <flow display_value="Kokoro Empathy Engine">b1074ee983ce7210f6b1fb96feaad311</flow>
+        <generation_source/>
+        <order>7</order>
+        <parent_ui_id>6b13825a-de00-4d83-b1aa-3fd80673797a</parent_ui_id>
+        <sys_class_name>sys_hub_action_instance_v2</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:47:34</sys_created_on>
+        <sys_id>4e074ee983ce7210f6b1fb96feaad33f</sys_id>
+        <sys_mod_count>1</sys_mod_count>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:34</sys_updated_on>
+        <ui_id>e54cc6c1-5dba-41d8-bb3b-9f90e4a01b73</ui_id>
+        <updation_source/>
+        <values>H4sIAAAAAAAA/+VVW0sbQRT+K2GfQ9hNYtC8lQShYBW02Adrl8nuJBmcvXRmNpqGgLspVtqX0pdaK/RGC9UWH1qoLUV/zDSYPvUv9OwtBhWr4Evovs25zfd9c87ZpY5CTKWsFLGpalNayShohUJeVfOTRa1WKtS0vFlAGGtKVrGRhSGSYcNhJpxbiHqhodOpMIwENnUtZ3iMYVt0u+A3CXcpai8mYWAxmoSa4FfKS8tZxUUMKgrMlHLnlOuykCiqYQqh8ymm0xhF2w3PpmN4FuDSSWqcSTKriSdzswoeSArhaGpWwWsC2yYGIHVEOc4qFrJNJBzWVsqCeWAA0uacTdvDiCaxRUzUQmucPICbi2oYV8fAzEhEGB71RKDYXK8igRagsiE8NtTLIQbmsSYmriOPisqoLQ6YcwVx7DhFoBpNsx3qWfZsrIgyLDDyHh4HENgNeYbIY1r1haazOp+CnCZ2JElCkToGosMTEoKRmidCOB0FUxxpbCHXJXZDd5nTIlEyQLFyDQqHXJ06q3AnJw07h4wQdw5URblpsFcj8yJiJCRxC8pAcjer8DavUMT5CRXQUL/vhUhiYgkFPVIhkkCPOiFMNhhxxQ24qoUT4N1s0vS1iYs6zJg6aaiRmieNv6Zrk3mtNFHUV5wVhzm6qnNCQxyrhDfPTsBC5MzciZ1XG4ZLQE2H4XbUAudDT+bhjG1mNDczGzuSaZi4tmmYHKdpSGiM/Tj8awjU/IVrdqSTor7nIwMAdFED6xS3ML3rqWrBbDCM7XuI6BzuJyH/2C6DbzL4Lnsbsvd68Hmrv/n+z8/tXwfrg81Px9sPpb97/PJgsPdI+ofSfyX9/f5R7/jpBrj6weHA/yrXA9nbkb2PsvclLBK8k8Fb6e/JYFMGTwYfdgc/9qBIf/+wf7Qjg2fSf/z7zZb0ofLzqOYLqHB2IMcO/9V2xiVeNt0Z0wRTk5/z1OnCwBYIJ7AeP/2ppZE4M4uJc/gbvbbNoZXU6Buj/fHf/E2X/wLGTS+GRAoAAA==</values>
+    </sys_hub_action_instance_v2>
+    <sys_hub_alias_mapping action="delete_multiple" query="source_id=4e074ee983ce7210f6b1fb96feaad33f"/>
+    <sys_hub_sub_flow_instance_v2 action="delete_multiple" query="flow=b1074ee983ce7210f6b1fb96feaad311"/>
+    <sys_hub_flow_logic_instance_v2 action="delete_multiple" query="flow=b1074ee983ce7210f6b1fb96feaad311^sys_idNOT IN0e074ee983ce7210f6b1fb96feaad32e,c6074ee983ce7210f6b1fb96feaad32d,c6074ee983ce7210f6b1fb96feaad33c"/>
+    <sys_hub_flow_logic_instance_v2 action="INSERT_OR_UPDATE">
+        <attributes/>
+        <block display_value="">71070ee983ce7210f6b1fb96feaad3bd</block>
+        <comment/>
+        <connected_to>5ef2aa11-d00c-4840-ac94-9bce101d2c4c</connected_to>
+        <decision_table/>
+        <display_text/>
+        <flow display_value="Kokoro Empathy Engine">b1074ee983ce7210f6b1fb96feaad311</flow>
+        <flow_variables_assigned/>
+        <generation_source/>
+        <logic_definition display_value="Else If">666e5545c3e232002841b63b12d3ae99</logic_definition>
+        <order>4</order>
+        <outputs_assigned/>
+        <parent_ui_id/>
+        <sys_class_name>sys_hub_flow_logic_instance_v2</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:47:34</sys_created_on>
+        <sys_id>0e074ee983ce7210f6b1fb96feaad32e</sys_id>
+        <sys_mod_count>1</sys_mod_count>
+        <sys_scope/>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:34</sys_updated_on>
+        <ui_id>bd198d4b-340a-46a5-a273-ad4ce4a46334</ui_id>
+        <updation_source/>
+        <values>H4sIAAAAAAAA/+1VzY7TMBB+lZXPUZSk7Ar2tmpZaUXpCna1F7REE9tpLRw72E67JepTIPEEe+TAgWdC8BaM89NWUEQQe0HiVn8znvm+L+NpTXTlysrZa31mrZgrcvrqNiBCeQx/10QwckryCPL4CY3pKDkZJVGUPH4UZyejLE7YCDgkJCAKCo6ZVCsmnNAqbYCALEFWPjDhjlN3NOOcWYSZsKWE9c3hKF0IyQzv2JRgsJbjhpzWP4SGspOQcYmp457e0bRBfs3brUuPW2eEmnfnaVflqge1YZ5VHAWE3zmuGEc+OUjLA1KAYuC0WW8Rw4FdKrkDFkI5LEd88p0V77BhcnzsE3OOEilvg9tj2rnWwvkEHCCVirrKdKl0oQXltjWH8Rwq6cb7WJtwWXqp7RUHmexva1kVatY6QrYF+o+ESGWRBC+9Uk+905FfLfTqZc/yXKjGlS4oNQW5PYFD77LKeT414ZIXWCgtoCzR0bQ0eimay8ilCOcSD2Eu9Qqb+ukMgXriIRoL4Tnikwa+ASO8iudYBi+3NDOwgqbNJGM5tImTTUDs2o4lWLsTie6mbytPsZXciUtbf/wVakTpzrDzknc6NsGwhxEfGLC9N1HXY5wJx1kah7Qy6J4LV8IuUkzGaXKbzfTi2dPXsxfDEr/dvx+c++XT58G5Xz98/PnF/lPcH3SfxIf2yeEP/SdLJPnNEvETPHCHRFH0f4n89RIRNm2ffqetaf6AO+TWL4K259ZrKixSu/bYRf8f7ANrHC5B96GVNm+8qB22+Q5tYaiEzQcAAA==</values>
+        <workflow_reference/>
+    </sys_hub_flow_logic_instance_v2>
+    <sys_hub_flow_logic_instance_v2 action="INSERT_OR_UPDATE">
+        <attributes/>
+        <block display_value="">8a2b5da1830e7210f6b1fb96feaad320</block>
+        <comment/>
+        <connected_to/>
+        <decision_table/>
+        <display_text/>
+        <flow display_value="Kokoro Empathy Engine">b1074ee983ce7210f6b1fb96feaad311</flow>
+        <flow_variables_assigned/>
+        <generation_source/>
+        <logic_definition display_value="If">af4e1945c3e232002841b63b12d3ae3e</logic_definition>
+        <order>1</order>
+        <outputs_assigned/>
+        <parent_ui_id/>
+        <sys_class_name>sys_hub_flow_logic_instance_v2</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:47:34</sys_created_on>
+        <sys_id>c6074ee983ce7210f6b1fb96feaad32d</sys_id>
+        <sys_mod_count>1</sys_mod_count>
+        <sys_scope/>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:34</sys_updated_on>
+        <ui_id>5ef2aa11-d00c-4840-ac94-9bce101d2c4c</ui_id>
+        <updation_source/>
+        <values>H4sIAAAAAAAA/+1Wy24TQRD8FWvO1mrXji3iW2QTKUpIBLFyQWHVnp21R8w+mIedxbJEbhG3HBAHziCBxBfwORHhN+jZh21hI9YCccrNXdPdU9WuHu2cJEanRqthcqAUH8ek9/yySXhsMfw9JzFEjPQITeKAa57EpEmmIIzF5vO+ZKBZ4HsONVKyWDszriY+JmsMFouTo+PHL06f1kv88f5D7dz7Nx/r5767rZ/79dsOHL7c39Rv/f3t57vr27vrT7UrcNQBV6mA7OJh4v9r4nTCRYDHxSKkINH/mknSm/9yxAP8Q/ahE3Y8t0PbrW675bqtR3veqNseea2gDWyviw0FjJjA1P7aBm1ZKp2lFlJa8nhcxidl6XkFJjKwVFpuk7ArpB0wJBGCUKxJIogD0InMSE9LgwDqDc5ikS0zJjzW2I3Y3CvFXzPbyXVtZshQF2XF6TL0S/sVcDgADUjFUG1kmUonCadMFRMJWAhG6P46ViScpbnKvETDSFTViTBRfFoMgywbVG5HxCgkwVKr1HIvhYTnk2T2rGJ5yON8KuWhSCiIZQQaZzcy2vKZEyZYhI38CNIUJ+qnMpnyvBi5RM5YYOCEIpnhpfY1dIBa4g4OFpxDxAc5fAGSWxVPsA0WoxeUr6jkaaUtv5wsmkRlqi9AqZVGHK7/yliGheJSm1+Mx5bkjQ7w4ikrZSyam++wnwOrx3iALqW6MZRgImgcs2yGZlGbT8hv83YzfuhC6O1Tb7vxob3N+I3Cz5v2r7TssgPeH3agRGotQafzsAN/vQOW5ggUp37+9YDt7DP0D5fg0pq9uHQ5bMoVchta7Kj6ZrEHGTqK03UIbf7Sqlphi5+vgGwU/QgAAA==</values>
+        <workflow_reference/>
+    </sys_hub_flow_logic_instance_v2>
+    <sys_hub_flow_logic_instance_v2 action="INSERT_OR_UPDATE">
+        <attributes/>
+        <block display_value="">31070ee983ce7210f6b1fb96feaad3bf</block>
+        <comment/>
+        <connected_to>5ef2aa11-d00c-4840-ac94-9bce101d2c4c</connected_to>
+        <decision_table/>
+        <display_text/>
+        <flow display_value="Kokoro Empathy Engine">b1074ee983ce7210f6b1fb96feaad311</flow>
+        <flow_variables_assigned/>
+        <generation_source/>
+        <logic_definition display_value="Else">1f781bf3c32232002841b63b12d3aee6</logic_definition>
+        <order>6</order>
+        <outputs_assigned/>
+        <parent_ui_id/>
+        <sys_class_name>sys_hub_flow_logic_instance_v2</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:47:34</sys_created_on>
+        <sys_id>c6074ee983ce7210f6b1fb96feaad33c</sys_id>
+        <sys_mod_count>1</sys_mod_count>
+        <sys_scope/>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:34</sys_updated_on>
+        <ui_id>6b13825a-de00-4d83-b1aa-3fd80673797a</ui_id>
+        <updation_source/>
+        <values>H4sIAAAAAAAA/6tWyi8tKSgtKQ7JdywuzkzPU7KKjtVRyswDiUHYZYlFmYlJOalQbkpqcmZxZn5eCEjME0ldSmVeYm5mMrJQeX5RdlpOfjlCrBYAD1ouqHEAAAA=</values>
+        <workflow_reference/>
+    </sys_hub_flow_logic_instance_v2>
+    <sys_hub_pill_compound action="delete_multiple" query="attached_to=b1074ee983ce7210f6b1fb96feaad311^sys_idNOT INca074ee983ce7210f6b1fb96feaad341"/>
+    <sys_hub_pill_compound action="INSERT_OR_UPDATE">
+        <attached_to>b1074ee983ce7210f6b1fb96feaad311</attached_to>
+        <extra_info/>
+        <order>0</order>
+        <prescription>{{Created_1.current.wish_content}}</prescription>
+        <source_ui_id/>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:47:34</sys_created_on>
+        <sys_id>ca074ee983ce7210f6b1fb96feaad341</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:34</sys_updated_on>
+        <transform_compositions>[]</transform_compositions>
+        <transform_definition_id/>
+        <ui_id>513c7746-f3be-437e-8323-44663c944219</ui_id>
+    </sys_hub_pill_compound>
+    <sys_hub_flow_variable action="delete_multiple" query="model=b1074ee983ce7210f6b1fb96feaad311"/>
+    <sys_documentation action="INSERT_OR_UPDATE">
+        <element>table_name</element>
+        <help/>
+        <hint/>
+        <label>Table Name</label>
+        <language>en</language>
+        <name>var__m_sys_hub_flow_input_b1074ee983ce7210f6b1fb96feaad311</name>
+        <plural/>
+        <sys_class_name>sys_documentation</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:47:34</sys_created_on>
+        <sys_id>42074ee983ce7210f6b1fb96feaad326</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name/>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:34</sys_updated_on>
+        <url/>
+        <url_target/>
+    </sys_documentation>
+    <sys_documentation action="INSERT_OR_UPDATE">
+        <element>current</element>
+        <help/>
+        <hint/>
+        <label>Record</label>
+        <language>en</language>
+        <name>var__m_sys_hub_flow_input_b1074ee983ce7210f6b1fb96feaad311</name>
+        <plural/>
+        <sys_class_name>sys_documentation</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:47:34</sys_created_on>
+        <sys_id>8e074ee983ce7210f6b1fb96feaad31e</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name/>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:34</sys_updated_on>
+        <url/>
+        <url_target/>
+    </sys_documentation>
+    <sys_choice action="delete_multiple" query="name=var__m_sys_hub_flow_input_b1074ee983ce7210f6b1fb96feaad311"/>
+    <sys_choice action="delete_multiple" query="name=var__m_sys_hub_flow_output_b1074ee983ce7210f6b1fb96feaad311"/>
+    <sys_hub_flow action="UPDATE">
+        <sys_id>18b8d5ed83ca7210f6b1fb96feaad37d</sys_id>
+        <latest_snapshot>b1074ee983ce7210f6b1fb96feaad311</latest_snapshot>
+        <compiler_build>glide-zurich-07-01-2025__patch1-08-20-2025_09-08-2025_1328.zip</compiler_build>
+        <version_record/>
+    </sys_hub_flow>
+    <sys_flow_trigger_plan action="delete_multiple" query="plan_id=18b8d5ed83ca7210f6b1fb96feaad37d^sys_idNOT IN9a074ee983ce7210f6b1fb96feaad362"/>
+    <sys_flow_trigger_plan action="INSERT_OR_UPDATE">
+        <binding_strategy>com.snc.process_flow.engine.binding.OncePerRecord</binding_strategy>
+        <plan>{"type":"PlanProxy","persistor":{"@class":".ChunkingPlanPersistor","table":"sys_flow_trigger_plan","id":"9a074ee983ce7210f6b1fb96feaad362","name":"plan","plan_signature":null}}</plan>
+        <plan_id>18b8d5ed83ca7210f6b1fb96feaad37d</plan_id>
+        <snapshot>9577862d83ce7210f6b1fb96feaad3e6</snapshot>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 04:47:35</sys_created_on>
+        <sys_domain>global</sys_domain>
+        <sys_domain_path>/</sys_domain_path>
+        <sys_id>9a074ee983ce7210f6b1fb96feaad362</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_overrides/>
+        <sys_scope/>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 04:47:35</sys_updated_on>
+        <trigger display_value="">de074ee983ce7210f6b1fb96feaad353</trigger>
+    </sys_flow_trigger_plan>
+    <sys_flow_subflow_plan action="delete_multiple" query="plan_id=18b8d5ed83ca7210f6b1fb96feaad37d"/>
+</record_update>

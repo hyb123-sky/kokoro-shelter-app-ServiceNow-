@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="ais_search_profile_ais_search_source_m2m">
+    <ais_search_profile_ais_search_source_m2m action="INSERT_OR_UPDATE">
+        <exclude_attachments_in_now_assist_genius_results>false</exclude_attachments_in_now_assist_genius_results>
+        <exclude_in_now_assist_genius_results>false</exclude_in_now_assist_genius_results>
+        <exclude_in_regular_search>false</exclude_in_regular_search>
+        <profile display_value="kokoro-shelter Search Profile">012bc2a1f002b2102cf9eb9869237133</profile>
+        <search_source display_value="Silent Wish">fa2b06a18302b210f6b1fb96feaad3fd</search_source>
+        <sys_class_name>ais_search_profile_ais_search_source_m2m</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 05:05:39</sys_created_on>
+        <sys_id>3a2b46a18302b210f6b1fb96feaad301</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>kokoro-shelter Search Profile.Silent Wish</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>ais_search_profile_ais_search_source_m2m_3a2b46a18302b210f6b1fb96feaad301</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 05:05:39</sys_updated_on>
+    </ais_search_profile_ais_search_source_m2m>
+</record_update>

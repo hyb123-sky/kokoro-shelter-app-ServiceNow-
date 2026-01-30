@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="666f936d8322b210f6b1fb96feaad359" label="Kokoro Inventory Transaction" max_length="40" name="x_1821654_kokoro_0_kokoro_inventory_transaction" type="collection">
+        <element label="Notes" max_length="1000" name="notes" type="string"/>
+        <element label="Inventory Item" mandatory="true" max_length="32" name="inventory_item" reference="x_1821654_kokoro_0_kokoro_inventory" type="reference"/>
+        <element default="1" label="Quantity" mandatory="true" max_length="40" name="quantity" type="integer"/>
+        <element choice="3" label="Operation" max_length="40" name="operation" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="returned"/>
+                <element inactive_on_update="false" label="consumed"/>
+                <element inactive_on_update="false" label="reserved"/>
+            </choice>
+        </element>
+        <element choice="3" label="Type" max_length="40" name="type" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="Out" value="out"/>
+                <element inactive_on_update="false" label="In" value="In"/>
+            </choice>
+        </element>
+        <element label="Related Wish" max_length="32" name="related_wish" reference="x_1821654_kokoro_0_silent_wish" type="reference"/>
+        <index name="index">
+            <element name="inventory_item"/>
+        </index>
+        <index name="index2">
+            <element name="related_wish"/>
+        </index>
+    </element>
+</database>

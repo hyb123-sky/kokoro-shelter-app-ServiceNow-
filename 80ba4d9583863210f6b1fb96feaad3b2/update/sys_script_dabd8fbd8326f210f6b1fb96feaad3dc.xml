@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update sys_domain="global" table="sys_script">
+    <sys_script action="INSERT_OR_UPDATE">
+        <abort_action>false</abort_action>
+        <access>package_private</access>
+        <action_delete>false</action_delete>
+        <action_insert>true</action_insert>
+        <action_query>false</action_query>
+        <action_update>false</action_update>
+        <active>true</active>
+        <add_message>false</add_message>
+        <advanced>true</advanced>
+        <change_fields>false</change_fields>
+        <client_callable>false</client_callable>
+        <collection>x_1821654_kokoro_0_kokoro_inventory_transaction</collection>
+        <condition/>
+        <description/>
+        <execute_function>false</execute_function>
+        <filter_condition table="x_1821654_kokoro_0_kokoro_inventory_transaction">operation=^EQ<item display_value="-- None --" endquery="false" field="operation" goto="false" newquery="false" operator="=" or="false" value=""/>
+            <item endquery="true" field="" goto="false" newquery="false" operator="=" or="false" value=""/>
+        </filter_condition>
+        <is_rest>false</is_rest>
+        <message/>
+        <name>Auto Update Inventory on Transaction</name>
+        <order>100</order>
+        <priority>100</priority>
+        <rest_method/>
+        <rest_method_text/>
+        <rest_service/>
+        <rest_service_text/>
+        <rest_variables/>
+        <role_conditions/>
+        <script><![CDATA[(function executeRule(current, previous /*null when async*/) {
+    
+    // 获取事务记录的信息
+    var inventoryId = current.getValue('inventory_item');
+    var quantity = parseInt(current.getValue('quantity'));
+    
+    // 验证必要字段
+    if (!inventoryId || !quantity) {
+        gs.error('Auto Update Inventory: Missing required fields');
+        return;
+    }
+    
+    // 获取库存记录
+    var inventory = new GlideRecord('x_1821654_kokoro_0_kokoro_inventory');
+    inventory.setWorkflow(false); // 防止触发其他 Business Rules 或 Flows
+    
+    if (inventory.get(inventoryId)) {
+        var currentQty = parseInt(inventory.getValue('quantity'));
+        var newQty = currentQty - quantity;
+        
+        // 检查库存是否足够
+        if (currentQty >= quantity) {
+            // 更新库存
+            inventory.setValue('quantity', newQty);
+            inventory.update();
+            
+            gs.info('Inventory updated: ' + inventory.getValue('item_name') + 
+                   ' | Old: ' + currentQty + ' | Consumed: ' + quantity + 
+                   ' | New: ' + newQty);
+            
+            // 如果库存低于阈值，发送警报
+            var threshold = parseInt(inventory.getValue('reorder_point')) || 10;
+            if (newQty <= threshold) {
+                // 创建事件或发送通知
+                gs.eventQueue('kokoro.inventory.low', inventory, newQty, threshold);
+                gs.warn('Low inventory alert: ' + inventory.getValue('item_name') + 
+                       ' (Current: ' + newQty + ', Threshold: ' + threshold + ')');
+            }
+            
+        } else {
+            // 库存不足，记录错误
+            gs.error('Insufficient inventory: ' + inventory.getValue('item_name') + 
+                    ' | Available: ' + currentQty + ' | Requested: ' + quantity);
+            
+            // 可以在这里添加通知逻辑
+            gs.eventQueue('kokoro.inventory.insufficient', inventory, currentQty, quantity);
+        }
+    } else {
+        gs.error('Inventory item not found: ' + inventoryId);
+    }
+
+})(current, previous);]]></script>
+        <sys_class_name>sys_script</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-21 01:08:14</sys_created_on>
+        <sys_domain>global</sys_domain>
+        <sys_domain_path>/</sys_domain_path>
+        <sys_id>dabd8fbd8326f210f6b1fb96feaad3dc</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Auto Update Inventory on Transaction</sys_name>
+        <sys_overrides/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_script_dabd8fbd8326f210f6b1fb96feaad3dc</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-21 01:08:14</sys_updated_on>
+        <template/>
+        <when>after</when>
+    </sys_script>
+    <sys_translated_text action="delete_multiple" query="documentkey=dabd8fbd8326f210f6b1fb96feaad3dc"/>
+</record_update>

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update sys_domain="global" table="sn_decision_table_decision_condition">
+    <sn_decision_table_decision_condition action="DELETE">
+        <decision_input display_value="Category">19ad38df8382b210f6b1fb96feaad388</decision_input>
+        <decision_table display_value="Kokoro Dispatch Rules">745df0db8382b210f6b1fb96feaad330</decision_table>
+        <default_operator>=</default_operator>
+        <description>支援物資のカテゴリを特定する</description>
+        <field/>
+        <field_label/>
+        <field_parent_table/>
+        <label>check Category</label>
+        <order>100</order>
+        <parent/>
+        <reference/>
+        <sys_class_name>sn_decision_table_decision_condition</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-31 10:03:21</sys_created_on>
+        <sys_domain>global</sys_domain>
+        <sys_id>ac4ff49383c2b210f6b1fb96feaad343</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sn_decision_table_decision_condition_ac4ff49383c2b210f6b1fb96feaad343</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-31 10:03:21</sys_updated_on>
+        <type display_value="Choice">5217a7c1bf3320001875647fcf0739b7</type>
+    </sn_decision_table_decision_condition>
+    <sys_update_version action="INSERT_OR_UPDATE">
+        <action>DELETE</action>
+        <application display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</application>
+        <file_path/>
+        <instance_id>26f701431b4a8650168f4089bd4bcbef</instance_id>
+        <instance_name>dev269536</instance_name>
+        <name>sn_decision_table_decision_condition_ac4ff49383c2b210f6b1fb96feaad343</name>
+        <payload><![CDATA[<?xml version="1.0" encoding="UTF-8"?><record_update sys_domain="global" table="sn_decision_table_decision_condition"><sn_decision_table_decision_condition action="INSERT_OR_UPDATE"><decision_input display_value="Category">19ad38df8382b210f6b1fb96feaad388</decision_input><decision_table display_value="Kokoro Dispatch Rules">745df0db8382b210f6b1fb96feaad330</decision_table><default_operator>=</default_operator><description>支援物資のカテゴリを特定する</description><field/><field_label/><field_parent_table/><label>check Category</label><order>100</order><parent/><reference/><sys_class_name>sn_decision_table_decision_condition</sys_class_name><sys_created_by>admin</sys_created_by><sys_created_on>2025-12-31 10:03:21</sys_created_on><sys_domain>global</sys_domain><sys_id>ac4ff49383c2b210f6b1fb96feaad343</sys_id><sys_mod_count>0</sys_mod_count><sys_name/><sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package><sys_policy/><sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope><sys_update_name>sn_decision_table_decision_condition_ac4ff49383c2b210f6b1fb96feaad343</sys_update_name><sys_updated_by>admin</sys_updated_by><sys_updated_on>2025-12-31 10:03:21</sys_updated_on><type display_value="Choice">5217a7c1bf3320001875647fcf0739b7</type></sn_decision_table_decision_condition></record_update>]]></payload>
+        <payload_hash>811315184</payload_hash>
+        <record_name/>
+        <reverted_from/>
+        <source>48ba4d9583863210f6b1fb96feaad3b6</source>
+        <source_table>sys_update_set</source_table>
+        <state>previous</state>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-31 10:03:21</sys_created_on>
+        <sys_id>ac4ff49383c2b210f6b1fb96feaad346</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_recorded_at>19b73dcb1010000001</sys_recorded_at>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-31 10:03:21</sys_updated_on>
+        <type>Decision Condition</type>
+        <update_guid>244ff4934ec2b2107dc9f23d841cf846</update_guid>
+        <update_guid_history>244ff4934ec2b2107dc9f23d841cf846:811315184</update_guid_history>
+    </sys_update_version>
+    <sys_metadata_delete action="INSERT_OR_UPDATE">
+        <sys_audit_delete display_value="">c4a2c99783c2b210f6b1fb96feaad360</sys_audit_delete>
+        <sys_class_name>sys_metadata_delete</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-31 10:18:04</sys_created_on>
+        <sys_db_object display_value="" name="sn_decision_table_decision_condition">sn_decision_table_decision_condition</sys_db_object>
+        <sys_id>040183e5cf064dbf892922f975088459</sys_id>
+        <sys_metadata>ac4ff49383c2b210f6b1fb96feaad343</sys_metadata>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_parent/>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_scope_delete display_value="">b5b651695bd14f99aee30f38068ac3c1</sys_scope_delete>
+        <sys_update_name>sn_decision_table_decision_condition_ac4ff49383c2b210f6b1fb96feaad343</sys_update_name>
+        <sys_update_version display_value="sn_decision_table_decision_condition_ac4ff49383c2b210f6b1fb96feaad343">ac4ff49383c2b210f6b1fb96feaad346</sys_update_version>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-31 10:18:04</sys_updated_on>
+    </sys_metadata_delete>
+</record_update>

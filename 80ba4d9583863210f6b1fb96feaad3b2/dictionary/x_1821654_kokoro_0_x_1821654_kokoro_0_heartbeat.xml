@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="09749d1583623210f6b1fb96feaad345" label="Kokoro Heartbeat" max_length="40" name="x_1821654_kokoro_0_x_1821654_kokoro_0_heartbeat" type="collection">
+        <element label="State changed on" max_length="40" name="state_changed_on" type="glide_date_time"/>
+        <element label="Saved will" max_length="4000" name="u_saved_will" type="string"/>
+        <element choice="3" default="10" label="State" max_length="40" name="state" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="下書き" sequence="100" value="draft"/>
+                <element inactive_on_update="false" label="提出済み" sequence="200" value="submitted"/>
+                <element inactive_on_update="false" label="担当者決定" sequence="300" value="assigned"/>
+                <element inactive_on_update="false" label="完了" sequence="500" value="Completed"/>
+                <element inactive_on_update="false" label="キャセル" sequence="600" value="Cancelled"/>
+                <element inactive_on_update="false" label="保留中" sequence="700" value="On Hold"/>
+                <element inactive_on_update="false" label="対応中" sequence="400" value="In Progress"/>
+            </choice>
+        </element>
+        <element choice="1" label="u_status" max_length="40" name="u_status" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="Offline" value="Offline"/>
+                <element inactive_on_update="false" label="Safe" sequence="0" value="safe"/>
+                <element inactive_on_update="false" label="AtRisk" sequence="1" value="AtRisk"/>
+                <element inactive_on_update="false" label="Emergency" sequence="2" value="Emergency"/>
+            </choice>
+        </element>
+        <element label="Longitude" max_length="20" name="u_longitude" type="decimal"/>
+        <element label="u_ip_address" max_length="45" name="u_ip_address" type="string"/>
+        <element label="Latitude" max_length="20" name="u_latitude" type="decimal"/>
+        <element label="Emergency email" max_length="40" name="u_emergency_email" type="string"/>
+        <element label="u_user" max_length="32" name="u_user" reference="sys_user" type="reference"/>
+        <element label="Timestamp" max_length="40" name="u_timestamp" type="glide_date_time"/>
+        <element label="State changed by" max_length="40" name="state_changed_by" type="string"/>
+        <element label="Device info" max_length="200" name="u_device_info" type="string"/>
+        <index name="index">
+            <element name="u_user"/>
+        </index>
+    </element>
+</database>

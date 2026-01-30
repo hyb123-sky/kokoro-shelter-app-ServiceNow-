@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_ui_style">
+    <sys_ui_style action="INSERT_OR_UPDATE">
+        <alt/>
+        <element>triage_level</element>
+        <name>x_1821654_kokoro_0_silent_wish</name>
+        <style>background-color: #ffcccc; /* 淡红色背景 */&#13;
+color: #990000;            /* 深红色文字 */&#13;
+font-weight: bold;         /* 加粗 */&#13;
+border-left: 5px solid red; /* 左侧加一道红杠 */</style>
+        <sys_class_name>sys_ui_style</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 05:00:14</sys_created_on>
+        <sys_id>d9d90eed83ce7210f6b1fb96feaad300</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>x_1821654_kokoro_0_silent_wish</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_ui_style_d9d90eed83ce7210f6b1fb96feaad300</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 05:00:14</sys_updated_on>
+        <themed_style/>
+        <value>red</value>
+    </sys_ui_style>
+    <sys_translated_text action="delete_multiple" query="documentkey=d9d90eed83ce7210f6b1fb96feaad300"/>
+</record_update>

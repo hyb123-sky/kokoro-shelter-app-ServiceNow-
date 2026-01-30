@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_rest_message_fn">
+    <sys_rest_message_fn action="DELETE">
+        <authentication_type>inherit_from_parent</authentication_type>
+        <basic_auth_password/>
+        <basic_auth_profile/>
+        <basic_auth_user/>
+        <content>{&#13;
+  "contents": [{&#13;
+    "parts": [{&#13;
+      "text": "あなたは災害救援の感情分析AIです。以下の被災者からの求助メッセージを分析してください。厳密に以下のフォーマットのみを出力し、余計なテキストは含めないでください：\nレベル: [Green/Yellow/Red]\n要約: [簡潔な一文での感情分析]\n\n被災者メッセージ： 生きていても意味がない、世界が灰色に見える。"&#13;
+    }]&#13;
+  }]&#13;
+}</content>
+        <function_name>Analyze Sentiment</function_name>
+        <http_method>post</http_method>
+        <lock>false</lock>
+        <oauth2_profile/>
+        <protocol_name/>
+        <qualified_name>Gemini AI [ Analyze Sentiment ]</qualified_name>
+        <rest_endpoint/>
+        <rest_message display_value="Gemini AI">50f025a9830e7210f6b1fb96feaad3b3</rest_message>
+        <sys_class_name>sys_rest_message_fn</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 02:01:49</sys_created_on>
+        <sys_id>961125a9830e7210f6b1fb96feaad3f4</sys_id>
+        <sys_mod_count>9</sys_mod_count>
+        <sys_name>Analyze Sentiment</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_rest_message_fn_961125a9830e7210f6b1fb96feaad3f4</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 02:41:19</sys_updated_on>
+        <use_basic_auth>false</use_basic_auth>
+        <use_mid_server/>
+        <use_mutual_auth>false</use_mutual_auth>
+    </sys_rest_message_fn>
+    <sys_update_version action="INSERT_OR_UPDATE">
+        <action>DELETE</action>
+        <application display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</application>
+        <file_path/>
+        <instance_id>26f701431b4a8650168f4089bd4bcbef</instance_id>
+        <instance_name>dev269536</instance_name>
+        <name>sys_rest_message_fn_961125a9830e7210f6b1fb96feaad3f4</name>
+        <payload><![CDATA[<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_rest_message_fn"><sys_rest_message_fn action="INSERT_OR_UPDATE"><authentication_type>inherit_from_parent</authentication_type><basic_auth_password/><basic_auth_profile/><basic_auth_user/><content>{&#13;
+  "contents": [{&#13;
+    "parts": [{&#13;
+      "text": "あなたは災害救援の感情分析AIです。以下の被災者からの求助メッセージを分析してください。厳密に以下のフォーマットのみを出力し、余計なテキストは含めないでください：\nレベル: [Green/Yellow/Red]\n要約: [簡潔な一文での感情分析]\n\n被災者メッセージ： 生きていても意味がない、世界が灰色に見える。"&#13;
+    }]&#13;
+  }]&#13;
+}</content><function_name>Analyze Sentiment</function_name><http_method>post</http_method><lock>false</lock><oauth2_profile/><protocol_name/><qualified_name>Gemini AI [ Analyze Sentiment ]</qualified_name><rest_endpoint/><rest_message display_value="Gemini AI">50f025a9830e7210f6b1fb96feaad3b3</rest_message><sys_class_name>sys_rest_message_fn</sys_class_name><sys_created_by>admin</sys_created_by><sys_created_on>2025-12-26 02:01:49</sys_created_on><sys_id>961125a9830e7210f6b1fb96feaad3f4</sys_id><sys_mod_count>9</sys_mod_count><sys_name>Analyze Sentiment</sys_name><sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package><sys_policy/><sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope><sys_update_name>sys_rest_message_fn_961125a9830e7210f6b1fb96feaad3f4</sys_update_name><sys_updated_by>admin</sys_updated_by><sys_updated_on>2025-12-26 02:41:19</sys_updated_on><use_basic_auth>false</use_basic_auth><use_mid_server/><use_mutual_auth>false</use_mutual_auth></sys_rest_message_fn></record_update>]]></payload>
+        <payload_hash>-328479278</payload_hash>
+        <record_name>Analyze Sentiment</record_name>
+        <reverted_from/>
+        <source>48ba4d9583863210f6b1fb96feaad3b6</source>
+        <source_table>sys_update_set</source_table>
+        <state>previous</state>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 02:41:19</sys_created_on>
+        <sys_id>342ae965834e7210f6b1fb96feaad3d7</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_recorded_at>19b588833f20000001</sys_recorded_at>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 02:41:19</sys_updated_on>
+        <type>HTTP Method</type>
+        <update_guid>b82ae965a14e721098abb3c37134acd6</update_guid>
+        <update_guid_history>b82ae965a14e721098abb3c37134acd6:-328479278,94b921a52b4e721046bd35841a55dc66:962791460,b398e925cb4e7210ef20fa7092d5c206:-819536888,cd68e125ec4e7210d2f9f2f7d2c6ec0e:1156719043,39e729e1fd4e7210e3e69ff8f422c56a:-819536888,a73761a1d64e721088013f2942ef56a7:1156719043,c9766961da4e7210cbf5da2302ecb2cd:-819536888,8053a5256c0e7210484652f7de45a222:962791460,ce716da9c40e7210c3dfd99cbf8c0c0d:1312007191,9e1125a9ce0e721023a8fd1894261cf6:-1546736127</update_guid_history>
+    </sys_update_version>
+    <sys_metadata_delete action="INSERT_OR_UPDATE">
+        <sys_audit_delete/>
+        <sys_class_name>sys_metadata_delete</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 03:56:34</sys_created_on>
+        <sys_db_object display_value="" name="sys_rest_message_fn">sys_rest_message_fn</sys_db_object>
+        <sys_id>4f5b1d9b19c7442eaf9de4501ba0cfc9</sys_id>
+        <sys_metadata>961125a9830e7210f6b1fb96feaad3f4</sys_metadata>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Analyze Sentiment</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_parent/>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_scope_delete display_value="">b5b651695bd14f99aee30f38068ac3c1</sys_scope_delete>
+        <sys_update_name>sys_rest_message_fn_961125a9830e7210f6b1fb96feaad3f4</sys_update_name>
+        <sys_update_version display_value="sys_rest_message_fn_961125a9830e7210f6b1fb96feaad3f4">342ae965834e7210f6b1fb96feaad3d7</sys_update_version>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 03:56:34</sys_updated_on>
+    </sys_metadata_delete>
+</record_update>

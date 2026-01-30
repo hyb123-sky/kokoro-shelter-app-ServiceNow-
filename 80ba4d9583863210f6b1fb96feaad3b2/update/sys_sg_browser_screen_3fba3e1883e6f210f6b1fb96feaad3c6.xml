@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_sg_browser_screen">
+    <sys_sg_browser_screen action="INSERT_OR_UPDATE">
+        <available_offline>false</available_offline>
+        <check_acl>false</check_acl>
+        <description/>
+        <dynamic_prefetch_count/>
+        <empty_state/>
+        <external_browser>false</external_browser>
+        <fetch_type>not_required</fetch_type>
+        <filter/>
+        <hide_filters>false</hide_filters>
+        <hide_native_header>false</hide_native_header>
+        <hide_screen_name>false</hide_screen_name>
+        <icon display_value="MS icon-Mail-Solid">03ef790673b52010a59b4c5353f6a70a</icon>
+        <name>Kokoro Portal</name>
+        <relative_url>false</relative_url>
+        <roles_override>x_1821654_kokoro_0.user,x_1821654_kokoro_0.kokoro_inventory_user</roles_override>
+        <sys_class_name>sys_sg_browser_screen</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-16 07:52:30</sys_created_on>
+        <sys_id>3fba3e1883e6f210f6b1fb96feaad3c6</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Kokoro Portal</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_sg_browser_screen_3fba3e1883e6f210f6b1fb96feaad3c6</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-16 07:52:30</sys_updated_on>
+        <url>/sp?id=kokoro_public&amp;sys_id=2dd8915983c63210f6b1fb96feaad377</url>
+    </sys_sg_browser_screen>
+    <sys_translated_text action="delete_multiple" query="documentkey=3fba3e1883e6f210f6b1fb96feaad3c6"/>
+</record_update>

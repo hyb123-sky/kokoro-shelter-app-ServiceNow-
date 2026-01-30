@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="b427030c83323210f6b1fb96feaad3f2" label="SLA Definition" max_length="40" name="x_1821654_kokoro_0_sla_definition" type="collection">
+        <element label="Response Time" max_length="40" name="response_time" type="integer"/>
+        <element default="70" label="Warning%" max_length="40" name="warning" type="integer"/>
+        <element default="true" label="Active" max_length="40" name="active" type="boolean"/>
+        <element choice="1" label="Urgency" max_length="40" name="urgency" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="Low" value="low"/>
+                <element inactive_on_update="false" label="Critical" value="critical"/>
+                <element inactive_on_update="false" label="Medium" value="medium"/>
+            </choice>
+        </element>
+        <element label="Escalation Enabled" max_length="40" name="escalation_enabled" type="boolean"/>
+        <element label="Resolution Time" max_length="40" name="resolution_time" type="integer"/>
+        <element label="Name" max_length="100" name="name" type="string"/>
+        <element default="90" label="Critical%" max_length="40" name="critical" type="integer"/>
+        <element label="Escalation Target" max_length="32" name="escalation_target" reference="sys_user_group" type="reference"/>
+        <index name="index">
+            <element name="escalation_target"/>
+        </index>
+    </element>
+</database>

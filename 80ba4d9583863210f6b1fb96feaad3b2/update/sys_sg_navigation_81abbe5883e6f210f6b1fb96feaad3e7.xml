@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_sg_navigation">
+    <sys_sg_navigation action="INSERT_OR_UPDATE">
+        <color/>
+        <legacy_application>false</legacy_application>
+        <name>Kokoro Navbar</name>
+        <quick_actions_menu_color/>
+        <sys_class_name>sys_sg_navigation</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-16 07:56:24</sys_created_on>
+        <sys_id>81abbe5883e6f210f6b1fb96feaad3e7</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Kokoro Navbar</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_sg_navigation_81abbe5883e6f210f6b1fb96feaad3e7</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-16 07:56:24</sys_updated_on>
+    </sys_sg_navigation>
+</record_update>

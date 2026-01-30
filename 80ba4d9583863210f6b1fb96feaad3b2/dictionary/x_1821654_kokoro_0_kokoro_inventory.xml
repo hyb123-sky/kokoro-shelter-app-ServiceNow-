@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="02f743bb83023210f6b1fb96feaad3e6" label="Kokoro Inventory" max_length="40" name="x_1821654_kokoro_0_kokoro_inventory" type="collection">
+        <element label="warning Threshold" max_length="40" name="warning_threshold" type="integer"/>
+        <element label="Item_code" max_length="40" name="item_code" type="string"/>
+        <element label="stock Quantity" max_length="40" name="stock_quantity" type="integer"/>
+        <element label="Current quantity" max_length="20" name="current_quantity" type="decimal"/>
+        <element label="Location" max_length="40" name="location" type="string"/>
+        <element label="Item Name" max_length="40" name="item_name" type="string"/>
+        <element label="Max capacity" max_length="1000" name="max_capacity" type="decimal"/>
+        <element choice="3" label="Category" max_length="500" name="category" type="string">
+            <choice>
+                <element inactive_on_update="false" label="飲料水" value="water"/>
+                <element inactive_on_update="false" label="医療品" value="medical"/>
+                <element inactive_on_update="false" label="衛生用品" value="hygiene"/>
+                <element inactive_on_update="false" label="食料" value="food"/>
+                <element inactive_on_update="false" label="衣類" value="clothing"/>
+            </choice>
+        </element>
+    </element>
+</database>

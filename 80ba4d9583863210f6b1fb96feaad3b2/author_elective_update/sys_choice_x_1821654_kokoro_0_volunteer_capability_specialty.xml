@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update>
+    <sys_choice action="INSERT_OR_UPDATE" field="specialty" table="x_1821654_kokoro_0_volunteer_capability" version="3">
+        <sys_choice_set action="INSERT_OR_UPDATE">
+            <element>specialty</element>
+            <name>x_1821654_kokoro_0_volunteer_capability</name>
+            <sys_class_name>sys_choice_set</sys_class_name>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-01-27 08:15:42</sys_created_on>
+            <sys_mod_count>0</sys_mod_count>
+            <sys_name>specialty</sys_name>
+            <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+            <sys_policy/>
+            <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+            <sys_update_name>sys_choice_x_1821654_kokoro_0_volunteer_capability_specialty</sys_update_name>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-01-27 08:15:42</sys_updated_on>
+        </sys_choice_set>
+        <sys_choice action="INSERT_OR_UPDATE">
+            <dependent_value/>
+            <element>specialty</element>
+            <hint/>
+            <inactive>false</inactive>
+            <label>育児対応 (Childcare)</label>
+            <language>en</language>
+            <name>x_1821654_kokoro_0_volunteer_capability</name>
+            <sequence/>
+            <synonyms/>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-01-27 08:16:33</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_mod_count>1</sys_mod_count>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-01-27 08:16:40</sys_updated_on>
+            <value>childcare</value>
+        </sys_choice>
+        <sys_choice action="INSERT_OR_UPDATE">
+            <dependent_value/>
+            <element>specialty</element>
+            <hint/>
+            <inactive>false</inactive>
+            <label>一般対応 (General)</label>
+            <language>en</language>
+            <name>x_1821654_kokoro_0_volunteer_capability</name>
+            <sequence/>
+            <synonyms/>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-01-27 08:16:48</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_mod_count>1</sys_mod_count>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-01-27 08:16:52</sys_updated_on>
+            <value>general</value>
+        </sys_choice>
+        <sys_choice action="INSERT_OR_UPDATE">
+            <dependent_value/>
+            <element>specialty</element>
+            <hint/>
+            <inactive>false</inactive>
+            <label>物流対応 (Logistics)</label>
+            <language>en</language>
+            <name>x_1821654_kokoro_0_volunteer_capability</name>
+            <sequence/>
+            <synonyms/>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-01-27 08:16:17</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_mod_count>1</sys_mod_count>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-01-27 08:16:25</sys_updated_on>
+            <value>logistics</value>
+        </sys_choice>
+        <sys_choice action="INSERT_OR_UPDATE">
+            <dependent_value/>
+            <element>specialty</element>
+            <hint/>
+            <inactive>false</inactive>
+            <label>医療対応(Medical)</label>
+            <language>en</language>
+            <name>x_1821654_kokoro_0_volunteer_capability</name>
+            <sequence/>
+            <synonyms/>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-01-27 08:15:42</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_mod_count>2</sys_mod_count>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-01-27 08:16:08</sys_updated_on>
+            <value>medical</value>
+        </sys_choice>
+    </sys_choice>
+</record_update>

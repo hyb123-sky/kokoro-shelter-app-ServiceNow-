@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="ais_datasource_field_attribute">
+    <ais_datasource_field_attribute action="INSERT_OR_UPDATE">
+        <attribute display_value="map_to">f734a634c7320010d1cfd9795cc26094</attribute>
+        <datasource display_value="Silent Wish Table">fa2b06a18302b210f6b1fb96feaad3eb</datasource>
+        <field>number</field>
+        <source>x_1821654_kokoro_0_silent_wish</source>
+        <sys_class_name>ais_datasource_field_attribute</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 05:05:39</sys_created_on>
+        <sys_id>c72b46a18302b210f6b1fb96feaad33a</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>x_1821654_kokoro_0_silent_wish.number</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>ais_datasource_field_attribute_c72b46a18302b210f6b1fb96feaad33a</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 05:05:39</sys_updated_on>
+        <value>text</value>
+    </ais_datasource_field_attribute>
+</record_update>

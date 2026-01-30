@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sysauto_script">
+    <sysauto_script action="INSERT_OR_UPDATE">
+        <active>true</active>
+        <advanced>true</advanced>
+        <business_calendar/>
+        <condition/>
+        <conditional>false</conditional>
+        <entered_run_end/>
+        <entered_run_start/>
+        <entered_time>1970-01-01 00:00:00</entered_time>
+        <max_drift/>
+        <name>Kokoro - Daily SLA Report</name>
+        <offset/>
+        <offset_type>0</offset_type>
+        <repeat_every/>
+        <run_as display_value="System Administrator">6816f79cc0a8016401c5a33be04be441</run_as>
+        <run_as_tz/>
+        <run_dayofmonth>1</run_dayofmonth>
+        <run_dayofweek>1</run_dayofweek>
+        <run_daysofweek/>
+        <run_end/>
+        <run_month>1</run_month>
+        <run_period/>
+        <run_start>2026-01-29 00:41:06</run_start>
+        <run_time>1970-01-01 08:00:00</run_time>
+        <run_type>daily</run_type>
+        <run_weekinmonth>1</run_weekinmonth>
+        <script><![CDATA[(function() {
+    gs.info('[Kokoro Scheduled] Generating daily SLA report...');
+    
+    try {
+        var yesterday = new GlideDateTime();
+        yesterday.addDaysLocalTime(-1);
+        var yesterdayStr = yesterday.getLocalDate().toString();
+        
+        // 统计昨天的SLA数据
+        var stats = {
+            total: 0,
+            achieved: 0,
+            breached: 0,
+            avgResolutionTime: 0
+        };
+        
+        var slaGR = new GlideRecord('x_1821654_kokoro_0_sla_task');
+        slaGR.addQuery('actual_end_time', '>=', yesterdayStr + ' 00:00:00');
+        slaGR.addQuery('actual_end_time', '<=', yesterdayStr + ' 23:59:59');
+        slaGR.query();
+        
+        var totalResolutionMinutes = 0;
+        
+        while (slaGR.next()) {
+            stats.total++;
+            
+            if (slaGR.getValue('status') === 'achieved') {
+                stats.achieved++;
+            } else if (slaGR.getValue('status') === 'breached') {
+                stats.breached++;
+            }
+            
+            // 计算解决时间
+            var startTime = new GlideDateTime(slaGR.getValue('start_time'));
+            var endTime = new GlideDateTime(slaGR.getValue('actual_end_time'));
+            var resolutionMs = GlideDateTime.subtract(startTime, endTime).getNumericValue();
+            totalResolutionMinutes += Math.floor(resolutionMs / 1000 / 60);
+        }
+        
+        if (stats.total > 0) {
+            stats.avgResolutionTime = Math.round(totalResolutionMinutes / stats.total);
+            stats.achievementRate = Math.round((stats.achieved / stats.total) * 100);
+        }
+        
+        var report = '[Kokoro Daily Report] ' + yesterdayStr + '\n' +
+                    '- Total SLAs completed: ' + stats.total + '\n' +
+                    '- Achieved: ' + stats.achieved + ' (' + (stats.achievementRate || 0) + '%)\n' +
+                    '- Breached: ' + stats.breached + '\n' +
+                    '- Average resolution time: ' + stats.avgResolutionTime + ' minutes';
+        
+        gs.info(report);
+        
+        // TODO: 可以将报告发送邮件
+        // gs.eventQueue('kokoro.daily_report', null, report);
+        
+    } catch (e) {
+        gs.error('[Kokoro Scheduled] Daily report error: ' + e.message);
+    }
+    
+})();]]></script>
+        <sys_class_name>sysauto_script</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-29 00:41:53</sys_created_on>
+        <sys_id>1ba45c6083f2b210f6b1fb96feaad354</sys_id>
+        <sys_mod_count>1</sys_mod_count>
+        <sys_name>Kokoro - Daily SLA Report</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sysauto_script_1ba45c6083f2b210f6b1fb96feaad354</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-29 00:41:57</sys_updated_on>
+        <time_zone/>
+        <upgrade_safe>false</upgrade_safe>
+    </sysauto_script>
+</record_update>

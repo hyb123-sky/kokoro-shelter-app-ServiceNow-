@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_ui_style">
+    <sys_ui_style action="INSERT_OR_UPDATE">
+        <alt/>
+        <element>triage_level</element>
+        <name>x_1821654_kokoro_0_silent_wish</name>
+        <style>background-color: #ffffe0;&#13;
+color: #bfa900;&#13;
+font-weight: bold;</style>
+        <sys_class_name>sys_ui_style</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 05:00:31</sys_created_on>
+        <sys_id>18f942218302b210f6b1fb96feaad3dc</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>x_1821654_kokoro_0_silent_wish</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_ui_style_18f942218302b210f6b1fb96feaad3dc</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 05:00:31</sys_updated_on>
+        <themed_style/>
+        <value>yellow</value>
+    </sys_ui_style>
+    <sys_translated_text action="delete_multiple" query="documentkey=18f942218302b210f6b1fb96feaad3dc"/>
+</record_update>

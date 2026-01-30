@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sysauto_script">
+    <sysauto_script action="INSERT_OR_UPDATE">
+        <active>true</active>
+        <advanced>true</advanced>
+        <business_calendar/>
+        <condition/>
+        <conditional>false</conditional>
+        <entered_run_end/>
+        <entered_run_start/>
+        <entered_time>1970-01-01 00:00:00</entered_time>
+        <max_drift/>
+        <name>Kokoro - Load Balancing</name>
+        <offset/>
+        <offset_type>0</offset_type>
+        <repeat_every/>
+        <run_as display_value="System Administrator">6816f79cc0a8016401c5a33be04be441</run_as>
+        <run_as_tz/>
+        <run_dayofmonth>1</run_dayofmonth>
+        <run_dayofweek>1</run_dayofweek>
+        <run_daysofweek/>
+        <run_end/>
+        <run_month>1</run_month>
+        <run_period>1970-01-01 00:15:00</run_period>
+        <run_start>2026-01-29 00:35:40</run_start>
+        <run_time>1970-01-01 08:00:00</run_time>
+        <run_type>periodically</run_type>
+        <run_weekinmonth>1</run_weekinmonth>
+        <script><![CDATA[(function() {
+    gs.info('[Kokoro Scheduled] Starting load balancing...');
+    
+    try {
+        var assignEngine = new x_1821654_kokoro_0.KokoroAutoAssignment();
+        
+        // 重新均衡负载超过80%的志愿者的任务
+        // 这个功能需要在KokoroAutoAssignment中实现rebalanceAssignments方法
+        // 如果尚未实现，可以跳过
+        
+        if (typeof assignEngine.rebalanceAssignments === 'function') {
+            var stats = assignEngine.rebalanceAssignments(0.8);
+            
+            gs.info('[Kokoro Scheduled] Load balance complete: ' + 
+                   'overloaded_volunteers=' + stats.overloaded_volunteers + ', ' +
+                   'tasks_redistributed=' + stats.tasks_redistributed);
+        } else {
+            gs.info('[Kokoro Scheduled] Load balancing skipped - method not implemented');
+        }
+        
+    } catch (e) {
+        gs.error('[Kokoro Scheduled] Load balance error: ' + e.message);
+    }
+    
+})();]]></script>
+        <sys_class_name>sysauto_script</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-29 00:37:05</sys_created_on>
+        <sys_id>f7635cec83b2b210f6b1fb96feaad31c</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Kokoro - Load Balancing</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sysauto_script_f7635cec83b2b210f6b1fb96feaad31c</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-29 00:37:05</sys_updated_on>
+        <time_zone/>
+        <upgrade_safe>false</upgrade_safe>
+    </sysauto_script>
+</record_update>

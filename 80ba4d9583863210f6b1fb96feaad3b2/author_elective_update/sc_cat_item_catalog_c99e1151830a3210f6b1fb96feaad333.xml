@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sc_cat_item_catalog">
+    <sc_cat_item_catalog action="DELETE">
+        <sc_cat_item display_value="支援リクエスト（匿名）">2dd8915983c63210f6b1fb96feaad377</sc_cat_item>
+        <sc_catalog display_value="Service Catalog">e0d08b13c3330100c8b837659bba8fb4</sc_catalog>
+        <sys_class_name>sc_cat_item_catalog</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-25 07:12:21</sys_created_on>
+        <sys_id>c99e1151830a3210f6b1fb96feaad333</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Service Catalog.支援リクエスト（匿名）</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sc_cat_item_catalog_c99e1151830a3210f6b1fb96feaad333</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-25 07:12:21</sys_updated_on>
+    </sc_cat_item_catalog>
+    <sys_update_version action="INSERT_OR_UPDATE">
+        <action>DELETE</action>
+        <application display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</application>
+        <file_path/>
+        <instance_id>26f701431b4a8650168f4089bd4bcbef</instance_id>
+        <instance_name>dev269536</instance_name>
+        <name>sc_cat_item_catalog_c99e1151830a3210f6b1fb96feaad333</name>
+        <payload><![CDATA[<?xml version="1.0" encoding="UTF-8"?><record_update table="sc_cat_item_catalog"><sc_cat_item_catalog action="INSERT_OR_UPDATE"><sc_cat_item display_value="支援リクエスト（匿名）">2dd8915983c63210f6b1fb96feaad377</sc_cat_item><sc_catalog display_value="Service Catalog">e0d08b13c3330100c8b837659bba8fb4</sc_catalog><sys_class_name>sc_cat_item_catalog</sys_class_name><sys_created_by>admin</sys_created_by><sys_created_on>2025-12-25 07:12:21</sys_created_on><sys_id>c99e1151830a3210f6b1fb96feaad333</sys_id><sys_mod_count>0</sys_mod_count><sys_name>Service Catalog.支援リクエスト（匿名）</sys_name><sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package><sys_policy/><sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope><sys_update_name>sc_cat_item_catalog_c99e1151830a3210f6b1fb96feaad333</sys_update_name><sys_updated_by>admin</sys_updated_by><sys_updated_on>2025-12-25 07:12:21</sys_updated_on></sc_cat_item_catalog></record_update>]]></payload>
+        <payload_hash>-1055807929</payload_hash>
+        <record_name>Service Catalog.支援リクエスト（匿名）</record_name>
+        <reverted_from/>
+        <source>48ba4d9583863210f6b1fb96feaad3b6</source>
+        <source_table>sys_update_set</source_table>
+        <state>previous</state>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-25 07:12:21</sys_created_on>
+        <sys_id>4d9e1151830a3210f6b1fb96feaad337</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_recorded_at>19b5459f9080000001</sys_recorded_at>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-25 07:12:21</sys_updated_on>
+        <type>Catalog Items Catalog</type>
+        <update_guid>cd9e1151f30a3210dba98359356dd536</update_guid>
+        <update_guid_history>cd9e1151f30a3210dba98359356dd536:-1055807929</update_guid_history>
+    </sys_update_version>
+    <sys_metadata_delete action="INSERT_OR_UPDATE">
+        <sys_audit_delete display_value="Service Catalog.支援リクエスト（匿名）">d0ae5151830a3210f6b1fb96feaad383</sys_audit_delete>
+        <sys_class_name>sys_metadata_delete</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-25 07:12:34</sys_created_on>
+        <sys_db_object display_value="" name="sc_cat_item_catalog">sc_cat_item_catalog</sys_db_object>
+        <sys_id>00cbf44e1f2f4caa863402f91f272ba4</sys_id>
+        <sys_metadata>c99e1151830a3210f6b1fb96feaad333</sys_metadata>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Service Catalog.支援リクエスト（匿名）</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_parent display_value="支援リクエスト">2dd8915983c63210f6b1fb96feaad377</sys_parent>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_scope_delete display_value="">b5b651695bd14f99aee30f38068ac3c1</sys_scope_delete>
+        <sys_update_name>sc_cat_item_catalog_c99e1151830a3210f6b1fb96feaad333</sys_update_name>
+        <sys_update_version display_value="sc_cat_item_catalog_c99e1151830a3210f6b1fb96feaad333">4d9e1151830a3210f6b1fb96feaad337</sys_update_version>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-25 07:12:34</sys_updated_on>
+    </sys_metadata_delete>
+</record_update>

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_rest_message_headers">
+    <sys_rest_message_headers action="DELETE">
+        <name>Contet-Type</name>
+        <rest_message display_value="Gemini AI">50f025a9830e7210f6b1fb96feaad3b3</rest_message>
+        <sys_class_name>sys_rest_message_headers</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 02:04:26</sys_created_on>
+        <sys_id>aa7121e9830e7210f6b1fb96feaad3e7</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Contet-Type</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_rest_message_headers_aa7121e9830e7210f6b1fb96feaad3e7</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 02:04:26</sys_updated_on>
+        <value>application/json</value>
+    </sys_rest_message_headers>
+    <sys_update_version action="INSERT_OR_UPDATE">
+        <action>DELETE</action>
+        <application display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</application>
+        <file_path/>
+        <instance_id>26f701431b4a8650168f4089bd4bcbef</instance_id>
+        <instance_name>dev269536</instance_name>
+        <name>sys_rest_message_headers_aa7121e9830e7210f6b1fb96feaad3e7</name>
+        <payload><![CDATA[<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_rest_message_headers"><sys_rest_message_headers action="INSERT_OR_UPDATE"><name>Contet-Type</name><rest_message display_value="Gemini AI">50f025a9830e7210f6b1fb96feaad3b3</rest_message><sys_class_name>sys_rest_message_headers</sys_class_name><sys_created_by>admin</sys_created_by><sys_created_on>2025-12-26 02:04:26</sys_created_on><sys_id>aa7121e9830e7210f6b1fb96feaad3e7</sys_id><sys_mod_count>0</sys_mod_count><sys_name>Contet-Type</sys_name><sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package><sys_policy/><sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope><sys_update_name>sys_rest_message_headers_aa7121e9830e7210f6b1fb96feaad3e7</sys_update_name><sys_updated_by>admin</sys_updated_by><sys_updated_on>2025-12-26 02:04:26</sys_updated_on><value>application/json</value></sys_rest_message_headers></record_update>]]></payload>
+        <payload_hash>-111181658</payload_hash>
+        <record_name>Contet-Type</record_name>
+        <reverted_from/>
+        <source>48ba4d9583863210f6b1fb96feaad3b6</source>
+        <source_table>sys_update_set</source_table>
+        <state>previous</state>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 02:04:26</sys_created_on>
+        <sys_id>64b1a5e9830e7210f6b1fb96feaad315</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_recorded_at>19b58666dee0000001</sys_recorded_at>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 02:04:26</sys_updated_on>
+        <type>HTTP Headers</type>
+        <update_guid>e8b1a5e94e0e721074452ee33074a114</update_guid>
+        <update_guid_history>e8b1a5e94e0e721074452ee33074a114:-111181658</update_guid_history>
+    </sys_update_version>
+    <sys_metadata_delete action="INSERT_OR_UPDATE">
+        <sys_audit_delete/>
+        <sys_class_name>sys_metadata_delete</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-12-26 02:08:25</sys_created_on>
+        <sys_db_object display_value="" name="sys_rest_message_headers">sys_rest_message_headers</sys_db_object>
+        <sys_id>221627e737c54bd0b5bf62332407bcc4</sys_id>
+        <sys_metadata>aa7121e9830e7210f6b1fb96feaad3e7</sys_metadata>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Contet-Type</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_parent display_value="">50f025a9830e7210f6b1fb96feaad3b3</sys_parent>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_scope_delete display_value="">b5b651695bd14f99aee30f38068ac3c1</sys_scope_delete>
+        <sys_update_name>sys_rest_message_headers_aa7121e9830e7210f6b1fb96feaad3e7</sys_update_name>
+        <sys_update_version display_value="sys_rest_message_headers_aa7121e9830e7210f6b1fb96feaad3e7">64b1a5e9830e7210f6b1fb96feaad315</sys_update_version>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-12-26 02:08:25</sys_updated_on>
+    </sys_metadata_delete>
+</record_update>

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_security_acl_role">
+    <sys_security_acl_role action="DELETE">
+        <sys_class_name>sys_security_acl_role</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-22 07:06:12</sys_created_on>
+        <sys_id>48b9ad96836a7210f6b1fb96feaad39a</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>x_1821654_kokoro_0_x_kokoro_user_profile.x_1821654_kokoro_0.kokoro_inventory_user</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_security_acl display_value="x_1821654_kokoro_0_x_kokoro_user_profile">00b9ad96836a7210f6b1fb96feaad364</sys_security_acl>
+        <sys_update_name>sys_security_acl_role_48b9ad96836a7210f6b1fb96feaad39a</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-22 07:06:12</sys_updated_on>
+        <sys_user_role display_value="x_1821654_kokoro_0.kokoro_inventory_user" name="x_1821654_kokoro_0.kokoro_inventory_user">f2588b7b83023210f6b1fb96feaad358</sys_user_role>
+    </sys_security_acl_role>
+    <sys_update_version action="INSERT_OR_UPDATE">
+        <action>DELETE</action>
+        <application display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</application>
+        <file_path/>
+        <instance_id>26f701431b4a8650168f4089bd4bcbef</instance_id>
+        <instance_name>dev269536</instance_name>
+        <name>sys_security_acl_role_48b9ad96836a7210f6b1fb96feaad39a</name>
+        <payload><![CDATA[<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_security_acl_role"><sys_security_acl_role action="INSERT_OR_UPDATE"><sys_class_name>sys_security_acl_role</sys_class_name><sys_created_by>admin</sys_created_by><sys_created_on>2026-01-22 07:06:12</sys_created_on><sys_id>48b9ad96836a7210f6b1fb96feaad39a</sys_id><sys_mod_count>0</sys_mod_count><sys_name>x_1821654_kokoro_0_x_kokoro_user_profile.x_1821654_kokoro_0.kokoro_inventory_user</sys_name><sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package><sys_policy/><sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope><sys_security_acl display_value="x_1821654_kokoro_0_x_kokoro_user_profile">00b9ad96836a7210f6b1fb96feaad364</sys_security_acl><sys_update_name>sys_security_acl_role_48b9ad96836a7210f6b1fb96feaad39a</sys_update_name><sys_updated_by>admin</sys_updated_by><sys_updated_on>2026-01-22 07:06:12</sys_updated_on><sys_user_role display_value="x_1821654_kokoro_0.kokoro_inventory_user" name="x_1821654_kokoro_0.kokoro_inventory_user">f2588b7b83023210f6b1fb96feaad358</sys_user_role></sys_security_acl_role></record_update>]]></payload>
+        <payload_hash>-1968587225</payload_hash>
+        <record_name>x_1821654_kokoro_0_x_kokoro_user_profile.x_1821654_kokoro_0.kokoro_inventory_user</record_name>
+        <reverted_from/>
+        <source>48ba4d9583863210f6b1fb96feaad3b6</source>
+        <source_table>sys_update_set</source_table>
+        <state>previous</state>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-22 07:06:12</sys_created_on>
+        <sys_id>04b9ad96836a7210f6b1fb96feaad39e</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_recorded_at>19be48668670000001</sys_recorded_at>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-22 07:06:12</sys_updated_on>
+        <type>Access Roles</type>
+        <update_guid>88b9ad964b6a72109494497ed144ef9d</update_guid>
+        <update_guid_history>88b9ad964b6a72109494497ed144ef9d:-1968587225</update_guid_history>
+    </sys_update_version>
+    <sys_metadata_delete action="INSERT_OR_UPDATE">
+        <sys_audit_delete display_value="x_1821654_kokoro_0_x_kokoro_user_profile.x_1821654_kokoro_0.kokoro_inventory_use">aff9e5d6836a7210f6b1fb96feaad34b</sys_audit_delete>
+        <sys_class_name>sys_metadata_delete</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-22 07:07:31</sys_created_on>
+        <sys_db_object display_value="" name="sys_security_acl_role">sys_security_acl_role</sys_db_object>
+        <sys_id>9e065464015547b8bbc36407910a55f9</sys_id>
+        <sys_metadata>48b9ad96836a7210f6b1fb96feaad39a</sys_metadata>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>x_1821654_kokoro_0_x_kokoro_user_profile.x_1821654_kokoro_0.kokoro_inventory_user</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_parent display_value="">00b9ad96836a7210f6b1fb96feaad364</sys_parent>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_scope_delete display_value="">b5b651695bd14f99aee30f38068ac3c1</sys_scope_delete>
+        <sys_update_name>sys_security_acl_role_48b9ad96836a7210f6b1fb96feaad39a</sys_update_name>
+        <sys_update_version display_value="sys_security_acl_role_48b9ad96836a7210f6b1fb96feaad39a">04b9ad96836a7210f6b1fb96feaad39e</sys_update_version>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-22 07:07:31</sys_updated_on>
+    </sys_metadata_delete>
+</record_update>

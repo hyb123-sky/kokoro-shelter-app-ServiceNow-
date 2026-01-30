@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="a54aadd6836a7210f6b1fb96feaad346" label="User Profile" max_length="40" name="x_1821654_kokoro_0_x_kokoro_user_profile" type="collection">
+        <element label="User" mandatory="true" max_length="32" name="user" reference="sys_user" type="reference"/>
+        <element label="Special needs" max_length="1000" name="special_needs" type="string"/>
+        <element label="Emergency Conact Email" max_length="100" name="emergency_conact_email" type="string"/>
+        <element choice="3" label="Preferred language" max_length="40" name="preferred_language" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="日本語" value="ja"/>
+                <element inactive_on_update="false" label="English" value="en"/>
+                <element inactive_on_update="false" label="中文" value="zh"/>
+                <element inactive_on_update="false" label="한국어" value="ko"/>
+            </choice>
+        </element>
+        <element label="allergies" max_length="500" name="allergies" type="string"/>
+        <element label="Medical Information (Private)" max_length="4000" name="medical_information" type="glide_encrypted"/>
+        <element label="Emergency contact 2 name" max_length="100" name="emergency_contact_2_name" type="string"/>
+        <element label="medications" max_length="500" name="medications" type="string"/>
+        <element label="Updated at" max_length="40" name="updated_at" type="glide_date_time"/>
+        <element choice="3" label="Mobility status" max_length="40" name="mobility_status" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="Wheelchair"/>
+                <element inactive_on_update="false" label="Mobile"/>
+                <element inactive_on_update="false" label="Bedridden"/>
+                <element inactive_on_update="false" label="Limited"/>
+            </choice>
+        </element>
+        <element label="Emergency contact 2 phone" max_length="20" name="emergency_contact_2_phone" type="string"/>
+        <element label="Emergency contact 1 name" max_length="100" name="emergency_contact_1_name" type="string"/>
+        <element label="Medical conditions" max_length="1000" name="medical_conditions" type="string"/>
+        <element label="Emergency contact 2 email" max_length="100" name="emergency_contact_2_email" type="string"/>
+        <element choice="3" label="Blood Type" max_length="40" name="blood_type" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="O-" sequence="5" value="o_neg"/>
+                <element inactive_on_update="false" label="A" sequence="0" value="a_pos"/>
+                <element inactive_on_update="false" label="AB" sequence="6" value="ab_pos"/>
+                <element inactive_on_update="false" label="B-" sequence="3" value="b_neg"/>
+                <element inactive_on_update="false" label="AB-" sequence="7" value="ab_neg"/>
+                <element inactive_on_update="false" label="A-" sequence="1" value="a_neg"/>
+                <element inactive_on_update="false" label="B" sequence="2" value="b_pos"/>
+                <element inactive_on_update="false" label="O" sequence="4" value="o_pos"/>
+            </choice>
+        </element>
+        <element label="Emergency contact 1 phone" max_length="20" name="emergency_contact_1_phone" type="string"/>
+        <element label="Created at" max_length="40" name="created_at" type="glide_date_time"/>
+        <index name="index">
+            <element name="user"/>
+        </index>
+    </element>
+</database>

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_script_fix">
+    <sys_script_fix action="INSERT_OR_UPDATE">
+        <before>false</before>
+        <description/>
+        <name>Init Kokoro Inventory Data</name>
+        <record_for_rollback>true</record_for_rollback>
+        <script><![CDATA[// ==========================================
+// KOKORO SHELTER - Inventory Initialization
+// 目的: 初始化库存数据，使其与UI设计图(百分比)完全一致
+// ==========================================
+
+var config = {
+    table: 'x_1821654_kokoro_0_kokoro_inventory',
+    items: [
+        // 42%
+        { name: '食料', code: 'FOOD', max: 1000, current: 420 },
+        // 78%
+        { name: '飲料水', code: 'WATER', max: 1000, current: 780 },
+        // 12% (500 * 0.12 = 60)
+        { name: '医療品', code: 'MEDICAL', max: 500, current: 60 },
+        // 89% (200 * 0.89 = 178)
+        { name: '衣類', code: 'CLOTHING', max: 200, current: 178 },
+        // 34% (500 * 0.34 = 170)
+        { name: '衛生用品', code: 'HYGIENE', max: 500, current: 170 }
+    ]
+};
+
+// 1. 清理旧数据 (防止重复)
+var grClean = new GlideRecord(config.table);
+grClean.query();
+grClean.deleteMultiple();
+gs.info('[Kokoro Setup] Old inventory records deleted.');
+
+// 2. 插入新数据
+for (var i = 0; i < config.items.length; i++) {
+    var item = config.items[i];
+    var gr = new GlideRecord(config.table);
+    gr.initialize();
+    gr.setValue('item_name', item.name);
+    gr.setValue('item_code', item.code);
+    gr.setValue('max_capacity', item.max);
+    gr.setValue('current_quantity', item.current);
+    gr.insert();
+    gs.info('[Kokoro Setup] Created: ' + item.name + ' (' + item.current + '/' + item.max + ')');
+}]]></script>
+        <sys_class_name>sys_script_fix</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-30 04:57:21</sys_created_on>
+        <sys_id>acd8163c83b63210f6b1fb96feaad3a4</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Init Kokoro Inventory Data</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_script_fix_acd8163c83b63210f6b1fb96feaad3a4</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-30 04:57:21</sys_updated_on>
+        <unloadable>false</unloadable>
+    </sys_script_fix>
+</record_update>
