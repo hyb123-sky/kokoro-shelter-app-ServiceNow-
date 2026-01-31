@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_index">
+    <sys_index action="INSERT_OR_UPDATE">
+        <access_method>btree</access_method>
+        <col_name_string>operation_type</col_name_string>
+        <index_col_name element="operation_type" name="x_1821654_kokoro_0_performance_snapshot">5a49cdd98372f210f6b1fb96feaad3a2</index_col_name>
+        <logical_table_name>x_1821654_kokoro_0_performance_snapshot</logical_table_name>
+        <sys_class_name>sys_index</sys_class_name>
+        <sys_created_by>system</sys_created_by>
+        <sys_created_on>2026-01-31 12:39:02</sys_created_on>
+        <sys_id>9f2c859183b2f210f6b1fb96feaad3b3</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>x_1821654_kokoro_0_performance_snapshot</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_index_x_1821654_kokoro_0_performance_snapshot_operation_type</sys_update_name>
+        <sys_updated_by>system</sys_updated_by>
+        <sys_updated_on>2026-01-31 12:39:02</sys_updated_on>
+        <table display_value="Performance Snapshot" name="x_1821654_kokoro_0_performance_snapshot">145db0998332f210f6b1fb96feaad3d0</table>
+        <unique_index>false</unique_index>
+    </sys_index>
+</record_update>

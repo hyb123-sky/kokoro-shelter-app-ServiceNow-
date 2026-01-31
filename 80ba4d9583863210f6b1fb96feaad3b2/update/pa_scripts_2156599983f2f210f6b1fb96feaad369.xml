@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update sys_domain="global" table="pa_scripts">
+    <pa_scripts action="INSERT_OR_UPDATE">
+        <arguments>metric_data</arguments>
+        <description/>
+        <name>Kokoro.Script.BreachRate</name>
+        <script><![CDATA[(function() {  // 1. 添加这行开头
+    var jsonStr = current.metric_data;
+    
+    // 如果没有数据，直接返回 0
+    if (!jsonStr) return 0;
+
+    try {
+        var data = JSON.parse(jsonStr);
+        // 尝试解析 breach_rate，如果解析失败或为 NaN，则返回 0
+        return parseFloat(data.breach_rate) || 0;
+    } catch(e) {
+        return 0;
+    }
+})();  // 2. 添加这行结尾]]></script>
+        <sys_class_name>pa_scripts</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-31 14:22:27</sys_created_on>
+        <sys_domain>global</sys_domain>
+        <sys_domain_path>/</sys_domain_path>
+        <sys_id>2156599983f2f210f6b1fb96feaad369</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Kokoro.Script.BreachRate</sys_name>
+        <sys_overrides/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>pa_scripts_2156599983f2f210f6b1fb96feaad369</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-31 14:22:27</sys_updated_on>
+        <table>x_1821654_kokoro_0_system_metrics</table>
+    </pa_scripts>
+    <sys_translated_text action="delete_multiple" query="documentkey=2156599983f2f210f6b1fb96feaad369"/>
+    <sys_es_latest_script action="INSERT_OR_UPDATE">
+        <id>2156599983f2f210f6b1fb96feaad369</id>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-31 14:22:27</sys_created_on>
+        <sys_id>8ed3a5dd8336f210f6b1fb96feaad367</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-31 14:22:27</sys_updated_on>
+        <table>pa_scripts</table>
+        <use_es_latest>true</use_es_latest>
+    </sys_es_latest_script>
+</record_update>

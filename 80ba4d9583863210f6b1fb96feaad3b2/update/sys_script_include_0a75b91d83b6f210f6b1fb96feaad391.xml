@@ -1,0 +1,599 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_script_include">
+    <sys_script_include action="INSERT_OR_UPDATE">
+        <access>package_private</access>
+        <active>true</active>
+        <api_name>x_1821654_kokoro_0.KokoroMetricsCollector</api_name>
+        <caller_access/>
+        <client_callable>false</client_callable>
+        <description/>
+        <mobile_callable>false</mobile_callable>
+        <name>KokoroMetricsCollector</name>
+        <sandbox_callable>false</sandbox_callable>
+        <script><![CDATA[var KokoroMetricsCollector = Class.create();
+KokoroMetricsCollector.prototype = {
+    
+    CONFIG: {
+        tables: {
+            // *** 修正处：已更新为正确的表名 (包含 _system) ***
+            METRICS: 'x_1821654_kokoro_0_system_metrics',
+            
+            SILENT_WISH: 'x_1821654_kokoro_0_silent_wish',
+            SLA_TASK: 'x_1821654_kokoro_0_sla_task',
+            CAPABILITY: 'x_1821654_kokoro_0_volunteer_capability'
+        },
+        // 指标保留期限（天）
+        RETENTION_DAYS: 90,
+        // 阈值配置
+        THRESHOLDS: {
+            SLA_BREACH_RATE: 10,        // 10%违规率触发告警
+            AVG_RESPONSE_TIME: 15,      // 15分钟平均响应时间
+            VOLUNTEER_HIGH_LOAD: 0.8,    // 80%负载为高负载
+            SYSTEM_ERROR_RATE: 5         // 5%错误率触发告警
+        }
+    },
+    
+    initialize: function() {
+        this.timestamp = new GlideDateTime();
+    },
+    
+    /**
+     * 收集所有指标（主入口）
+     */
+    collectAllMetrics: function() {
+        var results = {
+            success: true,
+            metrics_collected: [],
+            errors: []
+        };
+        
+        gs.info('[Kokoro Metrics] Starting metrics collection at ' + this.timestamp);
+        
+        try {
+            // 1. SLA性能指标
+            var slaMetrics = this._collectSLAMetrics();
+            this._saveMetrics('sla_performance', slaMetrics);
+            results.metrics_collected.push('sla_performance');
+            
+            // 2. 志愿者负载指标
+            var volunteerMetrics = this._collectVolunteerMetrics();
+            this._saveMetrics('volunteer_load', volunteerMetrics);
+            results.metrics_collected.push('volunteer_load');
+            
+            // 3. 请求处理指标
+            var wishMetrics = this._collectWishMetrics();
+            this._saveMetrics('wish_processing', wishMetrics);
+            results.metrics_collected.push('wish_processing');
+            
+            // 4. 系统健康指标
+            var healthMetrics = this._collectSystemHealth();
+            this._saveMetrics('system_health', healthMetrics);
+            results.metrics_collected.push('system_health');
+            
+            gs.info('[Kokoro Metrics] Collection completed successfully');
+            
+        } catch (e) {
+            results.success = false;
+            results.errors.push(e.message);
+            gs.error('[Kokoro Metrics] Collection error: ' + e.message);
+        }
+        
+        // 清理过期数据
+        this._cleanupOldMetrics();
+        
+        return results;
+    },
+    
+    /**
+     * 收集SLA性能指标
+     */
+    _collectSLAMetrics: function() {
+        var metrics = {
+            timestamp: this.timestamp.getValue(),
+            total_active_sla: 0,
+            in_progress: 0,
+            breached: 0,
+            achieved: 0,
+            breach_rate: 0,
+            avg_completion_time: 0,
+            critical_count: 0,
+            warning_count: 0,
+            ok_count: 0
+        };
+        
+        // 活跃SLA总数
+        var gaActive = new GlideAggregate(this.CONFIG.tables.SLA_TASK);
+        gaActive.addQuery('status', 'IN', 'in_progress,paused');
+        gaActive.addAggregate('COUNT');
+        gaActive.query();
+        if (gaActive.next()) {
+            metrics.total_active_sla = parseInt(gaActive.getAggregate('COUNT')) || 0;
+        }
+        
+        // 违规数量
+        var gaBreached = new GlideAggregate(this.CONFIG.tables.SLA_TASK);
+        gaBreached.addQuery('has_breached', true);
+        gaBreached.addQuery('status', 'NOT IN', 'achieved,cancelled');
+        gaBreached.addAggregate('COUNT');
+        gaBreached.query();
+        if (gaBreached.next()) {
+            metrics.breached = parseInt(gaBreached.getAggregate('COUNT')) || 0;
+        }
+        
+        // 今日完成的SLA（计算平均完成时间）
+        var todayStart = new GlideDateTime();
+        todayStart.setDisplayValue(todayStart.getLocalDate().getValue() + ' 00:00:00');
+        
+        var gaSLA = new GlideRecord(this.CONFIG.tables.SLA_TASK);
+        gaSLA.addQuery('actual_end_time', '>=', todayStart);
+        gaSLA.addQuery('status', 'IN', 'achieved,breached');
+        gaSLA.query();
+        
+        var totalCompletionMinutes = 0;
+        var completedCount = 0;
+        var achievedCount = 0;
+        
+        while (gaSLA.next()) {
+            completedCount++;
+            if (gaSLA.getValue('status') === 'achieved') {
+                achievedCount++;
+            }
+            
+            // 计算完成时间
+            var startTime = new GlideDateTime(gaSLA.getValue('start_time'));
+            var endTime = new GlideDateTime(gaSLA.getValue('actual_end_time'));
+            var duration = gs.dateDiff(startTime.getValue(), endTime.getValue(), true);
+            totalCompletionMinutes += Math.floor(duration / 60);
+        }
+        
+        metrics.achieved = achievedCount;
+        if (completedCount > 0) {
+            metrics.avg_completion_time = Math.round(totalCompletionMinutes / completedCount);
+        }
+        
+        // 计算违规率
+        if (completedCount > 0) {
+            metrics.breach_rate = Math.round(((completedCount - achievedCount) / completedCount) * 100);
+        }
+        
+        // 按状态分类（critical/warning/ok）
+        var gaStatus = new GlideRecord(this.CONFIG.tables.SLA_TASK);
+        gaStatus.addQuery('status', 'in_progress');
+        gaStatus.query();
+        
+        while (gaStatus.next()) {
+            var percentage = parseInt(gaStatus.getValue('percentage')) || 0;
+            if (percentage >= 90) {
+                metrics.critical_count++;
+            } else if (percentage >= 70) {
+                metrics.warning_count++;
+            } else {
+                metrics.ok_count++;
+            }
+        }
+        
+        return metrics;
+    },
+    
+    /**
+     * 收集志愿者负载指标
+     */
+    _collectVolunteerMetrics: function() {
+        var metrics = {
+            timestamp: this.timestamp.getValue(),
+            total_volunteers: 0,
+            online_volunteers: 0,
+            avg_task_count: 0,
+            overloaded_volunteers: 0,
+            idle_volunteers: 0,
+            volunteer_utilization: 0,
+            max_load: 0,
+            min_load: 0
+        };
+        
+        var capGR = new GlideRecord(this.CONFIG.tables.CAPABILITY);
+        capGR.query();
+        
+        var totalTasks = 0;
+        var taskCounts = [];
+        
+        while (capGR.next()) {
+            metrics.total_volunteers++;
+            
+            if (capGR.getValue('is_available') == 'true') {
+                metrics.online_volunteers++;
+            }
+            
+            var taskCount = parseInt(capGR.getValue('current_task_count')) || 0;
+            var maxTasks = parseInt(capGR.getValue('max_concurrent_tasks')) || 5;
+            
+            totalTasks += taskCount;
+            taskCounts.push(taskCount);
+            
+            var loadRatio = maxTasks > 0 ? taskCount / maxTasks : 0;
+            
+            if (loadRatio >= this.CONFIG.THRESHOLDS.VOLUNTEER_HIGH_LOAD) {
+                metrics.overloaded_volunteers++;
+            } else if (taskCount === 0 && capGR.getValue('is_available') == 'true') {
+                metrics.idle_volunteers++;
+            }
+        }
+        
+        if (metrics.total_volunteers > 0) {
+            metrics.avg_task_count = Math.round((totalTasks / metrics.total_volunteers) * 10) / 10;
+            
+            // 计算利用率（平均负载/平均容量）
+            var gaCapacity = new GlideAggregate(this.CONFIG.tables.CAPABILITY);
+            gaCapacity.addAggregate('AVG', 'max_concurrent_tasks');
+            gaCapacity.query();
+            if (gaCapacity.next()) {
+                var avgCapacity = parseFloat(gaCapacity.getAggregate('AVG', 'max_concurrent_tasks')) || 5;
+                metrics.volunteer_utilization = Math.round((metrics.avg_task_count / avgCapacity) * 100);
+            }
+        }
+        
+        if (taskCounts.length > 0) {
+            metrics.max_load = Math.max.apply(null, taskCounts);
+            metrics.min_load = Math.min.apply(null, taskCounts);
+        }
+        
+        return metrics;
+    },
+    
+    /**
+     * 收集请求处理指标
+     */
+    _collectWishMetrics: function() {
+        var metrics = {
+            timestamp: this.timestamp.getValue(),
+            total_wishes: 0,
+            new_today: 0,
+            completed_today: 0,
+            cancelled_today: 0,
+            pending_assignment: 0,
+            in_progress: 0,
+            on_hold: 0,
+            avg_resolution_time: 0,
+            by_urgency: {
+                critical: 0,
+                high: 0,
+                medium: 0,
+                low: 0
+            },
+            by_category: {}
+        };
+        
+        var todayStart = new GlideDateTime();
+        todayStart.setDisplayValue(todayStart.getLocalDate().getValue() + ' 00:00:00');
+        
+        // 总请求数
+        var gaTotal = new GlideAggregate(this.CONFIG.tables.SILENT_WISH);
+        gaTotal.addAggregate('COUNT');
+        gaTotal.query();
+        if (gaTotal.next()) {
+            metrics.total_wishes = parseInt(gaTotal.getAggregate('COUNT')) || 0;
+        }
+        
+        // 今日新增
+        var gaNewToday = new GlideAggregate(this.CONFIG.tables.SILENT_WISH);
+        gaNewToday.addQuery('sys_created_on', '>=', todayStart);
+        gaNewToday.addAggregate('COUNT');
+        gaNewToday.query();
+        if (gaNewToday.next()) {
+            metrics.new_today = parseInt(gaNewToday.getAggregate('COUNT')) || 0;
+        }
+        
+        // 今日完成
+        var gaCompleted = new GlideAggregate(this.CONFIG.tables.SILENT_WISH);
+        gaCompleted.addQuery('state', '4');
+        gaCompleted.addQuery('sys_updated_on', '>=', todayStart);
+        gaCompleted.addAggregate('COUNT');
+        gaCompleted.query();
+        if (gaCompleted.next()) {
+            metrics.completed_today = parseInt(gaCompleted.getAggregate('COUNT')) || 0;
+        }
+        
+        // 按状态统计
+        var gaByState = new GlideAggregate(this.CONFIG.tables.SILENT_WISH);
+        gaByState.addAggregate('COUNT');
+        gaByState.groupBy('state');
+        gaByState.query();
+        
+        while (gaByState.next()) {
+            var state = gaByState.getValue('state');
+            var count = parseInt(gaByState.getAggregate('COUNT')) || 0;
+            
+            switch(state) {
+                case '10':
+                    metrics.pending_assignment = count;
+                    break;
+                case '2':
+                    metrics.in_progress = count;
+                    break;
+                case '6':
+                    metrics.on_hold = count;
+                    break;
+            }
+        }
+        
+        // 按紧急度统计
+        var gaByUrgency = new GlideAggregate(this.CONFIG.tables.SILENT_WISH);
+        gaByUrgency.addQuery('state', 'NOT IN', '4,5');
+        gaByUrgency.addAggregate('COUNT');
+        gaByUrgency.groupBy('u_urgency');
+        gaByUrgency.query();
+        
+        while (gaByUrgency.next()) {
+            var urgency = gaByUrgency.getValue('u_urgency').toLowerCase();
+            var count = parseInt(gaByUrgency.getAggregate('COUNT')) || 0;
+            metrics.by_urgency[urgency] = count;
+        }
+        
+        // 按类别统计
+        var gaByCategory = new GlideAggregate(this.CONFIG.tables.SILENT_WISH);
+        gaByCategory.addQuery('state', 'NOT IN', '4,5');
+        gaByCategory.addAggregate('COUNT');
+        gaByCategory.groupBy('u_category');
+        gaByCategory.query();
+        
+        while (gaByCategory.next()) {
+            var category = gaByCategory.getValue('u_category');
+            var count = parseInt(gaByCategory.getAggregate('COUNT')) || 0;
+            metrics.by_category[category] = count;
+        }
+        
+        // 平均解决时间（今日完成的）
+        var wishGR = new GlideRecord(this.CONFIG.tables.SILENT_WISH);
+        wishGR.addQuery('state', '4');
+        wishGR.addQuery('sys_updated_on', '>=', todayStart);
+        wishGR.query();
+        
+        var totalResolutionMinutes = 0;
+        var resolutionCount = 0;
+        
+        while (wishGR.next()) {
+            var created = new GlideDateTime(wishGR.getValue('sys_created_on'));
+            var completed = new GlideDateTime(wishGR.getValue('sys_updated_on'));
+            var duration = gs.dateDiff(created.getValue(), completed.getValue(), true);
+            totalResolutionMinutes += Math.floor(duration / 60);
+            resolutionCount++;
+        }
+        
+        if (resolutionCount > 0) {
+            metrics.avg_resolution_time = Math.round(totalResolutionMinutes / resolutionCount);
+        }
+        
+        return metrics;
+    },
+    
+    /**
+     * 收集系统健康指标
+     */
+    _collectSystemHealth: function() {
+        var metrics = {
+            timestamp: this.timestamp.getValue(),
+            script_errors_count: 0,
+            failed_assignments: 0,
+            sla_engine_health: 'healthy',
+            assignment_engine_health: 'healthy',
+            avg_query_time: 0,
+            cache_hit_rate: 0
+        };
+        
+        var yesterday = new GlideDateTime();
+        yesterday.addDaysLocalTime(-1);
+        
+        // 检查脚本错误
+        var gaErrors = new GlideAggregate('syslog');
+        gaErrors.addQuery('sys_created_on', '>=', yesterday);
+        gaErrors.addQuery('level', 'error');
+        gaErrors.addQuery('message', 'CONTAINS', 'Kokoro');
+        gaErrors.addAggregate('COUNT');
+        gaErrors.query();
+        if (gaErrors.next()) {
+            metrics.script_errors_count = parseInt(gaErrors.getAggregate('COUNT')) || 0;
+        }
+        
+        // 检查分配失败
+        var gaFailedAssign = new GlideAggregate('x_1821654_kokoro_0_assignment_history');
+        gaFailedAssign.addQuery('timestamp', '>=', yesterday);
+        gaFailedAssign.addQuery('assignment_reason', 'CONTAINS', 'failed');
+        gaFailedAssign.addAggregate('COUNT');
+        gaFailedAssign.query();
+        if (gaFailedAssign.next()) {
+            metrics.failed_assignments = parseInt(gaFailedAssign.getAggregate('COUNT')) || 0;
+        }
+        
+        // 健康状态评估
+        if (metrics.script_errors_count > 10) {
+            metrics.assignment_engine_health = 'degraded';
+        }
+        if (metrics.script_errors_count > 50) {
+            metrics.assignment_engine_health = 'unhealthy';
+        }
+        
+        return metrics;
+    },
+    
+    /**
+     * 保存指标到数据库
+     */
+    _saveMetrics: function(metricType, data) {
+        try {
+            var metricsGR = new GlideRecord(this.CONFIG.tables.METRICS);
+            metricsGR.initialize();
+            metricsGR.setValue('metric_type', metricType);
+            metricsGR.setValue('timestamp', this.timestamp);
+            metricsGR.setValue('metric_data', JSON.stringify(data));
+            
+            // 计算健康评分
+            var healthScore = this._calculateHealthScore(metricType, data);
+            metricsGR.setValue('health_score', healthScore);
+            
+            metricsGR.insert();
+            
+        } catch (e) {
+            gs.error('[Kokoro Metrics] Failed to save ' + metricType + ': ' + e.message);
+        }
+    },
+    
+    /**
+     * 计算健康评分 (0-100)
+     */
+    _calculateHealthScore: function(metricType, data) {
+        var score = 100;
+        
+        if (metricType === 'sla_performance') {
+            // SLA违规率越高，分数越低
+            if (data.breach_rate > this.CONFIG.THRESHOLDS.SLA_BREACH_RATE) {
+                score -= (data.breach_rate - this.CONFIG.THRESHOLDS.SLA_BREACH_RATE) * 2;
+            }
+            // 太多critical状态
+            if (data.critical_count > 5) {
+                score -= data.critical_count;
+            }
+        } else if (metricType === 'volunteer_load') {
+            // 过载志愿者太多
+            if (data.overloaded_volunteers > 3) {
+                score -= data.overloaded_volunteers * 5;
+            }
+            // 利用率过低或过高
+            if (data.volunteer_utilization < 30 || data.volunteer_utilization > 85) {
+                score -= 10;
+            }
+        } else if (metricType === 'system_health') {
+            // 错误数量
+            score -= data.script_errors_count * 2;
+            // 分配失败
+            score -= data.failed_assignments * 3;
+        }
+        
+        return Math.max(0, Math.min(100, score));
+    },
+    
+    /**
+     * 清理90天前的旧指标
+     */
+    _cleanupOldMetrics: function() {
+        var cutoffDate = new GlideDateTime();
+        cutoffDate.addDaysLocalTime(-this.CONFIG.RETENTION_DAYS);
+        
+        var metricsGR = new GlideRecord(this.CONFIG.tables.METRICS);
+        metricsGR.addQuery('timestamp', '<', cutoffDate);
+        metricsGR.deleteMultiple();
+        
+        gs.info('[Kokoro Metrics] Cleaned up metrics older than ' + this.CONFIG.RETENTION_DAYS + ' days');
+    },
+    
+    /**
+     * 获取最新指标（用于仪表板）
+     */
+    getLatestMetrics: function(metricType, hoursBack) {
+        hoursBack = hoursBack || 24;
+        
+        var startTime = new GlideDateTime();
+        startTime.addSeconds(-hoursBack * 3600);
+        
+        var results = [];
+        
+        var metricsGR = new GlideRecord(this.CONFIG.tables.METRICS);
+        metricsGR.addQuery('metric_type', metricType);
+        metricsGR.addQuery('timestamp', '>=', startTime);
+        metricsGR.orderBy('timestamp');
+        metricsGR.query();
+        
+        while (metricsGR.next()) {
+            try {
+                results.push({
+                    timestamp: metricsGR.getValue('timestamp'),
+                    data: JSON.parse(metricsGR.getValue('metric_data')),
+                    health_score: parseInt(metricsGR.getValue('health_score'))
+                });
+            } catch (e) {
+                gs.warn('[Kokoro Metrics] Failed to parse metrics: ' + e.message);
+            }
+        }
+        
+        return results;
+    },
+    
+    /**
+     * 检查是否需要发送告警
+     */
+    checkAndSendAlerts: function() {
+        var alerts = [];
+        
+        // 获取最新指标
+        var slaMetrics = this.getLatestMetrics('sla_performance', 1);
+        var volunteerMetrics = this.getLatestMetrics('volunteer_load', 1);
+        
+        if (slaMetrics.length > 0) {
+            var latestSLA = slaMetrics[slaMetrics.length - 1].data;
+            
+            // SLA违规率告警
+            if (latestSLA.breach_rate > this.CONFIG.THRESHOLDS.SLA_BREACH_RATE) {
+                alerts.push({
+                    severity: 'high',
+                    type: 'sla_breach_rate',
+                    message: 'SLA違反率が高い: ' + latestSLA.breach_rate + '%',
+                    value: latestSLA.breach_rate,
+                    threshold: this.CONFIG.THRESHOLDS.SLA_BREACH_RATE
+                });
+            }
+            
+            // Critical SLA告警
+            if (latestSLA.critical_count > 5) {
+                alerts.push({
+                    severity: 'critical',
+                    type: 'critical_sla_count',
+                    message: 'Critical状態のSLAが多い: ' + latestSLA.critical_count,
+                    value: latestSLA.critical_count
+                });
+            }
+        }
+        
+        if (volunteerMetrics.length > 0) {
+            var latestVol = volunteerMetrics[volunteerMetrics.length - 1].data;
+            
+            // 志愿者过载告警
+            if (latestVol.overloaded_volunteers > 3) {
+                alerts.push({
+                    severity: 'medium',
+                    type: 'volunteer_overload',
+                    message: '過負荷の志願者が多い: ' + latestVol.overloaded_volunteers,
+                    value: latestVol.overloaded_volunteers
+                });
+            }
+        }
+        
+        // 发送告警
+        for (var i = 0; i < alerts.length; i++) {
+            this._sendAlert(alerts[i]);
+        }
+        
+        return alerts;
+    },
+    
+    /**
+     * 发送告警（通过Event）
+     */
+    _sendAlert: function(alert) {
+        gs.eventQueue('kokoro.alert.' + alert.severity, null, JSON.stringify(alert));
+        gs.warn('[Kokoro Alert] ' + alert.severity.toUpperCase() + ': ' + alert.message);
+    },
+    
+    type: 'KokoroMetricsCollector'
+};]]></script>
+        <sys_class_name>sys_script_include</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-31 15:40:42</sys_created_on>
+        <sys_id>0a75b91d83b6f210f6b1fb96feaad391</sys_id>
+        <sys_mod_count>2</sys_mod_count>
+        <sys_name>KokoroMetricsCollector</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy>read</sys_policy>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_script_include_0a75b91d83b6f210f6b1fb96feaad391</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-31 15:53:06</sys_updated_on>
+    </sys_script_include>
+</record_update>

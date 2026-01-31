@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="3452c7b083fa3210f6b1fb96feaad39a" label="Alert Config" max_length="40" name="x_1821654_kokoro_0_alert_config" type="collection">
+        <element label="Last Triggered" max_length="40" name="last_triggered" type="glide_date_time"/>
+        <element label="Condition" max_length="500" name="condition" type="string"/>
+        <element choice="1" label="Severity" max_length="40" name="severity" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="medium" value="medium"/>
+                <element inactive_on_update="false" label="low" value="low"/>
+                <element inactive_on_update="false" label="high" value="high"/>
+                <element inactive_on_update="false" label="critical" value="critical"/>
+            </choice>
+        </element>
+        <element label="Alert Name" max_length="200" name="name" type="string"/>
+        <element choice="1" label="Notification Method" max_length="40" name="notification_method" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="slack" value="slack"/>
+                <element inactive_on_update="false" label="script" value="script"/>
+                <element inactive_on_update="false" label="email" value="email"/>
+                <element inactive_on_update="false" label="event" value="event"/>
+            </choice>
+        </element>
+        <element choice="1" label="Metric Type" max_length="40" name="metric_type" type="choice">
+            <choice/>
+        </element>
+        <element label="Active" max_length="40" name="active" type="boolean"/>
+        <element label="Recipients" max_length="1000" name="recipients" type="string"/>
+        <element label="Cooldown" max_length="40" name="cooldown" type="integer"/>
+    </element>
+</database>

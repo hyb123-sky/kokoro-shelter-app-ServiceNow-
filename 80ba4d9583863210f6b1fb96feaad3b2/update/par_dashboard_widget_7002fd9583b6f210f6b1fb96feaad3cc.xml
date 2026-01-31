@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update sys_domain="global" table="par_dashboard_widget">
+    <par_dashboard_widget action="INSERT_OR_UPDATE">
+        <canvas display_value="">c66de5dd8376f210f6b1fb96feaad3b5</canvas>
+        <component display_value="Dial">63f050cf050137731a828878839e0b33</component>
+        <component_props>{"configVersion":"23.0.0-ci-SNAPSHOT","minValue":0,"innerRadius":0.7,"valueLabelSize":"md","showZero":false,"rangesConfig":{},"colorConfig":{"type":"singleColor","values":[{"color":"0c2b2cd75b712110e5ba6e8a1d81c7ba","metric":"ZEdGaWJHVjRYekU0TWpFMk5UUmZhMjlyYjNKdlh6QmZjM2x6ZEdWdFgyMWxkSEpwWTNNeE56WTVPRGMxTkRnM01qTXoxNzY5ODc1NDg4MDY3","rules":[]}]},"newReporting":false,"enableAddZerosAtApi":true,"additionalGroupByConfig":[],"dataSources":[{"isDatabaseView":false,"allowRealTime":true,"label":"System Metrics","sourceType":"table","tableOrViewName":"x_1821654_kokoro_0_system_metrics","filterQuery":"metric_type=sla_performance","preferredVisualizations":["d24d53f60350de7a652caf3188a46ed2"],"id":"dGFibGV4XzE4MjE2NTRfa29rb3JvXzBfc3lzdGVtX21ldHJpY3MxNzY5ODc1NDg3MjMz","dataCategories":["trend","group","simple"]}],"showHeader":true,"showTotalAggregate":false,"showSubAggregate":false,"showFirstGroupAggregate":false,"showSecondGroupAggregate":false,"hideMatrixAggregate":false,"wrapTitle":false,"showLoadingIndicator":false,"showHeaderSeparator":false,"contextMenuActions":[],"headerTitle":"Real-time SLA Health","headingLevel":2,"showBorder":true,"bareBorder":false,"telemetry":null,"showDataPassthrough":false,"showAdditionalGroupBySelector":false,"allowAdditionalGroupByPerMetric":true,"metrics":[{"dataSource":"dGFibGV4XzE4MjE2NTRfa29rb3JvXzBfc3lzdGVtX21ldHJpY3MxNzY5ODc1NDg3MjMz","id":"ZEdGaWJHVjRYekU0TWpFMk5UUmZhMjlyYjNKdlh6QmZjM2x6ZEdWdFgyMWxkSEpwWTNNeE56WTVPRGMxTkRnM01qTXoxNzY5ODc1NDg4MDY3","aggregateFunction":"COUNT","numberFormat":{"customFormat":false},"axisId":"primary"}],"groupBy":null,"filterPerMetric":[],"sortBy":"value","sortByOrder":"desc","trendBy":null,"showChange":false,"showChangePercentage":false,"showTarget":false,"showForecast":false,"showForecastRange":false,"showTrend":false,"showConfidenceBand":false,"showGapPercentage":false,"showSparkline":false,"showMetricLabel":false,"showThreshold":false,"showComment":false,"followFilters":true,"showFilterIcon":true,"enableRealTimeUpdate":false,"enableDrilldown":true,"enableClickAndStay":false,"showDataTable":false,"enableCustomEmptyState":false,"componentId":"60odibv0","emptyStateIllustration":"no-data","emptyStateHeading":"No data available.","emptyStateHeadingLevel":3,"emptyStateContent":"There are no scores available for the selected criteria. Contact your admin for more info.","emptyStateAlignment":"vertical-centered","refreshFrequency":null,"hideDevSettings":false,"configPropModifiers":{},"filterConfigurations":"@state.parFilters","showMaximumRange":false,"allowChangeDateRange":false,"showDateRangeByDefault":false,"applyDateRange":false,"numberOfPeriods":3,"showAbsolutePeriod":false,"scoreType":null,"showChangeFrom":"previous","useCurrentDateForEnd":false,"period":"M","useDataCache":false,"cacheExpirationTime":0,"showCacheTime":true,"dateFormat":"default","showRefresh":true,"showFilterAsSeparateSeries":false,"userInfo":"@context.session.user","sharedContext":{"colorDetails":{"c53589b3d7332100fa6c0c12ce610318":[{"sysId":"c53589b3d7332100fa6c0c12ce610318","defaultColor":"255,148,22","cssCustomProperty":""}],"47f20080d7333100b4964ebfae610319":[{"sysId":"47f20080d7333100b4964ebfae610319","defaultColor":"203,45,45","cssCustomProperty":""}],"4a1f677f9f5c73001bb9baac757fcf38":[{"sysId":"4a1f677f9f5c73001bb9baac757fcf38","defaultColor":"127,189,133","cssCustomProperty":"--now-datavis_color--green-3"}],"0c2b2cd75b712110e5ba6e8a1d81c7ba":[{"sysId":"0c2b2cd75b712110e5ba6e8a1d81c7ba","defaultColor":"10,184,217","cssCustomProperty":""}],"a719e212bfc021009661d64f6c073920":[{"sysId":"a719e212bfc021009661d64f6c073920","defaultColor":"255,102,102","cssCustomProperty":"--now-datavis_color--qualitative-22"}]},"datasourceConfigurations":{"indicator":{"timeZone":"SESSION","maxSupportedAdditionalGroupBy":1,"useSeriesLabels":false},"table":{"timeZone":"SESSION","useSeriesLabels":false}}},"colors":{}}</component_props>
+        <h>12</h>
+        <name/>
+        <stored_component/>
+        <sys_class_name>par_dashboard_widget</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-31 15:24:21</sys_created_on>
+        <sys_domain>global</sys_domain>
+        <sys_domain_path>/</sys_domain_path>
+        <sys_id>7002fd9583b6f210f6b1fb96feaad3cc</sys_id>
+        <sys_mod_count>2</sys_mod_count>
+        <sys_name/>
+        <sys_overrides/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>par_dashboard_widget_7002fd9583b6f210f6b1fb96feaad3cc</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-31 16:04:55</sys_updated_on>
+        <visualization/>
+        <w>12</w>
+        <widget_props/>
+        <x>2</x>
+        <y>6</y>
+    </par_dashboard_widget>
+</record_update>

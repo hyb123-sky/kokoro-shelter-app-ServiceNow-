@@ -1,0 +1,493 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_script_include">
+    <sys_script_include action="INSERT_OR_UPDATE">
+        <access>package_private</access>
+        <active>true</active>
+        <api_name>x_1821654_kokoro_0.KokoroAuditLogger</api_name>
+        <caller_access/>
+        <client_callable>false</client_callable>
+        <description/>
+        <mobile_callable>false</mobile_callable>
+        <name>KokoroAuditLogger</name>
+        <sandbox_callable>false</sandbox_callable>
+        <script><![CDATA[var KokoroAuditLogger = Class.create();
+KokoroAuditLogger.prototype = {
+    
+    CONFIG: {
+        tables: {
+            AUDIT_LOG: 'x_1821654_kokoro_0_audit_log',
+            SILENT_WISH: 'x_1821654_kokoro_0_silent_wish'
+        },
+        // 需要审计的字段
+        AUDITED_FIELDS: {
+            'x_1821654_kokoro_0_silent_wish': [
+                'state',
+                'assigned_to',
+                'u_urgency',
+                'u_category',
+                'shelter_zone'
+            ]
+        },
+        // 敏感字段需要脱敏
+        SENSITIVE_FIELDS: [
+            'u_contact_info',
+            'u_phone',
+            'u_email'
+        ],
+        // 审计日志保留期（天）
+        RETENTION_DAYS: 365
+    },
+    
+    initialize: function() {
+        this.session = gs.getSession();
+        this.userId = gs.getUserID();
+        this.userName = gs.getUserName();
+        this.ipAddress = this.session.getClientIP();
+        this.sessionId = this.session.getSessionID();
+    },
+    
+    /**
+     * 记录创建操作
+     */
+    logCreate: function(tableName, recordId, initialData) {
+        return this._writeAuditLog({
+            table_name: tableName,
+            record_id: recordId,
+            action: 'create',
+            new_value: this._sanitizeData(initialData),
+            reason: 'Record created'
+        });
+    },
+    
+    /**
+     * 记录更新操作
+     */
+    logUpdate: function(tableName, recordId, fieldName, oldValue, newValue, reason) {
+        // 检查是否需要审计此字段
+        if (!this._shouldAuditField(tableName, fieldName)) {
+            return;
+        }
+        
+        // 脱敏敏感字段
+        if (this._isSensitiveField(fieldName)) {
+            oldValue = this._maskSensitiveData(oldValue);
+            newValue = this._maskSensitiveData(newValue);
+        }
+        
+        return this._writeAuditLog({
+            table_name: tableName,
+            record_id: recordId,
+            action: 'update',
+            field_name: fieldName,
+            old_value: oldValue,
+            new_value: newValue,
+            reason: reason || 'Field updated'
+        });
+    },
+    
+    /**
+     * 记录删除操作
+     */
+    logDelete: function(tableName, recordId, recordData, reason) {
+        return this._writeAuditLog({
+            table_name: tableName,
+            record_id: recordId,
+            action: 'delete',
+            old_value: this._sanitizeData(recordData),
+            reason: reason || 'Record deleted'
+        });
+    },
+    
+    /**
+     * 记录状态变更
+     */
+    logStateChange: function(recordId, oldState, newState, reason) {
+        var stateNames = {
+            1: 'New', 10: 'Submitted', 11: 'Assigned',
+            2: 'In Progress', 6: 'On Hold',
+            4: 'Completed', 5: 'Cancelled'
+        };
+        
+        return this._writeAuditLog({
+            table_name: this.CONFIG.tables.SILENT_WISH,
+            record_id: recordId,
+            action: 'state_change',
+            field_name: 'state',
+            old_value: stateNames[oldState] + ' (' + oldState + ')',
+            new_value: stateNames[newState] + ' (' + newState + ')',
+            reason: reason || 'State transition'
+        });
+    },
+    
+    /**
+     * 记录分配操作
+     */
+    logAssignment: function(recordId, oldAssignee, newAssignee, assignmentType, score, reason) {
+        var oldName = oldAssignee ? this._getUserName(oldAssignee) : '(Unassigned)';
+        var newName = this._getUserName(newAssignee);
+        
+        var details = {
+            assignment_type: assignmentType,
+            score: score
+        };
+        
+        return this._writeAuditLog({
+            table_name: this.CONFIG.tables.SILENT_WISH,
+            record_id: recordId,
+            action: 'assign',
+            field_name: 'assigned_to',
+            old_value: oldName,
+            new_value: newName,
+            reason: reason || (assignmentType === 'auto' ? '自動割り当て' : '手動割り当て') + 
+                   ' (Score: ' + (score || 'N/A') + ')'
+        });
+    },
+    
+    /**
+     * 记录SLA事件
+     */
+    logSLAEvent: function(recordId, eventType, slaData) {
+        var actions = {
+            'attach': 'sla_attach',
+            'breach': 'sla_breach',
+            'pause': 'sla_pause',
+            'resume': 'sla_resume',
+            'complete': 'sla_complete',
+            'cancel': 'sla_cancel'
+        };
+        
+        return this._writeAuditLog({
+            table_name: this.CONFIG.tables.SILENT_WISH,
+            record_id: recordId,
+            action: actions[eventType] || 'sla_event',
+            new_value: JSON.stringify(slaData),
+            reason: 'SLA ' + eventType + ' event'
+        });
+    },
+    
+    /**
+     * 记录安全事件
+     */
+    logSecurityEvent: function(eventType, recordId, details) {
+        return this._writeAuditLog({
+            table_name: 'security',
+            record_id: recordId || '',
+            action: eventType,
+            new_value: JSON.stringify(details),
+            reason: 'Security event: ' + eventType
+        });
+    },
+    
+    /**
+     * 查询审计日志
+     */
+    queryAuditLog: function(filters) {
+        var auditGR = new GlideRecord(this.CONFIG.tables.AUDIT_LOG);
+        
+        if (filters.table_name) {
+            auditGR.addQuery('table_name', filters.table_name);
+        }
+        if (filters.record_id) {
+            auditGR.addQuery('record_id', filters.record_id);
+        }
+        if (filters.user) {
+            auditGR.addQuery('user', filters.user);
+        }
+        if (filters.action) {
+            auditGR.addQuery('action', filters.action);
+        }
+        if (filters.start_date) {
+            auditGR.addQuery('timestamp', '>=', filters.start_date);
+        }
+        if (filters.end_date) {
+            auditGR.addQuery('timestamp', '<=', filters.end_date);
+        }
+        
+        auditGR.orderByDesc('timestamp');
+        
+        if (filters.limit) {
+            auditGR.setLimit(filters.limit);
+        }
+        
+        auditGR.query();
+        
+        var results = [];
+        while (auditGR.next()) {
+            results.push({
+                sys_id: auditGR.getUniqueValue(),
+                timestamp: auditGR.getValue('timestamp'),
+                user: auditGR.user.getDisplayValue(),
+                action: auditGR.getDisplayValue('action'),
+                field_name: auditGR.getValue('field_name'),
+                old_value: auditGR.getValue('old_value'),
+                new_value: auditGR.getValue('new_value'),
+                reason: auditGR.getValue('reason'),
+                ip_address: auditGR.getValue('ip_address')
+            });
+        }
+        
+        return results;
+    },
+    
+    /**
+     * 生成审计报告
+     */
+    generateAuditReport: function(startDate, endDate, options) {
+        options = options || {};
+        
+        var report = {
+            period: {
+                start: startDate,
+                end: endDate
+            },
+            summary: {
+                total_events: 0,
+                by_action: {},
+                by_user: {},
+                by_table: {},
+                security_events: 0
+            },
+            details: []
+        };
+        
+        var auditGR = new GlideRecord(this.CONFIG.tables.AUDIT_LOG);
+        auditGR.addQuery('timestamp', '>=', startDate);
+        auditGR.addQuery('timestamp', '<=', endDate);
+        auditGR.query();
+        
+        while (auditGR.next()) {
+            report.summary.total_events++;
+            
+            var action = auditGR.getValue('action');
+            var user = auditGR.user.getDisplayValue();
+            var table = auditGR.getValue('table_name');
+            
+            // 按action统计
+            report.summary.by_action[action] = (report.summary.by_action[action] || 0) + 1;
+            
+            // 按user统计
+            report.summary.by_user[user] = (report.summary.by_user[user] || 0) + 1;
+            
+            // 按table统计
+            report.summary.by_table[table] = (report.summary.by_table[table] || 0) + 1;
+            
+            // 安全事件
+            if (table === 'security') {
+                report.summary.security_events++;
+            }
+            
+            // 详细记录（如果需要）
+            if (options.include_details) {
+                report.details.push({
+                    timestamp: auditGR.getValue('timestamp'),
+                    user: user,
+                    action: action,
+                    table: table,
+                    record_id: auditGR.getValue('record_id'),
+                    reason: auditGR.getValue('reason')
+                });
+            }
+        }
+        
+        return report;
+    },
+    
+    /**
+     * 获取用户活动轨迹
+     */
+    getUserActivityTrail: function(userId, daysBack) {
+        daysBack = daysBack || 30;
+        
+        var startDate = new GlideDateTime();
+        startDate.addDaysLocalTime(-daysBack);
+        
+        return this.queryAuditLog({
+            user: userId,
+            start_date: startDate,
+            limit: 1000
+        });
+    },
+    
+    /**
+     * 获取记录的完整变更历史
+     */
+    getRecordHistory: function(tableName, recordId) {
+        return this.queryAuditLog({
+            table_name: tableName,
+            record_id: recordId
+        });
+    },
+    
+    /**
+     * 清理过期审计日志
+     */
+    cleanupOldLogs: function() {
+        var cutoffDate = new GlideDateTime();
+        cutoffDate.addDaysLocalTime(-this.CONFIG.RETENTION_DAYS);
+        
+        var auditGR = new GlideRecord(this.CONFIG.tables.AUDIT_LOG);
+        auditGR.addQuery('timestamp', '<', cutoffDate);
+        auditGR.query();
+        
+        var deletedCount = 0;
+        while (auditGR.next()) {
+            auditGR.deleteRecord();
+            deletedCount++;
+        }
+        
+        gs.info('[Kokoro Audit] Cleaned up ' + deletedCount + ' audit logs older than ' + 
+               this.CONFIG.RETENTION_DAYS + ' days');
+        
+        return deletedCount;
+    },
+    
+    // ========================================
+    // Private Methods
+    // ========================================
+    
+    /**
+     * 写入审计日志
+     * @private
+     */
+    _writeAuditLog: function(data) {
+        try {
+            var auditGR = new GlideRecord(this.CONFIG.tables.AUDIT_LOG);
+            auditGR.initialize();
+            
+            auditGR.setValue('table_name', data.table_name);
+            auditGR.setValue('record_id', data.record_id);
+            auditGR.setValue('action', data.action);
+            auditGR.setValue('field_name', data.field_name || '');
+            auditGR.setValue('old_value', this._truncate(data.old_value, 1000));
+            auditGR.setValue('new_value', this._truncate(data.new_value, 1000));
+            auditGR.setValue('user', this.userId);
+            auditGR.setValue('timestamp', new GlideDateTime());
+            auditGR.setValue('ip_address', this.ipAddress);
+            auditGR.setValue('session_id', this.sessionId);
+            auditGR.setValue('reason', data.reason || '');
+            
+            var sysId = auditGR.insert();
+            
+            if (sysId) {
+                return { success: true, sys_id: sysId };
+            } else {
+                gs.error('[Kokoro Audit] Failed to write audit log');
+                return { success: false, error: 'Insert failed' };
+            }
+            
+        } catch (e) {
+            gs.error('[Kokoro Audit] Error writing audit log: ' + e.message);
+            return { success: false, error: e.message };
+        }
+    },
+    
+    /**
+     * 检查字段是否需要审计
+     * @private
+     */
+    _shouldAuditField: function(tableName, fieldName) {
+        var auditedFields = this.CONFIG.AUDITED_FIELDS[tableName];
+        
+        // 如果没有配置，审计所有字段
+        if (!auditedFields) {
+            return true;
+        }
+        
+        return auditedFields.indexOf(fieldName) !== -1;
+    },
+    
+    /**
+     * 检查是否为敏感字段
+     * @private
+     */
+    _isSensitiveField: function(fieldName) {
+        return this.CONFIG.SENSITIVE_FIELDS.indexOf(fieldName) !== -1;
+    },
+    
+    /**
+     * 脱敏敏感数据
+     * @private
+     */
+    _maskSensitiveData: function(value) {
+        if (!value) return '';
+        
+        value = value.toString();
+        
+        // 邮箱脱敏: test@example.com -> t***@example.com
+        if (value.indexOf('@') !== -1) {
+            var parts = value.split('@');
+            return parts[0].charAt(0) + '***@' + parts[1];
+        }
+        
+        // 电话脱敏: 090-1234-5678 -> 090-****-5678
+        if (value.match(/\d{3}-\d{4}-\d{4}/)) {
+            return value.replace(/(\d{3})-(\d{4})-(\d{4})/, '$1-****-$3');
+        }
+        
+        // 通用脱敏: 只显示前后各2个字符
+        if (value.length > 6) {
+            return value.substring(0, 2) + '***' + value.substring(value.length - 2);
+        }
+        
+        return '***';
+    },
+    
+    /**
+     * 清理数据（移除敏感信息）
+     * @private
+     */
+    _sanitizeData: function(data) {
+        if (typeof data === 'object') {
+            var sanitized = {};
+            for (var key in data) {
+                if (this._isSensitiveField(key)) {
+                    sanitized[key] = this._maskSensitiveData(data[key]);
+                } else {
+                    sanitized[key] = data[key];
+                }
+            }
+            return JSON.stringify(sanitized);
+        }
+        return data;
+    },
+    
+    /**
+     * 获取用户显示名称
+     * @private
+     */
+    _getUserName: function(userId) {
+        var userGR = new GlideRecord('sys_user');
+        if (userGR.get(userId)) {
+            return userGR.getDisplayValue('name');
+        }
+        return 'Unknown User';
+    },
+    
+    /**
+     * 截断字符串到指定长度
+     * @private
+     */
+    _truncate: function(str, maxLength) {
+        if (!str) return '';
+        str = str.toString();
+        if (str.length <= maxLength) {
+            return str;
+        }
+        return str.substring(0, maxLength - 3) + '...';
+    },
+    
+    type: 'KokoroAuditLogger'
+};]]></script>
+        <sys_class_name>sys_script_include</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-01-31 15:41:31</sys_created_on>
+        <sys_id>29d5355d83b6f210f6b1fb96feaad3e2</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>KokoroAuditLogger</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy>read</sys_policy>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sys_script_include_29d5355d83b6f210f6b1fb96feaad3e2</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-01-31 15:41:31</sys_updated_on>
+    </sys_script_include>
+</record_update>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="145db0998332f210f6b1fb96feaad3d0" label="Performance Snapshot" max_length="40" name="x_1821654_kokoro_0_performance_snapshot" type="collection">
+        <element label="Success" max_length="40" name="success" type="boolean"/>
+        <element label="User" max_length="32" name="user" reference="sys_user" type="reference"/>
+        <element choice="3" label="Operation Type" max_length="40" name="operation_type" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="Script" value="script"/>
+                <element inactive_on_update="false" label="API" value="api"/>
+                <element inactive_on_update="false" label="SLA calculation" value="sla_calculation"/>
+                <element inactive_on_update="false" label="UI" value="ui"/>
+                <element inactive_on_update="false" label="Query" value="query"/>
+                <element inactive_on_update="false" label="Assignment" value="assignment"/>
+            </choice>
+        </element>
+        <element label="Record Count" max_length="40" name="record_count" type="integer"/>
+        <element label="Durantion" max_length="200" name="durantion" type="string"/>
+        <element label="Snapshot Time" max_length="40" name="snapshot_time" type="glide_date_time"/>
+        <element label="Error Message" max_length="1000" name="err" type="string"/>
+        <index name="index">
+            <element name="durantion"/>
+        </index>
+        <index name="index2">
+            <element name="operation_type"/>
+        </index>
+        <index name="index3">
+            <element name="snapshot_time"/>
+        </index>
+        <index name="index4">
+            <element name="user"/>
+        </index>
+    </element>
+</database>
