@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update sys_domain="global" table="par_dashboard_widget">
+    <par_dashboard_widget action="INSERT_OR_UPDATE">
+        <canvas display_value="">c66de5dd8376f210f6b1fb96feaad3b5</canvas>
+        <component display_value="Dial">63f050cf050137731a828878839e0b33</component>
+        <component_props>{"configVersion":"23.0.0-ci-SNAPSHOT","minValue":0,"innerRadius":0.7,"valueLabelSize":"md","showZero":false,"rangesConfig":{},"colorConfig":{"type":"singleColor","values":[{"color":"0c2b2cd75b712110e5ba6e8a1d81c7ba","metric":"YVc1a2FXTmhkRzl5WWpFMk5ERmpaVFU0TTJJMk16SXhNR1kyWWpGbVlqazJabVZoWVdRek1UTXhOelk1T1RFMU9UVXpNakUzMTc2OTkxNTk1NTQ0NA==","rules":[{"operator":"&gt;","order":100,"color":"4fc5987977212110f5f16e7f6b5a99a9","value1":80},{"operator":"between","order":100,"color":"65b303c7a9fe3dba000882c19631a889","value1":60,"value2":80},{"operator":"&lt;","order":100,"color":"3b36c9b3d7332100fa6c0c12ce610311","value1":60}]}]},"newReporting":false,"enableAddZerosAtApi":true,"additionalGroupByConfig":[],"dataSources":[{"allowRealTime":false,"allowTotalValue":false,"indicatorType":"1","isScriptedIndicator":true,"allowMultiElementsAggregation":false,"aggregateType":3,"label":"Kokoro Volunteer Utilization","sourceType":"indicator","uuid":{"indicator":"b1641ce583b63210f6b1fb96feaad313","breakdowns":[]},"preferredVisualizations":["18ac962264404bcc0039359d184b15f3"],"id":"aW5kaWNhdG9yYjE2NDFjZTU4M2I2MzIxMGY2YjFmYjk2ZmVhYWQzMTMxNzY5OTE1OTUzMjE3","dataCategories":["trend","group","simple"]}],"showHeader":true,"showTotalAggregate":false,"showSubAggregate":false,"showFirstGroupAggregate":false,"showSecondGroupAggregate":false,"hideMatrixAggregate":false,"wrapTitle":false,"showLoadingIndicator":false,"showHeaderSeparator":false,"contextMenuActions":[],"headerTitle":"Volunteer Utilization","headingLevel":2,"showBorder":true,"bareBorder":false,"telemetry":null,"showDataPassthrough":false,"showAdditionalGroupBySelector":false,"allowAdditionalGroupByPerMetric":false,"metrics":[{"dataSource":"aW5kaWNhdG9yYjE2NDFjZTU4M2I2MzIxMGY2YjFmYjk2ZmVhYWQzMTMxNzY5OTE1OTUzMjE3","id":"YVc1a2FXTmhkRzl5WWpFMk5ERmpaVFU0TTJJMk16SXhNR1kyWWpGbVlqazJabVZoWVdRek1UTXhOelk1T1RFMU9UVXpNakUzMTc2OTkxNTk1NTQ0NA==","aggregateIndicator":"","frequency":10,"numberFormat":{"customFormat":false},"axisId":"primary"}],"groupBy":null,"filterPerMetric":[],"sortBy":"value","sortByOrder":"desc","trendBy":null,"showChange":true,"showChangePercentage":true,"showTarget":true,"showForecast":false,"showForecastRange":false,"showTrend":false,"showConfidenceBand":false,"showGapPercentage":true,"showSparkline":true,"showMetricLabel":false,"showThreshold":false,"showComment":false,"showTotalValue":false,"followFilters":true,"showFilterIcon":true,"enableRealTimeUpdate":false,"enableDrilldown":true,"enableClickAndStay":false,"showDataTable":false,"enableCustomEmptyState":false,"componentId":"83oyj4e1","emptyStateIllustration":"no-data","emptyStateHeading":"No data available.","emptyStateHeadingLevel":3,"emptyStateContent":"There are no scores available for the selected criteria. Contact your admin for more info.","emptyStateAlignment":"vertical-centered","refreshFrequency":null,"hideDevSettings":false,"configPropModifiers":{},"filterConfigurations":"@state.parFilters","showMaximumRange":false,"allowChangeDateRange":false,"showDateRangeByDefault":false,"applyDateRange":false,"numberOfPeriods":3,"showAbsolutePeriod":false,"scoreType":null,"showChangeFrom":true,"useCurrentDateForEnd":false,"period":"M","useDataCache":false,"cacheExpirationTime":0,"showCacheTime":true,"dateFormat":"default","showRefresh":true,"showFilterAsSeparateSeries":false,"userInfo":"@context.session.user","sharedContext":{},"colors":{}}</component_props>
+        <h>12</h>
+        <name/>
+        <stored_component/>
+        <sys_class_name>par_dashboard_widget</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-02-01 03:22:52</sys_created_on>
+        <sys_domain>global</sys_domain>
+        <sys_domain_path>/</sys_domain_path>
+        <sys_id>0a7690e983b63210f6b1fb96feaad31c</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name/>
+        <sys_overrides/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>par_dashboard_widget_0a7690e983b63210f6b1fb96feaad31c</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-02-01 03:22:52</sys_updated_on>
+        <visualization/>
+        <w>13</w>
+        <widget_props/>
+        <x>17</x>
+        <y>18</y>
+    </par_dashboard_widget>
+</record_update>

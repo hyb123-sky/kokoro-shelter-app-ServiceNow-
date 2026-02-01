@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update sys_domain="global" table="pa_scripts">
+    <pa_scripts action="INSERT_OR_UPDATE">
+        <arguments>metric_data</arguments>
+        <description>Extract volunteer utilization from JSON</description>
+        <name>Kokoro.Script.VolunteerUtil</name>
+        <script><![CDATA[(function() {  // <--- 加上这个头部
+    var jsonStr = current.metric_data;
+    if (!jsonStr) return 0;
+    try {
+        var data = JSON.parse(jsonStr);
+        // 提取利用率，如果没有则返回0
+        return parseFloat(data.volunteer_utilization) || 0;
+    } catch(e) { 
+        return 0; 
+    }
+})();  // <--- 加上这个尾部]]></script>
+        <sys_class_name>pa_scripts</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-02-01 03:13:11</sys_created_on>
+        <sys_domain>global</sys_domain>
+        <sys_domain_path>/</sys_domain_path>
+        <sys_id>e723186583b63210f6b1fb96feaad3a3</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Kokoro.Script.VolunteerUtil</sys_name>
+        <sys_overrides/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>pa_scripts_e723186583b63210f6b1fb96feaad3a3</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-02-01 03:13:11</sys_updated_on>
+        <table>x_1821654_kokoro_0_system_metrics</table>
+    </pa_scripts>
+    <sys_translated_text action="delete_multiple" query="documentkey=e723186583b63210f6b1fb96feaad3a3"/>
+    <sys_es_latest_script action="INSERT_OR_UPDATE">
+        <id>e723186583b63210f6b1fb96feaad3a3</id>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-02-01 03:13:10</sys_created_on>
+        <sys_id>004494e583b63210f6b1fb96feaad394</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-02-01 03:13:10</sys_updated_on>
+        <table>pa_scripts</table>
+        <use_es_latest>true</use_es_latest>
+    </sys_es_latest_script>
+</record_update>

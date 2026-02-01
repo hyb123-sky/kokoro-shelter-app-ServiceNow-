@@ -20,10 +20,10 @@
         <include_trends>true</include_trends>
         <include_widget_notification>true</include_widget_notification>
         <last_deactivated_on/>
-        <last_updated_on>2026-01-31 16:04:55</last_updated_on>
+        <last_updated_on>2026-02-01 03:41:44</last_updated_on>
         <po_project_id_list>[]</po_project_id_list>
         <refresh_information>false</refresh_information>
-        <refresh_interval/>
+        <refresh_interval>-1</refresh_interval>
         <requested_by_user/>
         <schedule_repetition>false</schedule_repetition>
         <show_insights_panel>true</show_insights_panel>
@@ -33,7 +33,7 @@
         <sys_domain>global</sys_domain>
         <sys_domain_path>/</sys_domain_path>
         <sys_id>866de5dd8376f210f6b1fb96feaad39b</sys_id>
-        <sys_mod_count>11</sys_mod_count>
+        <sys_mod_count>25</sys_mod_count>
         <sys_name/>
         <sys_overrides/>
         <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
@@ -41,7 +41,7 @@
         <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
         <sys_update_name>par_dashboard_user_metadata_866de5dd8376f210f6b1fb96feaad39b</sys_update_name>
         <sys_updated_by>admin</sys_updated_by>
-        <sys_updated_on>2026-01-31 16:04:55</sys_updated_on>
+        <sys_updated_on>2026-02-01 03:41:50</sys_updated_on>
         <updated_by_user display_value="System Administrator">6816f79cc0a8016401c5a33be04be441</updated_by_user>
         <use_custom_tab_colors>false</use_custom_tab_colors>
         <widgets_margin>$now-global-space--sm</widgets_margin>
