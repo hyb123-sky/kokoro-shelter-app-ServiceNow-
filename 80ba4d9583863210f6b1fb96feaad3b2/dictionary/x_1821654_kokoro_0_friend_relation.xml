@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="08b9728a837a3210f6b1fb96feaad32b" label="Friend Relation" max_length="40" name="x_1821654_kokoro_0_friend_relation" type="collection">
+        <element choice="3" label="Status" max_length="40" name="status" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="Rejected" value="rejected"/>
+                <element inactive_on_update="false" label="Blocked" value="blocked"/>
+                <element inactive_on_update="false" label="Pending" value="pending"/>
+                <element inactive_on_update="false" label="Accepted" value="accepted"/>
+            </choice>
+        </element>
+        <element label="User" max_length="32" name="user" reference="sys_user" type="reference"/>
+        <element label="Share Location" max_length="40" name="share_location" type="boolean"/>
+        <element label="Alert Enabled" max_length="40" name="alert_enabled" type="boolean"/>
+        <element label="Friend" max_length="32" name="friend" reference="sys_user" type="reference"/>
+        <element label="Last Interaction" max_length="40" name="last_interaction" type="glide_date_time"/>
+        <element label="Nickname" max_length="40" name="nickname" type="string"/>
+        <element label="Accepted At" max_length="40" name="accepted_at" type="glide_date_time"/>
+        <element label="Created At" max_length="40" name="created_at" type="glide_date_time"/>
+        <index name="index">
+            <element name="friend"/>
+            <element name="status"/>
+        </index>
+        <index name="index2" unique="true">
+            <element name="user"/>
+            <element name="friend"/>
+        </index>
+        <index name="index3">
+            <element name="user"/>
+            <element name="status"/>
+        </index>
+    </element>
+</database>

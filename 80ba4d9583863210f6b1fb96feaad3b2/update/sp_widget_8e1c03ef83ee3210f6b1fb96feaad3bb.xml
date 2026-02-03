@@ -3,12 +3,242 @@
         <category>custom</category>
         <client_script><![CDATA[api.controller = function($scope, spUtil, $timeout, $window, $interval) {
     var c = this;
+	
+	 // ==========================================
+	// [新增] 好友守护系统
+	// ==========================================
 
-    // ============================================================
-    // KOKORO USER - Client Script (Refugee Mode)
-    // Version: 3.0 (Split Version)
-    // 修复: 史莱姆hover变色, 眼睛跟随
-    // ============================================================
+c.show_guardian = false;
+c.guardian_tab = 'friends'; // friends / requests / search
+c.selected_friend = null;
+c.search_query = "";
+c.search_results = [];
+c.recommended_friends = [];
+
+// 切换守护圈弹窗
+c.toggleGuardianCircle = function() {
+    c.showMenu = false; // 关闭汉堡菜单
+    c.show_guardian = !c.show_guardian;
+    
+    if (c.show_guardian) {
+        // 打开时加载数据
+        c.loadGuardianData();
+    }
+};
+
+// 加载守护圈数据
+c.loadGuardianData = function() {
+    c.server.get({ action: 'get_guardian_data' }).then(function(r) {
+        if (handleServerResponse(r, function(data) {
+            c.data.friends = data.friends || [];
+            c.data.friend_requests = data.friend_requests || [];
+            c.data.friend_notifications = data.notification_count || 0;
+            c.recommended_friends = data.recommended || [];
+        }));
+    });
+};
+
+// 搜索用户
+var searchTimer = null;
+c.searchUsers = function() {
+    if (searchTimer) $timeout.cancel(searchTimer);
+    
+    if (!c.search_query || c.search_query.trim().length < 2) {
+        c.search_results = [];
+        return;
+    }
+    
+    searchTimer = $timeout(function() {
+        c.server.get({
+            action: 'search_users',
+            query: c.search_query
+        }).then(function(r) {
+            if (handleServerResponse(r, function(data) {
+                c.search_results = data.results || [];
+            }));
+        });
+    }, 500);
+};
+
+// 发送好友请求
+c.sendFriendRequest = function(user) {
+    if (user.already_friend || user.request_sent) return;
+    
+    c.server.get({
+        action: 'send_friend_request',
+        friend_id: user.sys_id
+    }).then(function(r) {
+        if (handleServerResponse(r, function() {
+            user.request_sent = true;
+            showSuccess('友達リクエストを送信しました');
+        }));
+    });
+};
+
+// 接受好友请求
+c.acceptFriendRequest = function(req) {
+    c.server.get({
+        action: 'accept_friend_request',
+        request_id: req.sys_id
+    }).then(function(r) {
+        if (handleServerResponse(r, function() {
+            // 从请求列表中移除
+            var index = c.data.friend_requests.indexOf(req);
+            if (index !== -1) {
+                c.data.friend_requests.splice(index, 1);
+            }
+            
+            // 重新加载好友列表
+            c.loadGuardianData();
+            showSuccess(req.from_user_name + ' と友達になりました');
+        }));
+    });
+};
+
+// 拒绝好友请求
+c.rejectFriendRequest = function(req) {
+    c.server.get({
+        action: 'reject_friend_request',
+        request_id: req.sys_id
+    }).then(function(r) {
+        if (handleServerResponse(r, function() {
+            var index = c.data.friend_requests.indexOf(req);
+            if (index !== -1) {
+                c.data.friend_requests.splice(index, 1);
+            }
+            showSuccess('リクエストを拒否しました');
+        }));
+    });
+};
+
+// 显示好友详情
+c.showFriendDetail = function(friend) {
+    c.selected_friend = friend;
+};
+
+// 紧急呼叫
+c.emergencyCall = function(friend, $event) {
+    if ($event) $event.stopPropagation();
+    
+    if (confirm(friend.display_name + ' に緊急呼び出しを送信しますか？')) {
+        c.server.get({
+            action: 'send_emergency_call',
+            friend_id: friend.user_id
+        }).then(function(r) {
+            if (handleServerResponse(r, function() {
+                showSuccess('緊急呼び出しを送信しました');
+            }));
+        });
+    }
+};
+
+// 发送消息
+c.sendMessage = function(friend, $event) {
+    if ($event) $event.stopPropagation();
+    
+    var message = prompt(friend.display_name + ' へのメッセージ:');
+    if (message && message.trim()) {
+        c.server.get({
+            action: 'send_friend_message',
+            friend_id: friend.user_id,
+            message: message
+        }).then(function(r) {
+            if (handleServerResponse(r, function() {
+                showSuccess('メッセージを送信しました');
+            }));
+        });
+    }
+};
+
+// 查看好友历史
+c.viewFriendHistory = function(friend) {
+    // TODO: 实现心跳历史查看
+    showSuccess('この機能は開発中です');
+};
+
+// 移除好友
+c.removeFriend = function(friend) {
+    if (confirm(friend.display_name + ' を友達から削除しますか？')) {
+        c.server.get({
+            action: 'remove_friend',
+            friend_id: friend.user_id
+        }).then(function(r) {
+            if (handleServerResponse(r, function() {
+                c.selected_friend = null;
+                c.loadGuardianData();
+                showSuccess('友達を削除しました');
+            }));
+        });
+    }
+};
+
+// 实时更新好友状态 (使用轮询)
+var friendStatusInterval = null;
+
+function startFriendStatusPolling() {
+    if (friendStatusInterval) return;
+    
+    friendStatusInterval = $interval(function() {
+        if (c.show_guardian && c.data.friends && c.data.friends.length > 0) {
+            c.server.get({ action: 'get_friend_status_updates' }).then(function(r) {
+                if (r && r.data && r.data.updates) {
+                    // 更新好友状态
+                    r.data.updates.forEach(function(update) {
+                        var friend = c.data.friends.find(function(f) {
+                            return f.user_id === update.user_id;
+                        });
+                        if (friend) {
+                            friend.heartbeat_status = update.status;
+                            friend.last_heartbeat_time = update.time_ago;
+                            friend.current_zone = update.zone;
+                        }
+                    });
+                }
+            });
+        }
+    }, 30000); // 每30秒更新一次
+}
+
+function stopFriendStatusPolling() {
+    if (friendStatusInterval) {
+        $interval.cancel(friendStatusInterval);
+        friendStatusInterval = null;
+    }
+}
+
+// 监听弹窗打开/关闭
+$scope.$watch('c.show_guardian', function(newVal) {
+    if (newVal) {
+        startFriendStatusPolling();
+    } else {
+        stopFriendStatusPolling();
+    }
+});
+
+// 页面销毁时清理
+$scope.$on('$destroy', function() {
+    stopFriendStatusPolling();
+});
+	
+    // [新增] 汉堡菜单控制
+    c.showMenu = false;
+    c.toggleMenu = function() {
+        c.showMenu = !c.showMenu;
+    };
+
+    // 修改原有的 toggleSettings，确保点击后关闭菜单
+    var originalToggleSettings = c.toggleSettings;
+    c.toggleSettings = function() {
+        c.showMenu = false; // 关闭菜单
+        originalToggleSettings(); // 执行原有逻辑
+    };
+
+    // 修改原有的 toggleHistory，确保点击后关闭菜单
+    var originalToggleHistory = c.toggleHistory;
+    c.toggleHistory = function() {
+        c.showMenu = false; // 关闭菜单
+        originalToggleHistory(); // 执行原有逻辑
+    };
 
     // 状态初始化
     var CONFIG = {
@@ -416,6 +646,48 @@
         });
     };
 
+	// ==========================================
+    // [新增] 历史记录逻辑
+    // ==========================================
+    c.show_history = false;
+    
+    c.toggleHistory = function() {
+        c.show_history = !c.show_history;
+    };
+
+    c.loadTicket = function(item) {
+        // 1. 关闭历史列表
+        c.show_history = false;
+        
+        // 2. 填充数据以复现 Success Card (Step 5)
+        c.ticket_sys_id = item.sys_id;
+        c.ticket_number = item.number;
+        c.current_state_val = item.state;
+        
+        // 恢复数据对象 (用于显示)
+        c.data.location = item.location; // 注意：Server端需要确保返回value而不是display value，或者这里做映射
+        c.data.detail_loc = item.detail_loc;
+        c.data.category = item.category;
+        c.data.quantity = item.quantity;
+        c.data.urgency = item.urgency;
+        c.data.remarks = item.remarks;
+        
+        // 设置状态文本
+        if (c.statusDetails[c.current_state_val]) {
+            c.status_message = c.statusDetails[c.current_state_val].desc;
+        }
+
+        // 3. 激活 Record Watcher 监听此工单变化
+        initRecordWatcher(c.ticket_sys_id);
+
+        // 4. 跳转到 Step 5
+        c.step = 5;
+        
+        // 5. 让史莱姆开心
+        var slime = document.getElementById('the-slime');
+        if (slime) slime.classList.add('happy-slime');
+    };
+	
     // ==========================================
     // 清理
     // ==========================================
@@ -432,11 +704,6 @@
 /* ============================================================
    KOKORO USER - Widget CSS (Refugee Mode)
    Version: 3.4 (Heartbeat &amp; Texture Fix)
-   修复日志:
-   1. 史莱姆初始状态改为灰色质感（模仿迪士尼坏掉的心）。
-   2. 鼠标悬停时恢复原有的粉色史莱姆。
-   3. 调整了“戳一戳”后的颜色反馈，减少泛白，增加一点点深粉色。
-   4. 将“开心”状态的跳跃动画改为轻柔的心跳律动。
    ============================================================ */
 
 /* ==========================================
@@ -556,6 +823,1238 @@ html body #sp-nav-bar {
   /* 颜色过渡 */
   transition: all 0.5s ease;
 }
+
+/* ==========================================
+   [新增] 汉堡菜单样式
+   ========================================== */
+
+/* 1. 悬浮按钮 (左上角) */
+.kokoro-menu-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 8px 20px rgba(93, 64, 55, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.4rem;
+  color: #880e4f;
+  cursor: pointer;
+  z-index: 2001; /* 必须比遮罩层高 */
+  transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+.kokoro-menu-btn:hover {
+  background: #fff;
+  transform: scale(1.1);
+  box-shadow: 0 10px 25px rgba(233, 30, 99, 0.25);
+}
+
+.kokoro-menu-btn.active {
+  background: #fff;
+  color: #ec407a;
+  transform: rotate(90deg);
+}
+
+/* 2. 下拉菜单容器 */
+.kokoro-menu-dropdown {
+  position: absolute;
+  top: 85px; /* 在按钮下方 */
+  left: 20px;
+  width: 260px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 24px;
+  padding: 12px;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  z-index: 2000;
+  animation: menuSlideIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transform-origin: top left;
+}
+
+/* 3. 菜单项 */
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  margin-bottom: 6px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.menu-item:last-child {
+  margin-bottom: 0;
+}
+
+.menu-item:hover {
+  background: rgba(255, 240, 245, 0.8); /* 浅粉色背景 */
+}
+
+/* 图标 */
+.icon-box {
+  width: 36px;
+  height: 36px;
+  background: #fff;
+  border-radius: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #ec407a;
+  font-size: 1.1rem;
+  margin-right: 14px;
+  box-shadow: 0 4px 10px rgba(233, 30, 99, 0.1);
+}
+
+/* 文字 */
+.text-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-title {
+  font-weight: 800;
+  color: #5d4037;
+  font-size: 0.95rem;
+}
+
+.menu-sub {
+  font-size: 0.7rem;
+  color: #90a4ae;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+/* 数字角标 */
+.badge-pill {
+  background: #ff80ab;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+/* 管理者高亮样式 */
+.menu-item.highlight {
+  background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+}
+.menu-item.highlight .icon-box {
+  color: #ff6f00;
+}
+
+/* 4. 点击空白关闭菜单的遮罩 */
+.menu-backdrop {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: transparent; /* 透明，不妨碍视觉，只拦截点击 */
+  z-index: 1999;
+}
+
+/* ==========================================
+   守护圈 (Guardian Circle) 样式
+   ========================================== */
+
+/* 通知角标 - 红色警告 */
+.badge-alert {
+  background: #ff5252 !important;
+  animation: badgePulse 2s infinite;
+}
+
+@keyframes badgePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+/* 主弹窗容器 */
+.guardian-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(93, 64, 55, 0.35);
+  backdrop-filter: blur(6px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 3000;
+  animation: fadeIn 0.3s ease;
+}
+
+.guardian-card {
+  background: #ffffff;
+  width: 92%;
+  max-width: 440px;
+  max-height: 85vh;
+  border-radius: 28px;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* 渐变头部 */
+.gradient-header {
+  background: linear-gradient(135deg, #ec407a, #f48fb1);
+  padding: 22px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: white;
+}
+
+.gradient-header h3 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gradient-header .close-btn {
+  background: rgba(255,255,255,0.2);
+  color: white;
+  border: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  font-size: 1.3rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.gradient-header .close-btn:hover {
+  background: rgba(255,255,255,0.35);
+  transform: rotate(90deg);
+}
+
+/* 标签栏 */
+.tab-bar {
+  display: flex;
+  background: #fafafa;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.tab-item {
+  flex: 1;
+  padding: 14px 10px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 600;
+  color: #757575;
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 3px solid transparent;
+}
+
+.tab-item i {
+  font-size: 1.1rem;
+}
+
+.tab-item.active {
+  color: #ec407a;
+  background: white;
+  border-bottom-color: #ec407a;
+}
+
+.tab-item:hover:not(.active) {
+  background: #fff;
+  color: #ec407a;
+}
+
+/* 内容区域 */
+.tab-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 0;
+  background: #fff;
+}
+
+/* 空状态 */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #999;
+}
+
+.empty-state i {
+  color: #e0e0e0;
+  margin-bottom: 20px;
+}
+
+.empty-state p {
+  font-size: 1rem;
+  margin-bottom: 20px;
+}
+
+/* 好友列表 */
+.friend-list {
+  padding: 0 16px;
+}
+
+.friend-card {
+  display: flex;
+  align-items: center;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  background: #fafafa;
+  border-radius: 18px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 2px solid transparent;
+  position: relative;
+}
+
+.friend-card:hover {
+  background: #fff5f8;
+  border-color: #f8bbd0;
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(236, 64, 122, 0.1);
+}
+
+/* 头像容器 */
+.friend-avatar-wrapper {
+  position: relative;
+  margin-right: 14px;
+  flex-shrink: 0;
+}
+
+.friend-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff9a9e, #fad0c4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.3rem;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+/* 状态点 */
+.status-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+.status-dot.online {
+  background: #4caf50;
+}
+
+.status-dot.warning {
+  background: #ff9800;
+  animation: warningPulse 2s infinite;
+}
+
+.status-dot.critical {
+  background: #f44336;
+  animation: criticalPulse 1s infinite;
+}
+
+.status-dot.offline {
+  background: #9e9e9e;
+}
+
+/* 脉冲动画 */
+.pulse-ring {
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  right: -3px;
+  bottom: -3px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  animation: ringPulse 2s infinite;
+  opacity: 0;
+}
+
+.status-dot.critical .pulse-ring {
+  border-color: #f44336;
+}
+
+@keyframes ringPulse {
+  0% { transform: scale(0.8); opacity: 0.8; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+@keyframes warningPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+@keyframes criticalPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 2px 6px rgba(244,67,54,0.3); }
+  50% { transform: scale(1.2); box-shadow: 0 4px 12px rgba(244,67,54,0.6); }
+}
+
+/* 好友信息 */
+.friend-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.friend-name {
+  font-weight: 800;
+  color: #333;
+  font-size: 1.05rem;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.friend-badge {
+  background: #fff3e0;
+  color: #f57c00;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.friend-status-text,
+.friend-location {
+  font-size: 0.85rem;
+  color: #757575;
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.friend-location {
+  color: #ec407a;
+  font-weight: 600;
+}
+
+/* 快捷按钮 */
+.friend-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.icon-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  background: #fff;
+  color: #757575;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 1.1rem;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+.icon-btn:hover {
+  transform: scale(1.1);
+}
+
+.message-btn:hover {
+  background: #e1f5fe;
+  color: #0288d1;
+}
+
+.emergency-btn {
+  background: #ffebee;
+  color: #f44336;
+  animation: emergencyShake 2s infinite;
+}
+
+.emergency-btn:hover {
+  background: #f44336;
+  color: white;
+}
+
+@keyframes emergencyShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  75% { transform: translateX(3px); }
+}
+
+/* 好友请求卡片 */
+.request-list {
+  padding: 0 16px;
+}
+
+.request-card {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  margin-bottom: 12px;
+  background: #fff5f8;
+  border-radius: 18px;
+  border: 2px solid #fce4ec;
+  animation: slideIn 0.3s ease;
+}
+
+.request-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ec407a, #f48fb1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.3rem;
+  margin-right: 14px;
+  flex-shrink: 0;
+}
+
+.request-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.request-name {
+  font-weight: 800;
+  color: #333;
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+
+.request-time {
+  font-size: 0.8rem;
+  color: #999;
+  margin-bottom: 6px;
+}
+
+.request-message {
+  font-size: 0.9rem;
+  color: #666;
+  font-style: italic;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.6);
+  border-radius: 10px;
+  margin-top: 6px;
+}
+
+.request-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-accept,
+.btn-reject {
+  padding: 8px 16px;
+  border-radius: 16px;
+  border: none;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.btn-accept {
+  background: #4caf50;
+  color: white;
+}
+
+.btn-accept:hover {
+  background: #45a049;
+  transform: scale(1.05);
+}
+
+.btn-reject {
+  background: #fff;
+  color: #f44336;
+  border: 2px solid #ffcdd2;
+}
+
+.btn-reject:hover {
+  background: #ffebee;
+}
+
+/* 搜索框 */
+.search-box {
+  margin: 16px;
+  position: relative;
+}
+
+.search-box i {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #999;
+  font-size: 1.1rem;
+}
+
+.search-input {
+  width: 100%;
+  padding: 14px 20px 14px 50px;
+  border: 2px solid #f0f0f0;
+  border-radius: 24px;
+  font-size: 1rem;
+  outline: none;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.search-input:focus {
+  border-color: #ec407a;
+  box-shadow: 0 0 0 4px rgba(236,64,122,0.1);
+}
+
+/* 搜索结果 */
+.search-results {
+  padding: 0 16px;
+  margin-top: 10px;
+}
+
+.search-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: #fafafa;
+  border-radius: 16px;
+  transition: all 0.2s;
+}
+
+.search-item:hover {
+  background: #f5f5f5;
+}
+
+.search-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #90caf9, #64b5f6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.2rem;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.search-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.search-name {
+  font-weight: 700;
+  color: #333;
+  font-size: 0.95rem;
+}
+
+.search-email,
+.search-hint {
+  font-size: 0.8rem;
+  color: #999;
+  margin-top: 2px;
+}
+
+.btn-add-friend {
+  padding: 8px 18px;
+  border-radius: 18px;
+  border: none;
+  background: linear-gradient(135deg, #ec407a, #f48fb1);
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-add-friend:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(236,64,122,0.3);
+}
+
+.btn-add-friend:disabled {
+  background: #e0e0e0;
+  color: #999;
+  cursor: not-allowed;
+}
+
+/* 推荐区域 */
+.recommended-section {
+  margin-top: 24px;
+  padding: 0 16px;
+}
+
+.section-title {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #757575;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* 好友详情弹窗 */
+.friend-detail-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(93, 64, 55, 0.45);
+  backdrop-filter: blur(8px);
+  z-index: 3100;
+  animation: fadeIn 0.3s ease;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.friend-detail-card {
+  background: white;
+  width: 90%;
+  max-width: 400px;
+  max-height: 85vh;
+  border-radius: 28px;
+  padding: 24px;
+  overflow-y: auto;
+  box-shadow: 0 30px 70px rgba(0,0,0,0.2);
+  animation: slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+}
+
+.back-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.9);
+  border: 2px solid #f0f0f0;
+  color: #333;
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  z-index: 10;
+}
+
+.back-btn:hover {
+  background: #f5f5f5;
+  transform: scale(1.1);
+}
+
+.detail-header {
+  text-align: center;
+  padding-top: 20px;
+  margin-bottom: 24px;
+}
+
+.detail-avatar-large {
+  width: 90px;
+  height: 90px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff9a9e, #fad0c4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 2.5rem;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+  position: relative;
+}
+
+.status-indicator {
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 4px solid white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.status-indicator.online { background: #4caf50; }
+.status-indicator.warning { background: #ff9800; }
+.status-indicator.critical { background: #f44336; }
+.status-indicator.offline { background: #9e9e9e; }
+
+.detail-header h3 {
+  font-size: 1.4rem;
+  margin: 0 0 8px 0;
+  color: #333;
+}
+
+.detail-status-text {
+  color: #757575;
+  font-size: 0.95rem;
+}
+
+/* 统计信息 */
+.detail-stats {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.stat-item {
+  flex: 1;
+  background: #fafafa;
+  padding: 14px;
+  border-radius: 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-item i {
+  font-size: 1.3rem;
+  color: #ec407a;
+  margin-bottom: 4px;
+}
+
+.stat-item span {
+  font-size: 0.75rem;
+  color: #999;
+  text-transform: uppercase;
+}
+
+.stat-item strong {
+  font-size: 0.9rem;
+  color: #333;
+  font-weight: 700;
+}
+
+/* 详情操作按钮 */
+.detail-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.btn-action-large {
+  width: 100%;
+  padding: 14px 20px;
+  border-radius: 20px;
+  border: none;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: inherit;
+}
+
+.btn-action-large.primary {
+  background: linear-gradient(135deg, #ec407a, #f48fb1);
+  color: white;
+  box-shadow: 0 6px 16px rgba(236,64,122,0.3);
+}
+
+.btn-action-large.primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(236,64,122,0.4);
+}
+
+.btn-action-large.emergency {
+  background: linear-gradient(135deg, #f44336, #e57373);
+  color: white;
+  box-shadow: 0 6px 16px rgba(244,67,54,0.3);
+}
+
+.btn-action-large.emergency:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(244,67,54,0.4);
+}
+
+.btn-action-large:not(.primary):not(.emergency) {
+  background: #fafafa;
+  color: #333;
+  border: 2px solid #f0f0f0;
+}
+
+.btn-action-large:not(.primary):not(.emergency):hover {
+  background: #f5f5f5;
+}
+
+/* 设置项 */
+.detail-settings {
+  background: #fafafa;
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.setting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.setting-item:last-child {
+  border-bottom: none;
+}
+
+.setting-item span {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.95rem;
+}
+
+/* Toggle开关 */
+.toggle-switch {
+  position: relative;
+  width: 48px;
+  height: 26px;
+  display: inline-block;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.3s;
+  border-radius: 26px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: #ec407a;
+}
+
+input:checked + .slider:before {
+  transform: translateX(22px);
+}
+
+/* 删除按钮 */
+.btn-danger-outline {
+  width: 100%;
+  padding: 12px;
+  border-radius: 18px;
+  border: 2px solid #ffcdd2;
+  background: white;
+  color: #f44336;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: inherit;
+}
+
+.btn-danger-outline:hover {
+  background: #ffebee;
+  border-color: #f44336;
+}
+
+/* 主要按钮（空状态） */
+.btn-primary-small {
+  padding: 10px 24px;
+  border-radius: 20px;
+  border: none;
+  background: linear-gradient(135deg, #ec407a, #f48fb1);
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.btn-primary-small:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(236,64,122,0.3);
+}
+
+/* 响应式 */
+@media (max-width: 480px) {
+  .guardian-card {
+    width: 96%;
+    max-height: 90vh;
+  }
+  
+  .friend-card {
+    padding: 12px;
+  }
+  
+  .friend-avatar {
+    width: 44px;
+    height: 44px;
+    font-size: 1.1rem;
+  }
+  
+  .status-dot {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+/* 动画 */
+@keyframes menuSlideIn {
+  from { opacity: 0; transform: scale(0.8) translateY(-20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ==========================================
+   KOKORO CSS 修复整合版
+   ========================================== */
+
+/* ------------------------------------------
+   1. 汉堡菜单样式 (Menu)
+   ------------------------------------------ */
+.kokoro-menu-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 8px 20px rgba(93, 64, 55, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.4rem;
+  color: #880e4f;
+  cursor: pointer;
+  z-index: 2001; /* 必须比遮罩高 */
+  transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+.kokoro-menu-btn:hover {
+  background: #fff;
+  transform: scale(1.1);
+  box-shadow: 0 10px 25px rgba(233, 30, 99, 0.25);
+}
+
+.kokoro-menu-btn.active {
+  background: #fff;
+  color: #ec407a;
+  transform: rotate(90deg);
+}
+
+/* 下拉菜单容器 */
+.kokoro-menu-dropdown {
+  position: absolute;
+  top: 85px;
+  left: 20px;
+  width: 260px;
+  background: rgba(255, 255, 255, 0.95); /* 稍微不透明一点，防干扰 */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 24px;
+  padding: 12px;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  z-index: 2000;
+  animation: menuSlideIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transform-origin: top left;
+}
+
+/* 菜单项 */
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  margin-bottom: 6px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.menu-item:last-child { margin-bottom: 0; }
+.menu-item:hover { background: rgba(255, 240, 245, 0.8); }
+
+.icon-box {
+  width: 36px;
+  height: 36px;
+  background: #fff;
+  border-radius: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #ec407a;
+  font-size: 1.1rem;
+  margin-right: 14px;
+  box-shadow: 0 4px 10px rgba(233, 30, 99, 0.1);
+}
+
+.text-box { flex: 1; display: flex; flex-direction: column; }
+.menu-title { font-weight: 800; color: #5d4037; font-size: 0.95rem; }
+.menu-sub { font-size: 0.7rem; color: #90a4ae; text-transform: uppercase; font-weight: 600; }
+.badge-pill { background: #ff80ab; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: 700; }
+.menu-item.highlight { background: linear-gradient(135deg, #fff3e0, #ffe0b2); }
+.menu-item.highlight .icon-box { color: #ff6f00; }
+
+.menu-backdrop {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: transparent; z-index: 1999;
+}
+
+@keyframes menuSlideIn {
+  from { opacity: 0; transform: scale(0.8) translateY(-20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+
+/* ------------------------------------------
+   2. 申请履历弹窗样式 (History Overlay)
+   这是你之前缺失的部分！一定要加上！
+   ------------------------------------------ */
+.history-overlay {
+  position: fixed; /* 关键：固定定位 */
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(93, 64, 55, 0.3); /* 遮罩层背景 */
+  backdrop-filter: blur(4px);
+  display: flex; 
+  justify-content: center; 
+  align-items: center;
+  z-index: 3000; /* 关键：层级必须比菜单(2000)高 */
+  animation: fadeIn 0.3s ease;
+}
+
+.history-card {
+  background: #ffffff;
+  width: 90%;
+  max-width: 420px;
+  border-radius: 24px;
+  box-shadow: 0 25px 50px rgba(0,0,0,0.2);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 2px solid #fff0f5;
+  animation: slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.history-card .card-header {
+  background: linear-gradient(to right, #fff0f5, #fff);
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #fce4ec;
+}
+
+.history-card .card-header h3 {
+  margin: 0;
+  color: #880e4f;
+  font-size: 1.2rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.history-card .close-btn {
+  background: #f8bbd0;
+  color: #880e4f;
+  border: none;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex; justify-content: center; align-items: center;
+  transition: all 0.2s;
+}
+.history-card .close-btn:hover { background: #ec407a; color: white; transform: rotate(90deg); }
+
+.history-list { overflow-y: auto; padding: 10px 0; background: #fff; }
+
+.history-item {
+  display: flex; align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px dashed #fce4ec;
+  cursor: pointer; transition: 0.2s;
+}
+.history-item:last-child { border-bottom: none; }
+.history-item:hover { background: #fff5f8; padding-left: 28px; }
+
+.item-icon {
+  font-size: 1.4rem; margin-right: 15px;
+  width: 40px; height: 40px;
+  background: #fce4ec; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #ec407a;
+}
+.item-info { flex: 1; display: flex; flex-direction: column; }
+.item-cat { font-weight: 700; color: #5d4037; font-size: 1rem; }
+.item-date { font-size: 0.75rem; color: #90a4ae; margin-top: 4px; }
+
+.item-status { 
+  font-size: 0.75rem; font-weight: 700;
+  padding: 4px 10px; border-radius: 12px; 
+  background: #eceff1; color: #546e7a;
+}
+.status-1 { background: #e3f2fd; color: #1976d2; }
+.status-10 { background: #e8f5e9; color: #2e7d32; }
+.status-4 { background: #fff3e0; color: #f57c00; }
 
 /* 眼睛 */
 .slime-eyes {
@@ -1515,8 +3014,8 @@ textarea.glass-input {
         <roles/>
         <script><![CDATA[(function() {
     // ============================================================
-    // KOKORO SHELTER - Server Script (Shared)
-    // Version: 3.0 (Split Version)
+    // KOKORO SHELTER - Server Script (Merged Version 3.0)
+    // 包含: 基础避难所管理 + 好友系统(守护圈)
     // 用于: kokoro_user 和 kokoro_volunteer 两个Widget
     // ============================================================
 
@@ -1526,7 +3025,10 @@ textarea.glass-input {
             USER_PROFILE: 'x_1821654_kokoro_0_x_kokoro_user_profile',
             HEARTBEAT: 'x_1821654_kokoro_0_x_1821654_kokoro_0_heartbeat',
             EMERGENCY_MESSAGE: 'x_1821654_kokoro_0_emergency_message',
-            PROCESS_EVENT: 'x_1821654_kokoro_0_process_event'
+            PROCESS_EVENT: 'x_1821654_kokoro_0_process_event',
+            // [新增] 好友系统表
+            FRIEND_RELATION: 'x_1821654_kokoro_0_friend_relation',
+            FRIEND_NOTIFICATION: 'x_1821654_kokoro_0_friend_notification'
         },
         wishStates: {
             DRAFT: '1',
@@ -1547,7 +3049,7 @@ textarea.glass-input {
 
     data.user_id = gs.getUserID();
     data.user_name = gs.getUserDisplayName();
-    
+
     var isVolunteer = gs.hasRole('admin') || gs.hasRole('x_1821654_kokoro_0.volunteer');
     data.is_volunteer = isVolunteer;
 
@@ -1560,6 +3062,14 @@ textarea.glass-input {
     data.volunteers = [];
     data.openCount = 0;
     data.sosCount = 0;
+    
+    // 好友系统数据
+    data.my_requests = [];
+    data.friends = [];
+    data.friend_requests = [];
+    data.friend_notifications = 0;
+    data.recommended = [];
+    data.results = [];
 
     // ==========================================
     // 工具函数
@@ -1608,27 +3118,27 @@ textarea.glass-input {
             '5':  [],
             '6':  ['11', '2', '5']
         },
-        
+
         validateTransition: function(fromState, toState) {
             fromState = String(fromState);
             toState = String(toState);
-            
+
             if (!fromState || fromState === '' || fromState === 'undefined' || fromState === 'null') {
                 return { valid: true };
             }
-            
+
             if (!this.allowedTransitions.hasOwnProperty(fromState)) {
                 return { valid: false, message: '無効な現在状態: ' + fromState };
             }
-            
+
             var allowed = this.allowedTransitions[fromState];
             if (allowed.indexOf(toState) === -1) {
-                return { 
-                    valid: false, 
-                    message: fromState + ' から ' + toState + ' への遷移は許可されていません' 
+                return {
+                    valid: false,
+                    message: fromState + ' から ' + toState + ' への遷移は許可されていません'
                 };
             }
-            
+
             return { valid: true };
         }
     };
@@ -1775,7 +3285,7 @@ textarea.glass-input {
             while (roleGr.next()) {
                 volIds.push(roleGr.getValue('user'));
             }
-            
+
             if (volIds.length > 0) {
                 var userGr = new GlideRecord('sys_user');
                 userGr.addQuery('sys_id', 'IN', volIds.join(','));
@@ -1788,7 +3298,7 @@ textarea.glass-input {
                     });
                 }
             }
-            
+
             // 添加管理员
             var adminGr = new GlideRecord('sys_user');
             adminGr.addQuery('active', true);
@@ -1796,8 +3306,8 @@ textarea.glass-input {
             adminGr.setLimit(10);
             adminGr.query();
             while (adminGr.next()) {
-                var alreadyExists = volunteerList.some(function(v) { 
-                    return v.sys_id === adminGr.getUniqueValue(); 
+                var alreadyExists = volunteerList.some(function(v) {
+                    return v.sys_id === adminGr.getUniqueValue();
                 });
                 if (!alreadyExists) {
                     volunteerList.push({
@@ -1810,6 +3320,262 @@ textarea.glass-input {
             gs.error("[Kokoro] Load volunteer list error: " + e.message);
         }
         return volunteerList;
+    }
+
+    // ==========================================
+    // 好友系统 - 工具函数
+    // ==========================================
+    
+    // 获取最新心跳信息
+    function getLatestHeartbeat(userId) {
+        try {
+            var hbGr = new GlideRecord(CONFIG.tables.HEARTBEAT);
+            hbGr.addQuery('u_user', userId);
+            hbGr.orderByDesc('u_timestamp');
+            hbGr.setLimit(1);
+            hbGr.query();
+
+            if (hbGr.next()) {
+                var hbTime = new GlideDateTime(hbGr.u_timestamp);
+                var now = new GlideDateTime();
+                var diffMs = GlideDateTime.subtract(now, hbTime).getNumericValue();
+                var minutes = Math.floor(diffMs / 1000 / 60);
+
+                var status = 'offline';
+                var message = 'オフライン';
+
+                if (minutes < 5) {
+                    status = 'online';
+                    message = 'オンライン';
+                } else if (minutes < 60) {
+                    status = 'online';
+                    message = minutes + '分前';
+                } else if (minutes < 360) { // 6小时
+                    status = 'warning';
+                    message = Math.floor(minutes / 60) + '時間前';
+                } else if (minutes < 1440) { // 24小时
+                    status = 'critical';
+                    message = '⚠️ ' + Math.floor(minutes / 60) + '時間応答なし';
+                } else {
+                    status = 'critical';
+                    message = ']]>🆘<![CDATA[ ' + Math.floor(minutes / 1440) + '日間連絡なし';
+                }
+
+                // 获取位置信息 (从最近的wish或profile)
+                var zone = getUserCurrentZone(userId);
+
+                return {
+                    status: status,
+                    time_ago: message,
+                    zone: zone,
+                    message: message
+                };
+            }
+        } catch (e) {
+            gs.error('[Kokoro] Get heartbeat error: ' + e.message);
+        }
+
+        return {
+            status: 'offline',
+            time_ago: '未知',
+            zone: '',
+            message: 'データなし'
+        };
+    }
+
+    // 获取用户当前区域
+    function getUserCurrentZone(userId) {
+        try {
+            // 从最近的wish获取
+            var wishGr = new GlideRecord(CONFIG.tables.SILENT_WISH);
+            wishGr.addQuery('opened_by', userId);
+            wishGr.orderByDesc('sys_created_on');
+            wishGr.setLimit(1);
+            wishGr.query();
+
+            if (wishGr.next() && wishGr.getValue('shelter_zone')) {
+                return wishGr.getDisplayValue('shelter_zone');
+            }
+
+            // 或从用户Profile获取
+            var profileGr = new GlideRecord(CONFIG.tables.USER_PROFILE);
+            profileGr.addQuery('user', userId);
+            profileGr.setLimit(1);
+            profileGr.query();
+
+            if (profileGr.next() && profileGr.getValue('current_zone')) {
+                return profileGr.getValue('current_zone');
+            }
+        } catch (e) {}
+
+        return '';
+    }
+
+    // 检查好友状态
+    function checkFriendStatus(userId, friendId) {
+        try {
+            var gr = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
+            gr.addQuery('user', userId);
+            gr.addQuery('friend', friendId);
+            gr.addQuery('status', 'accepted');
+            gr.setLimit(1);
+            gr.query();
+
+            return gr.hasNext();
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // 检查待处理请求
+    function checkPendingRequest(fromUser, toUser) {
+        try {
+            var gr = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
+            gr.addQuery('user', fromUser);
+            gr.addQuery('friend', toUser);
+            gr.addQuery('status', 'pending');
+            gr.setLimit(1);
+            gr.query();
+
+            return gr.hasNext();
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // 创建好友通知
+    function createFriendNotification(fromUser, toUser, type, message, relatedRecord) {
+        try {
+            var notif = new GlideRecord(CONFIG.tables.FRIEND_NOTIFICATION);
+            notif.initialize();
+            notif.setValue('from_user', fromUser);
+            notif.setValue('to_user', toUser);
+            notif.setValue('type', type);
+            notif.setValue('message', sanitizeInput(message, 500));
+            notif.setValue('is_read', false);
+            notif.setValue('created_at', new GlideDateTime());
+
+            if (relatedRecord) {
+                notif.setValue('related_record', relatedRecord);
+            }
+
+            return notif.insert();
+        } catch (e) {
+            gs.error('[Kokoro] Create notification error: ' + e.message);
+            return null;
+        }
+    }
+
+    // 获取推荐好友 (同一区域的活跃用户)
+    function getRecommendedFriends(userId) {
+        var recommended = [];
+
+        try {
+            // 获取当前用户的区域
+            var userZone = getUserCurrentZone(userId);
+            if (!userZone) return recommended;
+
+            // 查找同一区域的其他用户
+            var wishGr = new GlideAggregate(CONFIG.tables.SILENT_WISH);
+            wishGr.addQuery('shelter_zone', userZone);
+            wishGr.addQuery('opened_by', '!=', userId);
+            wishGr.groupBy('opened_by');
+            wishGr.orderByDesc('COUNT');
+            wishGr.setLimit(5);
+            wishGr.query();
+
+            while (wishGr.next()) {
+                var candidateId = wishGr.getValue('opened_by');
+
+                // 检查是否已经是好友
+                if (checkFriendStatus(userId, candidateId)) continue;
+
+                // 检查是否已发送请求
+                if (checkPendingRequest(userId, candidateId)) continue;
+
+                var userGr = new GlideRecord('sys_user');
+                if (userGr.get(candidateId)) {
+                    recommended.push({
+                        sys_id: candidateId,
+                        name: userGr.getDisplayValue('name'),
+                        email: userGr.getValue('email'),
+                        hint: '同じエリア'
+                    });
+                }
+            }
+        } catch (e) {
+            gs.error('[Kokoro] Get recommended friends error: ' + e.message);
+        }
+
+        return recommended;
+    }
+
+    // ==========================================
+    // 加载用户提交的历史记录
+    // ==========================================
+    if (data.user_id) {
+        var myReq = new GlideRecord(CONFIG.tables.SILENT_WISH);
+        myReq.addQuery('opened_by', data.user_id);
+        myReq.orderByDesc('sys_created_on');
+        myReq.setLimit(5);
+        myReq.query();
+        while (myReq.next()) {
+            data.my_requests.push(buildTaskItem(myReq));
+        }
+    }
+
+    // ==========================================
+    // 加载志愿者数据
+    // ==========================================
+    if (isVolunteer) {
+        try {
+            var myGr = new GlideRecord(CONFIG.tables.SILENT_WISH);
+            myGr.addQuery('assigned_to', data.user_id);
+            myGr.orderByDesc('sys_updated_on');
+            myGr.setLimit(50);
+            myGr.query();
+            while (myGr.next()) {
+                data.myTasks.push(buildTaskItem(myGr));
+            }
+        } catch (e) {
+            gs.error("[Kokoro] My tasks load error: " + e.message);
+        }
+
+        try {
+            var allGr = new GlideRecord(CONFIG.tables.SILENT_WISH);
+            allGr.orderByDesc('sys_created_on');
+            allGr.setLimit(100);
+            allGr.query();
+            while (allGr.next()) {
+                data.list.push(buildTaskItem(allGr));
+            }
+        } catch (e) {
+            gs.error("[Kokoro] All tasks load error: " + e.message);
+        }
+
+        try {
+            var gaOpen = new GlideAggregate(CONFIG.tables.SILENT_WISH);
+            gaOpen.addNullQuery('assigned_to');
+            gaOpen.addQuery('state', 'NOT IN', [CONFIG.wishStates.COMPLETED, CONFIG.wishStates.CANCELLED]);
+            gaOpen.addAggregate('COUNT');
+            gaOpen.query();
+            if (gaOpen.next()) {
+                data.openCount = parseInt(gaOpen.getAggregate('COUNT')) || 0;
+            }
+
+            var gaSOS = new GlideAggregate(CONFIG.tables.SILENT_WISH);
+            gaSOS.addQuery('u_urgency', 'Critical');
+            gaSOS.addQuery('state', 'NOT IN', [CONFIG.wishStates.COMPLETED, CONFIG.wishStates.CANCELLED]);
+            gaSOS.addAggregate('COUNT');
+            gaSOS.query();
+            if (gaSOS.next()) {
+                data.sosCount = parseInt(gaSOS.getAggregate('COUNT')) || 0;
+            }
+        } catch (e) {
+            gs.error("[Kokoro] Stats error: " + e.message);
+        }
+
+        data.volunteers = loadVolunteerList();
     }
 
     // ==========================================
@@ -2023,7 +3789,461 @@ textarea.glass-input {
             return;
         }
 
-        // 志愿者操作
+        // ==========================================
+        // 好友系统 - 获取守护圈数据
+        // ==========================================
+        if (input.action === 'get_guardian_data') {
+            try {
+                var guardianData = {
+                    friends: [],
+                    friend_requests: [],
+                    notification_count: 0,
+                    recommended: []
+                };
+
+                // 1. 获取好友列表
+                var friendGr = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
+                friendGr.addQuery('user', data.user_id);
+                friendGr.addQuery('status', 'accepted');
+                friendGr.orderByDesc('last_interact');
+                friendGr.query();
+
+                while (friendGr.next()) {
+                    var friendId = friendGr.getValue('friend');
+                    var friendUser = new GlideRecord('sys_user');
+
+                    if (friendUser.get(friendId)) {
+                        // 获取好友的最新心跳
+                        var heartbeat = getLatestHeartbeat(friendId);
+
+                        var friendItem = {
+                            relation_id: friendGr.getUniqueValue(),
+                            user_id: friendId,
+                            display_name: friendGr.getValue('nickname') || friendUser.getDisplayValue('name'),
+                            email: friendUser.getValue('email'),
+                            is_family: false,
+                            // 心跳状态
+                            heartbeat_status: heartbeat.status,
+                            last_heartbeat_time: heartbeat.time_ago,
+                            current_zone: heartbeat.zone,
+                            status_message: heartbeat.message,
+                            // 设置
+                            share_location: friendGr.getValue('share_loc') == 'true',
+                            alert_enabled: friendGr.getValue('alert_enabled') == 'true'
+                        };
+
+                        guardianData.friends.push(friendItem);
+                    }
+                }
+
+                // 2. 获取待处理的好友请求
+                var requestGr = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
+                requestGr.addQuery('friend', data.user_id);
+                requestGr.addQuery('status', 'pending');
+                requestGr.orderByDesc('sys_created_on');
+                requestGr.query();
+
+                while (requestGr.next()) {
+                    var fromUserId = requestGr.getValue('user');
+                    var fromUser = new GlideRecord('sys_user');
+
+                    if (fromUser.get(fromUserId)) {
+                        var created = new GlideDateTime(requestGr.sys_created_on);
+                        var now = new GlideDateTime();
+                        var diffMs = GlideDateTime.subtract(now, created).getNumericValue();
+                        var minutes = Math.floor(diffMs / 1000 / 60);
+
+                        var timeAgo = '';
+                        if (minutes < 60) {
+                            timeAgo = minutes + "分前";
+                        } else if (minutes < 1440) {
+                            timeAgo = Math.floor(minutes / 60) + "時間前";
+                        } else {
+                            timeAgo = Math.floor(minutes / 1440) + "日前";
+                        }
+
+                        guardianData.friend_requests.push({
+                            sys_id: requestGr.getUniqueValue(),
+                            from_user_id: fromUserId,
+                            from_user_name: fromUser.getDisplayValue('name'),
+                            from_user_email: fromUser.getValue('email'),
+                            message: '',
+                            time_ago: timeAgo,
+                            created_at: requestGr.getDisplayValue('sys_created_on')
+                        });
+                    }
+                }
+
+                // 3. 计算未读通知数量
+                var notifGa = new GlideAggregate(CONFIG.tables.FRIEND_NOTIFICATION);
+                notifGa.addQuery('to_user', data.user_id);
+                notifGa.addQuery('is_read', false);
+                notifGa.addAggregate('COUNT');
+                notifGa.query();
+
+                if (notifGa.next()) {
+                    guardianData.notification_count = parseInt(notifGa.getAggregate('COUNT')) || 0;
+                }
+
+                // 4. 推荐好友
+                guardianData.recommended = getRecommendedFriends(data.user_id);
+
+                data.friends = guardianData.friends;
+                data.friend_requests = guardianData.friend_requests;
+                data.friend_notifications = guardianData.notification_count;
+                data.recommended = guardianData.recommended;
+                data.success = true;
+
+            } catch (e) {
+                gs.error('[Kokoro Guardian] Get data error: ' + e.message);
+                data.error = 'データ取得エラー';
+            }
+            return;
+        }
+
+        // ==========================================
+        // 搜索用户
+        // ==========================================
+        if (input.action === 'search_users' && input.query) {
+            try {
+                var query = sanitizeInput(input.query, 100).toLowerCase();
+                var results = [];
+
+                // 搜索用户名或邮箱
+                var userGr = new GlideRecord('sys_user');
+                userGr.addQuery('active', true);
+                userGr.addQuery('sys_id', '!=', data.user_id);
+
+                // 组合查询条件
+                var qc = userGr.addQuery('name', 'CONTAINS', query);
+                qc.addOrCondition('email', 'CONTAINS', query);
+                qc.addOrCondition('user_name', 'CONTAINS', query);
+
+                userGr.setLimit(20);
+                userGr.query();
+
+                while (userGr.next()) {
+                    var userId = userGr.getUniqueValue();
+
+                    // 检查是否已经是好友
+                    var isAlreadyFriend = checkFriendStatus(data.user_id, userId);
+
+                    // 检查是否已发送请求
+                    var requestSent = checkPendingRequest(data.user_id, userId);
+
+                    results.push({
+                        sys_id: userId,
+                        name: userGr.getDisplayValue('name'),
+                        email: userGr.getValue('email'),
+                        user_name: userGr.getValue('user_name'),
+                        already_friend: isAlreadyFriend,
+                        request_sent: requestSent
+                    });
+                }
+
+                data.results = results;
+                data.success = true;
+
+            } catch (e) {
+                gs.error('[Kokoro Guardian] Search error: ' + e.message);
+                data.error = '検索エラー';
+            }
+            return;
+        }
+
+        // ==========================================
+        // 发送好友请求
+        // ==========================================
+        if (input.action === 'send_friend_request' && input.friend_id) {
+            try {
+                if (!validateSysId(input.friend_id)) {
+                    data.error = '無効なユーザーID';
+                    return;
+                }
+
+                // 检查是否已经是好友
+                if (checkFriendStatus(data.user_id, input.friend_id)) {
+                    data.error = 'すでに友達です';
+                    return;
+                }
+
+                // 检查是否已有待处理的请求
+                if (checkPendingRequest(data.user_id, input.friend_id)) {
+                    data.error = 'リクエストが既に送信されています';
+                    return;
+                }
+
+                // 创建好友关系记录
+                var friendRel = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
+                friendRel.initialize();
+                friendRel.setValue('user', data.user_id);
+                friendRel.setValue('friend', input.friend_id);
+                friendRel.setValue('status', 'pending');
+                friendRel.setValue('created_at', new GlideDateTime());
+                friendRel.setValue('alert_enabled', true);
+
+                var relId = friendRel.insert();
+
+                if (relId) {
+                    // 创建通知
+                    createFriendNotification(
+                        data.user_id,
+                        input.friend_id,
+                        'friend_request',
+                        data.user_name + ' があなたに友達リクエストを送信しました',
+                        relId
+                    );
+
+                    data.success = true;
+                    logProcessEvent(relId, 'Friend request sent to ' + input.friend_id, data.user_id);
+                } else {
+                    data.error = 'リクエスト送信失敗';
+                }
+
+            } catch (e) {
+                gs.error('[Kokoro Guardian] Send request error: ' + e.message);
+                data.error = '送信エラー';
+            }
+            return;
+        }
+
+        // ==========================================
+        // 接受好友请求
+        // ==========================================
+        if (input.action === 'accept_friend_request' && input.request_id) {
+            try {
+                if (!validateSysId(input.request_id)) {
+                    data.error = '無効なリクエストID';
+                    return;
+                }
+
+                var reqGr = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
+                if (!reqGr.get(input.request_id)) {
+                    data.error = 'リクエストが見つかりません';
+                    return;
+                }
+
+                // 验证请求是发给当前用户的
+                if (reqGr.getValue('friend') != data.user_id) {
+                    data.error = '権限がありません';
+                    return;
+                }
+
+                // 更新状态为accepted
+                reqGr.setValue('status', 'accepted');
+                reqGr.setValue('accepted_at', new GlideDateTime());
+                reqGr.update();
+
+                // 创建反向关系 (双向好友)
+                var reverseRel = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
+                reverseRel.initialize();
+                reverseRel.setValue('user', data.user_id);
+                reverseRel.setValue('friend', reqGr.getValue('user'));
+                reverseRel.setValue('status', 'accepted');
+                reverseRel.setValue('created_at', new GlideDateTime());
+                reverseRel.setValue('accepted_at', new GlideDateTime());
+                reverseRel.setValue('alert_enabled', true);
+                reverseRel.insert();
+
+                // 发送通知给请求发起人
+                createFriendNotification(
+                    data.user_id,
+                    reqGr.getValue('user'),
+                    'friend_request_accepted',
+                    data.user_name + ' があなたの友達リクエストを承認しました',
+                    reqGr.getUniqueValue()
+                );
+
+                data.success = true;
+                logProcessEvent(input.request_id, 'Friend request accepted', data.user_id);
+
+            } catch (e) {
+                gs.error('[Kokoro Guardian] Accept request error: ' + e.message);
+                data.error = '承認エラー';
+            }
+            return;
+        }
+
+        // ==========================================
+        // 拒绝好友请求
+        // ==========================================
+        if (input.action === 'reject_friend_request' && input.request_id) {
+            try {
+                if (!validateSysId(input.request_id)) {
+                    data.error = '無効なリクエストID';
+                    return;
+                }
+
+                var reqGr = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
+                if (!reqGr.get(input.request_id)) {
+                    data.error = 'リクエストが見つかりません';
+                    return;
+                }
+
+                if (reqGr.getValue('friend') != data.user_id) {
+                    data.error = '権限がありません';
+                    return;
+                }
+
+                reqGr.setValue('status', 'rejected');
+                reqGr.update();
+
+                data.success = true;
+                logProcessEvent(input.request_id, 'Friend request rejected', data.user_id);
+
+            } catch (e) {
+                gs.error('[Kokoro Guardian] Reject request error: ' + e.message);
+                data.error = '拒否エラー';
+            }
+            return;
+        }
+
+        // ==========================================
+        // 发送紧急呼叫
+        // ==========================================
+        if (input.action === 'send_emergency_call' && input.friend_id) {
+            try {
+                if (!validateSysId(input.friend_id)) {
+                    data.error = '無効なユーザーID';
+                    return;
+                }
+
+                // 验证是好友关系
+                if (!checkFriendStatus(data.user_id, input.friend_id)) {
+                    data.error = '友達ではありません';
+                    return;
+                }
+
+                // 创建紧急通知
+                createFriendNotification(
+                    data.user_id,
+                    input.friend_id,
+                    'emergency_alert',
+                    ']]>🆘<![CDATA[ ' + data.user_name + ' が緊急呼び出しを送信しました！',
+                    null
+                );
+
+                // 发送系统事件 (触发邮件/短信通知)
+                gs.eventQueue('kokoro.friend.emergency_call', null, input.friend_id, data.user_name);
+
+                data.success = true;
+                logProcessEvent(input.friend_id, 'Emergency call sent', data.user_id);
+
+            } catch (e) {
+                gs.error('[Kokoro Guardian] Emergency call error: ' + e.message);
+                data.error = '送信エラー';
+            }
+            return;
+        }
+
+        // ==========================================
+        // 发送好友消息
+        // ==========================================
+        if (input.action === 'send_friend_message' && input.friend_id && input.message) {
+            try {
+                if (!validateSysId(input.friend_id)) {
+                    data.error = '無効なユーザーID';
+                    return;
+                }
+
+                if (!checkFriendStatus(data.user_id, input.friend_id)) {
+                    data.error = '友達ではありません';
+                    return;
+                }
+
+                var message = sanitizeInput(input.message, 500);
+
+                createFriendNotification(
+                    data.user_id,
+                    input.friend_id,
+                    'message',
+                    data.user_name + ': ' + message,
+                    null
+                );
+
+                data.success = true;
+
+            } catch (e) {
+                gs.error('[Kokoro Guardian] Send message error: ' + e.message);
+                data.error = '送信エラー';
+            }
+            return;
+        }
+
+        // ==========================================
+        // 移除好友
+        // ==========================================
+        if (input.action === 'remove_friend' && input.friend_id) {
+            try {
+                if (!validateSysId(input.friend_id)) {
+                    data.error = '無効なユーザーID';
+                    return;
+                }
+
+                // 删除双向关系
+                var rel1 = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
+                rel1.addQuery('user', data.user_id);
+                rel1.addQuery('friend', input.friend_id);
+                rel1.query();
+                if (rel1.next()) {
+                    rel1.deleteRecord();
+                }
+
+                var rel2 = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
+                rel2.addQuery('user', input.friend_id);
+                rel2.addQuery('friend', data.user_id);
+                rel2.query();
+                if (rel2.next()) {
+                    rel2.deleteRecord();
+                }
+
+                data.success = true;
+                logProcessEvent(input.friend_id, 'Friend removed', data.user_id);
+
+            } catch (e) {
+                gs.error('[Kokoro Guardian] Remove friend error: ' + e.message);
+                data.error = '削除エラー';
+            }
+            return;
+        }
+
+        // ==========================================
+        // 获取好友状态更新 (轮询)
+        // ==========================================
+        if (input.action === 'get_friend_status_updates') {
+            try {
+                var updates = [];
+
+                // 获取当前用户的所有好友
+                var friendGr = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
+                friendGr.addQuery('user', data.user_id);
+                friendGr.addQuery('status', 'accepted');
+                friendGr.query();
+
+                while (friendGr.next()) {
+                    var friendId = friendGr.getValue('friend');
+                    var heartbeat = getLatestHeartbeat(friendId);
+
+                    updates.push({
+                        user_id: friendId,
+                        status: heartbeat.status,
+                        time_ago: heartbeat.time_ago,
+                        zone: heartbeat.zone
+                    });
+                }
+
+                data.updates = updates;
+                data.success = true;
+
+            } catch (e) {
+                gs.error('[Kokoro Guardian] Status update error: ' + e.message);
+            }
+            return;
+        }
+
+        // ==========================================
+        // 志愿者操作 - 任务管理
+        // ==========================================
         if (input.sys_id) {
             if (!validateSysId(input.sys_id)) {
                 data.error = "無効なID";
@@ -2045,14 +4265,14 @@ textarea.glass-input {
                 }
 
                 taskGr.setValue('assigned_to', data.user_id);
-                
+
                 if (currentState === '1' || currentState === '10') {
                     var validationAssign = StateValidator.validateTransition(currentState, '11');
                     if (validationAssign.valid) {
                         taskGr.setValue('state', '11');
                     }
                 }
-                
+
                 if (taskGr.update()) {
                     data.success = true;
                     logProcessEvent(input.sys_id, 'Task assigned to ' + data.user_name, data.user_id);
@@ -2069,14 +4289,14 @@ textarea.glass-input {
                 }
 
                 taskGr.setValue('assigned_to', input.assignee_id);
-                
+
                 if (currentState === '1' || currentState === '10') {
                     var validationAssignTo = StateValidator.validateTransition(currentState, '11');
                     if (validationAssignTo.valid) {
                         taskGr.setValue('state', '11');
                     }
                 }
-                
+
                 if (taskGr.update()) {
                     data.success = true;
                     logProcessEvent(input.sys_id, 'Task assigned to ' + input.assignee_id, data.user_id);
@@ -2089,7 +4309,7 @@ textarea.glass-input {
             if (input.action === 'change_status' && input.new_state) {
                 var newState = String(input.new_state);
                 var validationChange = StateValidator.validateTransition(currentState, newState);
-                
+
                 if (!validationChange.valid) {
                     data.error = validationChange.message;
                     return;
@@ -2101,11 +4321,11 @@ textarea.glass-input {
                 }
 
                 taskGr.setValue('state', newState);
-                
+
                 if (newState === '4') {
                     taskGr.setValue('u_completed_at', new GlideDateTime());
                 }
-                
+
                 if (taskGr.update()) {
                     data.success = true;
                     logProcessEvent(input.sys_id, 'Status changed to ' + newState, data.user_id);
@@ -2128,7 +4348,7 @@ textarea.glass-input {
                 }
 
                 taskGr.setValue('state', '2');
-                
+
                 if (taskGr.update()) {
                     data.success = true;
                     logProcessEvent(input.sys_id, 'Task started', data.user_id);
@@ -2147,7 +4367,7 @@ textarea.glass-input {
 
                 taskGr.setValue('state', '4');
                 taskGr.setValue('u_completed_at', new GlideDateTime());
-                
+
                 if (taskGr.update()) {
                     data.success = true;
                     logProcessEvent(input.sys_id, 'Task completed', data.user_id);
@@ -2171,87 +4391,71 @@ textarea.glass-input {
         }
     }
 
-    // ==========================================
-    // 加载志愿者数据
-    // ==========================================
-    if (isVolunteer) {
-        try {
-            var myGr = new GlideRecord(CONFIG.tables.SILENT_WISH);
-            myGr.addQuery('assigned_to', data.user_id);
-            myGr.orderByDesc('sys_updated_on');
-            myGr.setLimit(50);
-            myGr.query();
-            while (myGr.next()) {
-                data.myTasks.push(buildTaskItem(myGr));
-            }
-        } catch (e) {
-            gs.error("[Kokoro] My tasks load error: " + e.message);
-        }
-
-        try {
-            var allGr = new GlideRecord(CONFIG.tables.SILENT_WISH);
-            allGr.orderByDesc('sys_created_on');
-            allGr.setLimit(100);
-            allGr.query();
-            while (allGr.next()) {
-                data.list.push(buildTaskItem(allGr));
-            }
-        } catch (e) {
-            gs.error("[Kokoro] All tasks load error: " + e.message);
-        }
-
-        try {
-            var gaOpen = new GlideAggregate(CONFIG.tables.SILENT_WISH);
-            gaOpen.addNullQuery('assigned_to');
-            gaOpen.addQuery('state', 'NOT IN', [CONFIG.wishStates.COMPLETED, CONFIG.wishStates.CANCELLED]);
-            gaOpen.addAggregate('COUNT');
-            gaOpen.query();
-            if (gaOpen.next()) {
-                data.openCount = parseInt(gaOpen.getAggregate('COUNT')) || 0;
-            }
-
-            var gaSOS = new GlideAggregate(CONFIG.tables.SILENT_WISH);
-            gaSOS.addQuery('u_urgency', 'Critical');
-            gaSOS.addQuery('state', 'NOT IN', [CONFIG.wishStates.COMPLETED, CONFIG.wishStates.CANCELLED]);
-            gaSOS.addAggregate('COUNT');
-            gaSOS.query();
-            if (gaSOS.next()) {
-                data.sosCount = parseInt(gaSOS.getAggregate('COUNT')) || 0;
-            }
-        } catch (e) {
-            gs.error("[Kokoro] Stats error: " + e.message);
-        }
-
-        data.volunteers = loadVolunteerList();
-    }
-
 })();]]></script>
         <servicenow>false</servicenow>
         <sys_class_name>sp_widget</sys_class_name>
         <sys_created_by>admin</sys_created_by>
         <sys_created_on>2026-01-26 11:35:13</sys_created_on>
         <sys_id>8e1c03ef83ee3210f6b1fb96feaad3bb</sys_id>
-        <sys_mod_count>38</sys_mod_count>
+        <sys_mod_count>47</sys_mod_count>
         <sys_name>Kokoro User</sys_name>
         <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
         <sys_policy/>
         <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
         <sys_update_name>sp_widget_8e1c03ef83ee3210f6b1fb96feaad3bb</sys_update_name>
         <sys_updated_by>admin</sys_updated_by>
-        <sys_updated_on>2026-01-27 05:33:47</sys_updated_on>
+        <sys_updated_on>2026-02-03 06:53:17</sys_updated_on>
         <template><![CDATA[<div class="kokoro-user-container">
   
-  <!-- 设置按钮 -->
-  <div class="safety-settings-btn" ng-click="c.toggleSettings()">
-    <i class="fa fa-cog"></i> 設定
-  </div>
-  
-  <!-- 管理者切换 -->
-  <div class="admin-switch" ng-if="c.data.is_volunteer" ng-click="c.goToVolunteerView()">
-    <i class="fa fa-user-md"></i>
+  <div class="kokoro-menu-btn" ng-click="c.toggleMenu()" ng-class="{'active': c.showMenu}">
+    <i class="fa fa-bars" ng-if="!c.showMenu"></i>
+    <i class="fa fa-times" ng-if="c.showMenu"></i>
   </div>
 
-  <!-- 设置覆盖层 -->
+  <div class="kokoro-menu-dropdown" ng-if="c.showMenu">
+    
+    <div class="menu-item" ng-click="c.toggleHistory()">
+      <div class="icon-box"><i class="fa fa-history"></i></div>
+      <div class="text-box">
+        <span class="menu-title">申請履歴</span>
+        <span class="menu-sub">History</span>
+      </div>
+      <span class="badge-pill" ng-if="c.data.my_requests.length > 0">{{c.data.my_requests.length}}</span>
+    </div>
+
+    <div class="menu-item" ng-click="c.toggleGuardianCircle()">
+      <div class="icon-box">
+        <i class="fa fa-users"></i>
+      </div>
+      <div class="text-box">
+        <span class="menu-title">守護の輪</span>
+        <span class="menu-sub">Guardian Circle</span>
+      </div>
+      <span class="badge-pill badge-alert" ng-if="c.data.friend_notifications > 0">
+        {{c.data.friend_notifications}}
+      </span>
+    </div>
+
+    <div class="menu-item" ng-click="c.toggleSettings()">
+      <div class="icon-box"><i class="fa fa-cog"></i></div>
+      <div class="text-box">
+        <span class="menu-title">安全設定</span>
+        <span class="menu-sub">Settings</span>
+      </div>
+    </div>
+
+    <div class="menu-item highlight" ng-if="c.data.is_volunteer" ng-click="c.goToVolunteerView()">
+      <div class="icon-box"><i class="fa fa-user-md"></i></div>
+      <div class="text-box">
+        <span class="menu-title">管理者モード</span>
+        <span class="menu-sub">Volunteer</span>
+      </div>
+    </div>
+    
+  </div>
+  
+  <div class="menu-backdrop" ng-if="c.showMenu" ng-click="c.toggleMenu()"></div>
+
   <div class="settings-overlay" ng-if="c.showSettings">
     <div class="settings-card">
       <div class="card-header">
@@ -2300,10 +4504,259 @@ textarea.glass-input {
       </button>
     </div>
   </div>
+
+  <div class="guardian-overlay" ng-if="c.show_guardian">
+    <div class="guardian-card">
+      
+      <div class="card-header gradient-header">
+        <h3>
+          <i class="fa fa-shield"></i> 
+          守護の輪
+        </h3>
+        <button class="close-btn" ng-click="c.toggleGuardianCircle()">&times;</button>
+      </div>
+
+      <div class="tab-bar">
+        <div class="tab-item" 
+             ng-class="{'active': c.guardian_tab === 'friends'}"
+             ng-click="c.guardian_tab = 'friends'">
+          <i class="fa fa-users"></i>
+          <span>好友 ({{c.data.friends.length}})</span>
+        </div>
+        <div class="tab-item" 
+             ng-class="{'active': c.guardian_tab === 'requests'}"
+             ng-click="c.guardian_tab = 'requests'">
+          <i class="fa fa-bell"></i>
+          <span>请求 ({{c.data.friend_requests.length}})</span>
+        </div>
+        <div class="tab-item" 
+             ng-class="{'active': c.guardian_tab === 'search'}"
+             ng-click="c.guardian_tab = 'search'">
+          <i class="fa fa-search"></i>
+          <span>添加</span>
+        </div>
+      </div>
+
+      <div class="tab-content" ng-if="c.guardian_tab === 'friends'">
+        
+        <div ng-if="!c.data.friends || c.data.friends.length === 0" 
+             class="empty-state">
+          <i class="fa fa-user-plus fa-3x"></i>
+          <p>まだ友達がいません</p>
+          <button class="btn-primary-small" ng-click="c.guardian_tab = 'search'">
+            友達を追加
+          </button>
+        </div>
+
+        <div class="friend-list">
+          <div class="friend-card" 
+               ng-repeat="friend in c.data.friends"
+               ng-click="c.showFriendDetail(friend)">
+            
+            <div class="friend-avatar-wrapper">
+              <div class="friend-avatar">
+                <i class="fa fa-user"></i>
+              </div>
+              <div class="status-dot" ng-class="friend.heartbeat_status">
+                <span class="pulse-ring"></span>
+              </div>
+            </div>
+
+            <div class="friend-info">
+              <div class="friend-name">
+                {{friend.display_name}}
+                <span class="friend-badge" ng-if="friend.is_family">家族</span>
+              </div>
+              <div class="friend-status-text">
+                <i class="fa fa-clock-o"></i>
+                {{friend.last_heartbeat_time}}
+              </div>
+              <div class="friend-location" ng-if="friend.current_zone">
+                <i class="fa fa-map-marker"></i>
+                {{friend.current_zone}}
+              </div>
+            </div>
+
+            <div class="friend-actions">
+              <button class="icon-btn emergency-btn" 
+                      ng-click="c.emergencyCall(friend, $event)"
+                      ng-if="friend.heartbeat_status === 'critical'">
+                <i class="fa fa-exclamation-triangle"></i>
+              </button>
+              
+              <button class="icon-btn message-btn" 
+                      ng-click="c.sendMessage(friend, $event)">
+                <i class="fa fa-comment"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-content" ng-if="c.guardian_tab === 'requests'">
+        
+        <div ng-if="!c.data.friend_requests || c.data.friend_requests.length === 0" 
+             class="empty-state">
+          <i class="fa fa-inbox fa-3x"></i>
+          <p>新しいリクエストはありません</p>
+        </div>
+
+        <div class="request-list">
+          <div class="request-card" ng-repeat="req in c.data.friend_requests">
+            
+            <div class="request-avatar">
+              <i class="fa fa-user"></i>
+            </div>
+
+            <div class="request-info">
+              <div class="request-name">{{req.from_user_name}}</div>
+              <div class="request-time">
+                <i class="fa fa-clock-o"></i>
+                {{req.time_ago}}
+              </div>
+              <div class="request-message" ng-if="req.message">
+                "{{req.message}}"
+              </div>
+            </div>
+
+            <div class="request-actions">
+              <button class="btn-accept" ng-click="c.acceptFriendRequest(req)">
+                <i class="fa fa-check"></i>
+                承認
+              </button>
+              <button class="btn-reject" ng-click="c.rejectFriendRequest(req)">
+                <i class="fa fa-times"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-content" ng-if="c.guardian_tab === 'search'">
+        
+        <div class="search-box">
+          <i class="fa fa-search"></i>
+          <input type="text" 
+                 class="search-input" 
+                 ng-model="c.search_query"
+                 placeholder="名前またはメールで検索..."
+                 ng-change="c.searchUsers()">
+        </div>
+
+        <div class="search-results" ng-if="c.search_results.length > 0">
+          <div class="search-item" ng-repeat="user in c.search_results">
+            
+            <div class="search-avatar">
+              <i class="fa fa-user"></i>
+            </div>
+
+            <div class="search-info">
+              <div class="search-name">{{user.name}}</div>
+              <div class="search-email">{{user.email}}</div>
+            </div>
+
+            <button class="btn-add-friend" 
+                    ng-click="c.sendFriendRequest(user)"
+                    ng-disabled="user.already_friend || user.request_sent">
+              <i class="fa fa-user-plus"></i>
+              <span ng-if="!user.already_friend && !user.request_sent">追加</span>
+              <span ng-if="user.request_sent">送信済</span>
+              <span ng-if="user.already_friend">友達</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="recommended-section" ng-if="c.recommended_friends.length > 0">
+          <h4 class="section-title">おすすめのユーザー</h4>
+          <div class="search-item" ng-repeat="user in c.recommended_friends">
+            <div class="search-avatar"><i class="fa fa-user"></i></div>
+            <div class="search-info">
+              <div class="search-name">{{user.name}}</div>
+              <div class="search-hint">同じエリア</div>
+            </div>
+            <button class="btn-add-friend" ng-click="c.sendFriendRequest(user)">
+              <i class="fa fa-user-plus"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="friend-detail-overlay" ng-if="c.selected_friend">
+    <div class="friend-detail-card">
+      
+      <button class="back-btn" ng-click="c.selected_friend = null">
+        <i class="fa fa-arrow-left"></i>
+      </button>
+
+      <div class="detail-header">
+        <div class="detail-avatar-large">
+          <i class="fa fa-user"></i>
+          <div class="status-indicator" ng-class="c.selected_friend.heartbeat_status"></div>
+        </div>
+        <h3>{{c.selected_friend.display_name}}</h3>
+        <p class="detail-status-text">{{c.selected_friend.status_message}}</p>
+      </div>
+
+      <div class="detail-stats">
+        <div class="stat-item">
+          <i class="fa fa-heartbeat"></i>
+          <span>最後の心拍</span>
+          <strong>{{c.selected_friend.last_heartbeat_time}}</strong>
+        </div>
+        <div class="stat-item" ng-if="c.selected_friend.current_zone">
+          <i class="fa fa-map-marker"></i>
+          <span>現在地</span>
+          <strong>{{c.selected_friend.current_zone}}</strong>
+        </div>
+      </div>
+
+      <div class="detail-actions">
+        <button class="btn-action-large emergency" 
+                ng-if="c.selected_friend.heartbeat_status === 'critical'"
+                ng-click="c.emergencyCall(c.selected_friend)">
+          <i class="fa fa-exclamation-triangle"></i>
+          緊急呼び出し
+        </button>
+        <button class="btn-action-large primary" 
+                ng-click="c.sendMessage(c.selected_friend)">
+          <i class="fa fa-comment"></i>
+          メッセージを送る
+        </button>
+        <button class="btn-action-large" 
+                ng-click="c.viewFriendHistory(c.selected_friend)">
+          <i class="fa fa-history"></i>
+          心拍履歴を見る
+        </button>
+      </div>
+
+      <div class="detail-settings">
+        <div class="setting-item">
+          <span>位置情報共有</span>
+          <label class="toggle-switch">
+            <input type="checkbox" ng-model="c.selected_friend.share_location">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="setting-item">
+          <span>緊急時に通知</span>
+          <label class="toggle-switch">
+            <input type="checkbox" ng-model="c.selected_friend.alert_enabled">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <button class="btn-danger-outline" ng-click="c.removeFriend(c.selected_friend)">
+        <i class="fa fa-trash"></i>
+        友達を削除
+      </button>
+    </div>
+  </div>
   
-  <!-- 初始界面 - 史莱姆 -->
   <div ng-if="c.step === 0 && !c.show_will_input">
-    <!-- 提示文字 -->
     <div class="pulse-overlay">
       <h2 class="pulse-title">
         今日、無事ですか？
@@ -2311,7 +4764,6 @@ textarea.glass-input {
       </h2>
     </div>
 
-    <!-- 史莱姆舞台 -->
     <div class="slime-stage">
       <div id="the-slime" class="kokoro-slime" 
            ng-class="{'happy-slime': c.step >= 1, 'poked': c.is_poked}"
@@ -2321,7 +4773,37 @@ textarea.glass-input {
     </div>
   </div>
 
-  <!-- 遗言输入 -->
+  <div class="history-overlay" ng-if="c.show_history">
+    <div class="history-card">
+      <div class="card-header">
+        <h3><i class="fa fa-list-alt" style="color: #ec407a;"></i> 申請履歴</h3>
+        <button class="close-btn" ng-click="c.toggleHistory()">&times;</button>
+      </div>
+      
+      <div class="history-list">
+        <div ng-if="!c.data.my_requests || c.data.my_requests.length === 0" style="text-align:center; padding: 40px; color:#aaa;">
+          <i class="fa fa-folder-open-o" style="font-size: 30px; margin-bottom:10px;"></i><br>
+          まだ履歴がありません
+        </div>
+
+        <div class="history-item" ng-repeat="item in c.data.my_requests" ng-click="c.loadTicket(item)">
+          <div class="item-icon">
+            {{c.statusDetails[item.state].icon}}
+          </div>
+          
+          <div class="item-info">
+            <span class="item-cat">{{item.category_display}}</span>
+            <span class="item-date"><i class="fa fa-clock-o"></i> {{item.time_ago}}</span>
+          </div>
+          
+          <div class="item-status" ng-class="'status-' + item.state">
+            {{item.state_label}}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
   <div class="will-overlay" ng-if="c.show_will_input">
     <div class="will-card">
       <h3 class="will-title"><i class="fa fa-heartbeat"></i> 生存確認完了</h3>
@@ -2334,7 +4816,6 @@ textarea.glass-input {
     </div>
   </div>
 
-  <!-- 表单容器 -->
   <div class="form-stage" ng-if="c.step > 0">
     <div class="floating-header" ng-if="c.step < 5">
       <h2 class="form-title"><i class="fa fa-heartbeat"></i> 支援リクエスト</h2>
@@ -2430,7 +4911,6 @@ textarea.glass-input {
       </div>
     </div>
 
-    <!-- 成功卡片 -->
     <div class="success-card" ng-if="c.step === 5">
       <div class="status-tracker">
         <div class="status-step" ng-class="{'active': c.current_state_val >= 1}"><div class="icon">]]>📨<![CDATA[</div><div class="text">提出</div></div>
@@ -2472,7 +4952,6 @@ textarea.glass-input {
     </div>
   </div>
 
-  <!-- 加载覆盖层 -->
   <div ng-if="c.submitting" class="loading-overlay">
     <div class="loading-content">
       <i class="fa fa-spinner fa-pulse fa-3x fa-fw"></i>

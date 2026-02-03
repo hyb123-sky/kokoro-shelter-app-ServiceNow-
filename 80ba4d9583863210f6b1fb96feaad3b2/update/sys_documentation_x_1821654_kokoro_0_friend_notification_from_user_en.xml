@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update>
+    <sys_documentation element="from_user" label="From User" language="en" table="x_1821654_kokoro_0_friend_notification">
+        <sys_documentation action="INSERT_OR_UPDATE">
+            <element>from_user</element>
+            <help/>
+            <hint/>
+            <label>From User</label>
+            <language>en</language>
+            <name>x_1821654_kokoro_0_friend_notification</name>
+            <plural>From Users</plural>
+            <sys_class_name>sys_documentation</sys_class_name>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-02-03 06:33:46</sys_created_on>
+            <sys_mod_count>0</sys_mod_count>
+            <sys_name>From User</sys_name>
+            <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+            <sys_policy/>
+            <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+            <sys_update_name>sys_documentation_x_1821654_kokoro_0_friend_notification_from_user_en</sys_update_name>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-02-03 06:33:46</sys_updated_on>
+            <url/>
+            <url_target/>
+        </sys_documentation>
+    </sys_documentation>
+</record_update>

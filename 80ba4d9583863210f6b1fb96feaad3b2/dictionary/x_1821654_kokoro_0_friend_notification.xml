@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="e205d7c6833e3210f6b1fb96feaad32a" label="Friend Notification" max_length="40" name="x_1821654_kokoro_0_friend_notification" type="collection">
+        <element choice="1" label="Type" max_length="40" name="type" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="Status Change" value="status change"/>
+                <element inactive_on_update="false" label="Friend Request" value="friend request"/>
+                <element inactive_on_update="false" label="Emergency Alert" value="emergency alret"/>
+            </choice>
+        </element>
+        <element label="Is Read" max_length="40" name="is_read" type="boolean"/>
+        <element label="To User" max_length="32" name="to_user" reference="sys_user" type="reference"/>
+        <element label="From User" max_length="32" name="from_user" reference="sys_user" type="reference"/>
+        <element label="Message" max_length="40" name="message" type="string"/>
+        <element label="Related Record" max_length="40" name="related_record" type="string"/>
+        <element label="Created At" max_length="40" name="created_at" type="glide_date_time"/>
+        <index name="index">
+            <element name="from_user"/>
+        </index>
+        <index name="index2">
+            <element name="to_user"/>
+        </index>
+    </element>
+</database>
