@@ -1,37 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?><record_update table="sp_widget">
     <sp_widget action="INSERT_OR_UPDATE">
         <category>custom</category>
-        <client_script><![CDATA[function kokoroController($scope, $timeout, $interval, spUtil) {
-  /* * 修复说明：
-   * 1. 这是一个"命名函数" (kokoroController)，解决了 "Expected ident" 错误。
-   * 2. 注释放在函数内部，解决了 "Must contain a function" 错误。
-   */
-  
-  /* jshint validthis: true */
+        <client_script><![CDATA[
+function kokoroController($scope, $timeout, $interval, spUtil, $window) {
   var c = this;
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // 初始化状态
+  // 状态初始化
   // ═══════════════════════════════════════════════════════════════════════════
   
   c.loading = true;
+  c.initialLoadComplete = false;
+  c.loadingProgress = 0;
   c.systemOnline = true;
-  c.version = 'v2.4.1';
+  c.isOffline = !navigator.onLine;
+  c.version = 'v3.0.1';
   c.activeTab = 'overview';
+  c.sidebarOpen = false;
+  c.lastSync = null;
   
-  // 用户信息
-  c.user = {
-    id: 'ADM_001',
-    name: 'Administrator'
-  };
+  c.user = { id: 'ADM_001', name: 'Administrator', role: 'System Admin' };
+  c.mapCenter = { lat: '35.6762', lng: '139.6503' };
+  c.mapZoom = 12;
+  c.mapWidget = null;
   
-  // 地图中心坐标
-  c.mapCenter = {
-    lat: '35.6762',
-    lng: '139.6503'
-  };
-  
-  // 导航配置
   c.tabs = [
     { id: 'overview', label: 'OVERVIEW', code: '01' },
     { id: 'tactical', label: 'TACTICAL', code: '02' },
@@ -39,362 +31,390 @@
     { id: 'logistics', label: 'LOGISTICS', code: '04' }
   ];
   
-  // 地图图层控制
   c.mapControls = [
-    { id: 'sos', label: 'SOS_MARKERS', active: false },
-    { id: 'shelter', label: 'SHELTER_LOC', active: false },
-    { id: 'operator', label: 'OPERATOR_POS', active: false },
-    { id: 'heatmap', label: 'HEAT_OVERLAY', active: true }
+    { id: 'sos', label: 'SOS_MARKERS', icon: ']]>🆘<![CDATA[', active: true, count: 0 },
+    { id: 'shelter', label: 'SHELTER_LOC', icon: ']]>🏠<![CDATA[', active: true, count: 0 },
+    { id: 'operator', label: 'OPERATOR_POS', icon: ']]>👤<![CDATA[', active: false, count: 0 },
+    { id: 'heatmap', label: 'HEAT_OVERLAY', icon: ']]>🔥<![CDATA[', active: false }
   ];
   
-  // 数据初始化
   c.data = {
     kpis: [],
     alerts: [],
     inventory: [],
-    operations: {
-      queue: [],
-      active: [],
-      completed: 0
-    },
-    system: {
-      status: 'ONLINE',
-      uptime: '---',
-      latency: '---',
-      nodes: 0
-    }
+    operations: { queue: [], active: [], completed: 0 },
+    system: { status: 'INITIALIZING', uptime: '---', latency: '---', nodes: 0 }
   };
   
-  // 嵌入的地图 Widget 实例
-  c.mapWidget = null;
+  c.weather = { icon: ']]>🌤<![CDATA[', temp: 18, condition: 'Partly Cloudy', humidity: 65, wind: 3.2, pressure: 1013, visibility: 10, forecast: [], warnings: [] };
+  c.seismic = { magnitude: 0, location: 'No recent activity', level: 5, status: 'STABLE' };
+  c.traffic = { status: 'NORMAL', blockedRoutes: 0 };
+  
+  c.analytics = { slaHealth: 85, healthTrend: [60, 65, 70, 75, 80, 82, 85], currentHealth: 77.73, activeRequests: 37, volunteerUtil: 0, slaTimers: 0, breachTrend: [5, 8, 3, 6, 4, 7, 2] };
+  c.analyticsPeriod = '24h';
+  c.completedHistory = [30, 45, 60, 40, 55, 70, 50];
+  c.opsFilter = 'all';
+  
+  c.showKpiModal = false;
+  c.showAlertModal = false;
+  c.showWeatherPanel = false;
+  c.selectedKpi = null;
+  c.selectedAlert = null;
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 离线功能
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  var CACHE_KEY = 'kokoro_offline_cache';
+  
+  function saveToCache(data) {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: new Date().toISOString(), data: data }));
+    } catch (e) { console.warn('Cache save failed:', e); }
+  }
+  
+  function loadFromCache() {
+    try {
+      var cached = localStorage.getItem(CACHE_KEY);
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) { return null; }
+  }
+  
+  c.syncOfflineData = function() {
+    if (c.isOffline) { alert('Cannot sync while offline'); return; }
+    c.loadData();
+  };
+  
+  $window.addEventListener('online', function() { $scope.$apply(function() { c.isOffline = false; c.loadData(); }); });
+  $window.addEventListener('offline', function() { $scope.$apply(function() { c.isOffline = true; }); });
   
   // ═══════════════════════════════════════════════════════════════════════════
   // 工具函数
   // ═══════════════════════════════════════════════════════════════════════════
   
-  /**
-   * 获取优先级颜色
-   */
-  c.getPriorityColor = function(priority) {
-    var colors = {
-      1: '#1a1a1a',  // Critical
-      2: '#404040',  // High
-      3: '#808080',  // Medium
-      4: '#b0b0b0'   // Low
-    };
-    return colors[priority] || colors[4];
-  };
-  
-  /**
-   * 获取优先级标签
-   */
-  c.getPriorityLabel = function(priority) {
-    var labels = {
-      1: 'CRITICAL',
-      2: 'HIGH',
-      3: 'MEDIUM',
-      4: 'LOW'
-    };
-    return labels[priority] || 'LOW';
-  };
-  
-  /**
-   * 根据百分比获取状态颜色
-   */
-  c.getStatusColor = function(current, capacity) {
-    var ratio = current / capacity;
-    if (ratio < 0.2) return '#1a1a1a';
-    if (ratio < 0.4) return '#404040';
-    if (ratio < 0.7) return '#808080';
-    return '#b0b0b0';
-  };
-  
-  /**
-   * 根据百分比获取状态标签
-   */
-  c.getStatusLabel = function(current, capacity) {
-    var ratio = current / capacity;
-    if (ratio < 0.2) return 'CRITICAL';
-    if (ratio < 0.4) return 'LOW';
-    if (ratio < 0.7) return 'NOMINAL';
-    return 'OPTIMAL';
-  };
-  
-  // ═══════════════════════════════════════════════════════════════════════════
-  // 时间显示
-  // ═══════════════════════════════════════════════════════════════════════════
+  c.getPriorityColor = function(p) { return {1:'#1a1a1a',2:'#404040',3:'#808080',4:'#b0b0b0'}[p] || '#b0b0b0'; };
+  c.getPriorityLabel = function(p) { return {1:'CRITICAL',2:'HIGH',3:'MEDIUM',4:'LOW'}[p] || 'LOW'; };
+  c.getStatusColor = function(cur, cap) { var r=cur/cap; if(r<0.2)return'#d32f2f'; if(r<0.4)return'#f57c00'; if(r<0.7)return'#808080'; return'#388e3c'; };
+  c.getStatusLabel = function(cur, cap) { var r=cur/cap; if(r<0.2)return'CRITICAL'; if(r<0.4)return'LOW'; if(r<0.7)return'NOMINAL'; return'OPTIMAL'; };
   
   function updateTime() {
     var now = new Date();
-    
-    // 格式化时间: HH:MM:SS
-    c.currentTime = now.toLocaleTimeString('en-US', { 
-      hour12: false, 
-      hour: '2-digit', 
-      minute: '2-digit', 
-      second: '2-digit' 
-    });
-    
-    // 格式化日期: YYYY.MM.DD
-    var year = now.getFullYear();
-    var month = String(now.getMonth() + 1).padStart(2, '0');
-    var day = String(now.getDate()).padStart(2, '0');
-    c.currentDate = year + '.' + month + '.' + day;
+    c.currentTime = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    c.currentDate = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0');
   }
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // Tab 切换
+  // 侧边栏 & Tab
   // ═══════════════════════════════════════════════════════════════════════════
+  
+  c.toggleSidebar = function() { c.sidebarOpen = !c.sidebarOpen; };
   
   c.setActiveTab = function(tabId) {
     c.activeTab = tabId;
-    
-    // 如果切换到战术地图 Tab，加载地图 Widget
-    if (tabId === 'tactical' && !c.mapWidget) {
-      c.loadMapWidget();
-    }
+    if (c.sidebarOpen) c.sidebarOpen = false;
+    if (tabId === 'tactical' && !c.mapWidget) c.loadMapWidget();
+    if (tabId === 'logistics') c.refreshAnalytics();
   };
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // 加载地图 Widget (嵌入式 Widget 关键代码)
+  // 地图
   // ═══════════════════════════════════════════════════════════════════════════
   
-  /**
-   * ]]>🔥<![CDATA[ 这是嵌入你的地图 Widget 的核心方法 ]]>🔥
-<![CDATA[   * * 将 'kokoro-live-map' 替换为你实际的地图 Widget ID
-   */
   c.loadMapWidget = function() {
-    // 使用 spUtil.get() 动态加载子 Widget
+    // ]]>🔥<![CDATA[ 将 'kokoro_live_map' 替换为你的地图 Widget ID
     spUtil.get('kokoro_live_map', {
-      // 可以传递参数给地图 Widget
-      // 这些参数会出现在地图 Widget 的 input 对象中
       showControls: true,
-      defaultZoom: 12,
-      defaultCenter: {
-        lat: parseFloat(c.mapCenter.lat),
-        lng: parseFloat(c.mapCenter.lng)
-      }
-    }).then(function(response) {
-      // 保存 Widget 实例
-      c.mapWidget = response;
-      console.log('Map widget loaded successfully');
-    }).catch(function(error) {
-      console.error('Failed to load map widget:', error);
-    });
+      defaultZoom: c.mapZoom,
+      defaultCenter: { lat: parseFloat(c.mapCenter.lat), lng: parseFloat(c.mapCenter.lng) }
+    }).then(function(r) {
+      c.mapWidget = r;
+      c.updateMapLayerCounts();
+    }).catch(function(e) { console.error('Map load failed:', e); });
   };
   
-  /**
-   * 切换地图图层
-   */
   c.toggleMapLayer = function(layerId) {
-    c.mapControls.forEach(function(ctrl) {
-      if (ctrl.id === layerId) {
-        ctrl.active = !ctrl.active;
-      }
-    });
-    
-    // 向地图 Widget 广播图层切换事件
-    $scope.$broadcast('mapLayerToggle', {
-      layerId: layerId,
-      active: c.mapControls.find(function(ctrl) {
-        return ctrl.id === layerId;
-      }).active
-    });
-  };
-  
-  // ═══════════════════════════════════════════════════════════════════════════
-  // 警报处理
-  // ═══════════════════════════════════════════════════════════════════════════
-  
-  c.handleAlertClick = function(alert) {
-    console.log('Alert clicked:', alert);
-    
-    // 如果是高优先级警报，切换到地图视图
-    if (alert.priority <= 2) {
-      c.setActiveTab('tactical');
-      
-      // 延迟广播，确保地图已加载
-      $timeout(function() {
-        $scope.$broadcast('highlightLocation', {
-          sector: alert.sector,
-          priority: alert.priority,
-          alertId: alert.id
-        });
-      }, 500);
+    var ctrl = c.mapControls.find(function(x) { return x.id === layerId; });
+    if (ctrl) {
+      ctrl.active = !ctrl.active;
+      $scope.$broadcast('mapLayerToggle', { layerId: layerId, active: ctrl.active });
     }
   };
+  
+  c.updateMapLayerCounts = function() {
+    var sos = c.mapControls.find(function(x){return x.id==='sos';}); if(sos) sos.count = c.data.alerts.length;
+    var op = c.mapControls.find(function(x){return x.id==='operator';}); 
+    if(op) { var k = c.data.kpis.find(function(x){return x.id==='OPR';}); op.count = k ? k.value : 0; }
+  };
+  
+  c.centerMapOnUser = function() {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(function(pos) {
+        $scope.$apply(function() {
+          c.mapCenter.lat = pos.coords.latitude.toFixed(4);
+          c.mapCenter.lng = pos.coords.longitude.toFixed(4);
+          $scope.$broadcast('centerMap', c.mapCenter);
+        });
+      });
+    }
+  };
+  
+  c.refreshMapData = function() { $scope.$broadcast('refreshMapData'); c.loadData(); };
+  c.createEmergencyMarker = function() { $scope.$broadcast('createEmergencyMarker'); };
+  c.createNewRequest = function() { console.log('Create new request'); };
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // KPI 弹窗
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  c.openKpiDetail = function(kpi) {
+    c.selectedKpi = angular.copy(kpi);
+    c.selectedKpi.history = [];
+    for (var i = 0; i < 7; i++) { c.selectedKpi.history.push(Math.floor(kpi.value * (0.7 + Math.random() * 0.6))); }
+    
+    c.selectedKpi.breakdown = [];
+    if (kpi.id === 'REQ') {
+      c.selectedKpi.breakdown = [
+        { label: 'Food Requests', value: Math.floor(kpi.value * 0.3) },
+        { label: 'Medical Requests', value: Math.floor(kpi.value * 0.25) },
+        { label: 'Shelter Requests', value: Math.floor(kpi.value * 0.2) },
+        { label: 'Water Requests', value: Math.floor(kpi.value * 0.15) },
+        { label: 'Other', value: Math.floor(kpi.value * 0.1) }
+      ];
+    } else if (kpi.id === 'OPR') {
+      c.selectedKpi.breakdown = [
+        { label: 'Field Operators', value: Math.floor(kpi.value * 0.6) },
+        { label: 'Medical Staff', value: Math.floor(kpi.value * 0.2) },
+        { label: 'Logistics', value: Math.floor(kpi.value * 0.15) },
+        { label: 'Coordinators', value: Math.floor(kpi.value * 0.05) }
+      ];
+    }
+    c.showKpiModal = true;
+  };
+  
+  c.exportKpiData = function() { alert('Exporting data for ' + c.selectedKpi.id); };
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Alert 弹窗
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  c.openAlertDetail = function(alert) {
+    c.selectedAlert = angular.copy(alert);
+    c.selectedAlert.priorityLabel = c.getPriorityLabel(alert.priority);
+    c.showAlertModal = true;
+  };
+  
+  c.handleAlertClick = function(alert) { c.openAlertDetail(alert); };
+  c.openAllAlerts = function() { console.log('Open all alerts'); };
+  c.assignAlert = function(a) { console.log('Assign:', a.id); };
+  c.viewOnMap = function(a) { c.closeModal(); c.setActiveTab('tactical'); $timeout(function() { $scope.$broadcast('highlightLocation', { sector: a.sector, alertId: a.id }); }, 500); };
+  c.escalateAlert = function(a) { alert('Escalated: ' + a.id); };
+  c.dismissAlert = function(a) { c.closeModal(); };
+  c.resolveAlert = function(a) { c.closeModal(); c.loadData(); };
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Inventory
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  c.openInventoryDetail = function(item) { console.log('Inventory detail:', item.id); };
+  c.requestRestock = function(item, e) { if(e) e.stopPropagation(); alert('Restock request: ' + item.name); };
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Operations
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  c.createNewTask = function() { console.log('Create task'); };
+  c.refreshOperations = function() { c.loadData(); };
+  c.applyOpsFilter = function() { console.log('Filter:', c.opsFilter); };
+  c.openTaskDetail = function(t) { console.log('Task detail:', t.id); };
+  c.assignTask = function(t, e) { if(e) e.stopPropagation(); console.log('Assign:', t.id); };
+  c.startTask = function(t, e) { if(e) e.stopPropagation(); console.log('Start:', t.id); };
+  c.updateProgress = function(t, e) { if(e) e.stopPropagation(); console.log('Update:', t.id); };
+  c.completeTask = function(t, e) { if(e) e.stopPropagation(); console.log('Complete:', t.id); c.loadData(); };
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 天气/地震/交通
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  c.openWeatherPanel = function() { c.loadWeatherData(); c.showWeatherPanel = true; };
+  c.openSeismicPanel = function() { console.log('Seismic panel'); };
+  c.openTrafficPanel = function() { console.log('Traffic panel'); };
+  
+  c.loadWeatherData = function() {
+    c.weather.forecast = [];
+    var icons = [']]>🌤<![CDATA[', '☀️', '⛅', ']]>🌥<![CDATA[', '☁️'];
+    for (var i = 0; i < 8; i++) {
+      var h = new Date(); h.setHours(h.getHours() + i * 3);
+      c.weather.forecast.push({
+        time: String(h.getHours()).padStart(2,'0') + ':00',
+        icon: icons[Math.floor(Math.random() * icons.length)],
+        temp: c.weather.temp + Math.floor(Math.random() * 6) - 3
+      });
+    }
+  };
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 管理面板
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  c.openManagementPanel = function(type) { console.log('Management:', type); c.toggleSidebar(); };
+  c.openUserProfile = function() { console.log('User profile'); };
+  c.openSettings = function() { console.log('Settings'); c.toggleSidebar(); };
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Analytics
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  c.refreshAnalytics = function() {
+    c.server.get({ action: 'getAnalytics', period: c.analyticsPeriod }).then(function(r) {
+      if (r.data && r.data.analytics) c.analytics = r.data.analytics;
+    });
+  };
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 弹窗控制
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  c.closeModal = function() {
+    c.showKpiModal = false;
+    c.showAlertModal = false;
+    c.showWeatherPanel = false;
+    c.selectedKpi = null;
+    c.selectedAlert = null;
+  };
+  
+  document.addEventListener('keydown', function(e) { if (e.keyCode === 27) { $scope.$apply(function() { c.closeModal(); }); } });
   
   // ═══════════════════════════════════════════════════════════════════════════
   // 数据加载
   // ═══════════════════════════════════════════════════════════════════════════
   
   c.loadData = function() {
-    c.loading = true;
+    if (!c.initialLoadComplete) c.loading = true;
+    c.loadingProgress = 10;
     
-    // 调用 Server Script 获取数据
-    c.server.get({
-      action: 'getData'
-    }).then(function(response) {
-      if (response.data) {
-        // 处理 KPI 数据
-        if (response.data.kpis) {
-          c.data.kpis = response.data.kpis.map(function(kpi) {
-            kpi.trendDisplay = (kpi.trend >= 0 ? '+' : '') + kpi.trend.toFixed(1) + '%';
-            return kpi;
-          });
-        }
-        
-        // 处理 Alerts 数据
-        if (response.data.alerts) {
-          c.data.alerts = response.data.alerts.map(function(alert) {
-            alert.priorityLabel = c.getPriorityLabel(alert.priority);
-            return alert;
-          });
-        }
-        
-        // 处理 Inventory 数据
-        if (response.data.inventory) {
-          c.data.inventory = response.data.inventory.map(function(item) {
-            item.percentage = Math.round((item.current / item.capacity) * 100);
-            item.statusColor = c.getStatusColor(item.current, item.capacity);
-            item.statusLabel = c.getStatusLabel(item.current, item.capacity);
-            return item;
-          });
-        }
-        
-        // 处理 Operations 数据
-        if (response.data.operations) {
-          c.data.operations = response.data.operations;
-        }
-        
-        // 处理 System 数据
-        if (response.data.system) {
-          c.data.system = response.data.system;
-        }
-      }
-      
-      c.loading = false;
-      c.systemOnline = true;
-      
-    }).catch(function(error) {
-      console.error('Data load failed:', error);
-      c.loading = false;
-      c.systemOnline = false;
+    if (c.isOffline) {
+      var cached = loadFromCache();
+      if (cached) { processData(cached.data); c.lastSync = '(cached)'; c.loading = false; c.initialLoadComplete = true; return; }
+    }
+    
+    c.server.get({ action: 'getData' }).then(function(r) {
+      c.loadingProgress = 50;
+      if (r.data) { processData(r.data); saveToCache(r.data); c.lastSync = new Date().toLocaleTimeString(); }
+      c.loadingProgress = 100;
+      $timeout(function() { c.loading = false; c.initialLoadComplete = true; c.systemOnline = true; }, 300);
+    }).catch(function(e) {
+      var cached = loadFromCache();
+      if (cached) { processData(cached.data); c.lastSync = '(cached)'; }
+      c.loading = false; c.initialLoadComplete = true; c.systemOnline = false;
     });
   };
   
-  // ═══════════════════════════════════════════════════════════════════════════
-  // 自动刷新
-  // ═══════════════════════════════════════════════════════════════════════════
-  
-  var refreshInterval;
-  var timeInterval;
-  
-  function startAutoRefresh() {
-    // 每 30 秒刷新数据
-    refreshInterval = $interval(function() {
-      c.loadData();
-    }, 30000);
-  }
-  
-  function startTimeUpdate() {
-    // 每秒更新时间
-    timeInterval = $interval(function() {
-      updateTime();
-    }, 1000);
+  function processData(data) {
+    if (data.kpis) c.data.kpis = data.kpis.map(function(k) { k.trendDisplay = (k.trend >= 0 ? '+' : '') + k.trend.toFixed(1) + '%'; return k; });
+    if (data.alerts) c.data.alerts = data.alerts.map(function(a) { a.priorityLabel = c.getPriorityLabel(a.priority); return a; });
+    if (data.inventory) c.data.inventory = data.inventory.map(function(i) { i.percentage = Math.round((i.current / i.capacity) * 100); i.statusColor = c.getStatusColor(i.current, i.capacity); i.statusLabel = c.getStatusLabel(i.current, i.capacity); return i; });
+    if (data.operations) c.data.operations = data.operations;
+    if (data.system) c.data.system = data.system;
+    c.updateMapLayerCounts();
   }
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // 初始化
+  // Sniper Protocol (清理原生组件)
   // ═══════════════════════════════════════════════════════════════════════════
+  
+  function runSniper() {
+    try {
+      var els = document.body.children;
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'LINK') continue;
+        var isFriend = el.classList && (el.classList.contains('kokoro-zenless') || el.classList.contains('modal'));
+        if (!isFriend && el.querySelector) isFriend = !!el.querySelector('.kokoro-zenless');
+        if (isFriend) continue;
+        var isNav = el.tagName === 'HEADER' || el.tagName === 'NAV' || (el.classList && el.classList.contains('sp-page-header'));
+        if (isNav) { el.style.setProperty('display', 'none', 'important'); el.style.setProperty('visibility', 'hidden', 'important'); }
+      }
+    } catch (e) {}
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 初始化 & 清理
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  var refreshInterval, timeInterval, sniperInterval;
   
   c.$onInit = function() {
-    console.log('KOKORO Command Center initializing...');
-    
-    // 初始化时间显示
+    console.log('KOKORO Command Center v3.0 initializing...');
     updateTime();
-    startTimeUpdate();
-    
-    // 加载数据
+    timeInterval = $interval(updateTime, 1000);
     c.loadData();
-    
-    // 启动自动刷新
-    startAutoRefresh();
-    
-    console.log('KOKORO Command Center initialized');
+    refreshInterval = $interval(function() { if (!c.isOffline) c.loadData(); }, 30000);
+    $timeout(runSniper, 0);
+    sniperInterval = $interval(runSniper, 500);
+    $timeout(function() { $interval.cancel(sniperInterval); sniperInterval = $interval(runSniper, 3000); }, 10000);
+    console.log('KOKORO initialized');
   };
   
-  // ═══════════════════════════════════════════════════════════════════════════
-  // 清理
-  // ═══════════════════════════════════════════════════════════════════════════
-  
   $scope.$on('$destroy', function() {
-    // 清理定时器
-    if (refreshInterval) {
-      $interval.cancel(refreshInterval);
-    }
-    if (timeInterval) {
-      $interval.cancel(timeInterval);
-    }
-    
-    console.log('KOKORO Command Center destroyed');
+    if (refreshInterval) $interval.cancel(refreshInterval);
+    if (timeInterval) $interval.cancel(timeInterval);
+    if (sniperInterval) $interval.cancel(sniperInterval);
   });
 }]]></client_script>
         <controller_as>c</controller_as>
-        <css>/* 
-═══════════════════════════════════════════════════════════════════════════════
-  KOKORO COMMAND CENTER - SCSS STYLES
-  绝区零/鸣潮 白色工业极简风格
-  
-  复制此代码到 ServiceNow Widget Editor &gt; CSS - SCSS
-═══════════════════════════════════════════════════════════════════════════════
-*/
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// DESIGN TOKENS 设计变量
+        <css>// ═══════════════════════════════════════════════════════════════════════════════
+// DESIGN TOKENS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// 颜色系统 - 白色工业风格
-$bg-base: #fafafa;           // 主背景
-$bg-elevated: #ffffff;       // 卡片背景
-$bg-subtle: #f0f0f0;         // 次级背景
-$bg-muted: #f8f8f8;          // 淡背景
+$bg-base: #fafafa;
+$bg-elevated: #ffffff;
+$bg-subtle: #f0f0f0;
+$bg-muted: #f8f8f8;
 
 $border-light: #e8e8e8;
 $border-default: #e0e0e0;
 $border-strong: #d0d0d0;
 
-$text-primary: #1a1a1a;      // 主文字
-$text-secondary: #404040;    // 次级文字
-$text-tertiary: #808080;     // 三级文字
-$text-muted: #a0a0a0;        // 弱化文字
-$text-disabled: #c0c0c0;     // 禁用文字
+$text-primary: #1a1a1a;
+$text-secondary: #404040;
+$text-tertiary: #808080;
+$text-muted: #a0a0a0;
+$text-disabled: #c0c0c0;
 
-// 优先级颜色 (灰阶系统)
 $priority-critical: #1a1a1a;
 $priority-high: #404040;
 $priority-medium: #808080;
 $priority-low: #b0b0b0;
 
-// 字体系统
-$font-ui: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
-$font-mono: 'Space Mono', 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
+$accent-danger: #d32f2f;
+$accent-warning: #f57c00;
+$accent-success: #388e3c;
+$accent-info: #1976d2;
 
-// 间距系统 (8px 网格)
+$font-ui: 'Inter', -apple-system, sans-serif;
+$font-mono: 'Space Mono', 'JetBrains Mono', monospace;
+
 $space-xs: 4px;
 $space-sm: 8px;
 $space-md: 16px;
 $space-lg: 24px;
 $space-xl: 32px;
-$space-2xl: 48px;
+
+$sidebar-width: 280px;
+$header-height: 72px;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ANIMATIONS 动画
+// ANIMATIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
 }
 
 @keyframes pulse {
@@ -406,56 +426,90 @@ $space-2xl: 48px;
   to { transform: rotate(360deg); }
 }
 
+@keyframes equalizer {
+  0% { height: 4px; opacity: 0.4; }
+  50% { height: 10px; opacity: 0.8; }
+  100% { height: 4px; opacity: 0.4; }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// BASE CONTAINER 基础容器
+// BASE CONTAINER
 // ═══════════════════════════════════════════════════════════════════════════════
 
 .kokoro-zenless {
-  min-height: 100vh;
+  // 必须加上这几行来接管从 HTML &lt;style&gt; 传递过来的全屏控制
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1000;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background: $bg-base;
-  color: $text-primary;
-  font-family: $font-ui;
-  position: relative;
-  overflow-x: hidden;
+  z-index: 1000;
   
   * {
     box-sizing: border-box;
   }
 }
 
-// 噪点纹理层
-.noise-layer {
+// ═══════════════════════════════════════════════════════════════════════════════
+// OFFLINE BANNER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+.offline-banner {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  bottom: 0;
-  opacity: 0.03;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-  pointer-events: none;
-  z-index: 1000;
+  height: 32px;
+  background: $accent-warning;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $space-sm;
+  font-size: 12px;
+  font-weight: 600;
+  z-index: 3000;
+  
+  .offline-icon { font-size: 14px; }
 }
 
-// 网格背景
+.offline-mode {
+  .kz-header { margin-top: 32px; }
+  .kz-sidebar { top: 32px; height: calc(100vh - 32px); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BACKGROUND LAYERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+.noise-layer {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  opacity: 0.02;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
 .grid-layer {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: 0; left: 0; right: 0; bottom: 0;
   background-image: 
-    linear-gradient(rgba(0,0,0,0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,0,0,0.025) 1px, transparent 1px);
+    linear-gradient(rgba(0,0,0,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.02) 1px, transparent 1px);
   background-size: 48px 48px;
   pointer-events: none;
   z-index: 0;
 }
 
-// 四角装饰括号
 .corner-bracket {
   position: fixed;
-  width: 24px;
-  height: 24px;
+  width: 24px; height: 24px;
   border-left: 2px solid $border-strong;
   border-top: 2px solid $border-strong;
   z-index: 100;
@@ -468,27 +522,198 @@ $space-2xl: 48px;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HEADER 顶部导航栏
+// SIDEBAR
+// ═══════════════════════════════════════════════════════════════════════════════
+
+.kz-sidebar {
+  position: fixed;
+  top: 0; left: 0;
+  width: $sidebar-width;
+  height: 100vh;
+  background: $bg-elevated;
+  border-right: 1px solid $border-default;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
+  z-index: 2500;
+  display: flex;
+  flex-direction: column;
+  
+  &amp;.open { transform: translateX(0); }
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: $space-md;
+  padding: $space-lg;
+  border-bottom: 1px solid $border-default;
+  
+  .sidebar-logo {
+    width: 36px; height: 36px;
+    background: $text-primary;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+    
+    .logo-letter {
+      color: $bg-base;
+      font-size: 16px;
+      font-weight: 700;
+      font-family: $font-mono;
+    }
+  }
+  
+  .sidebar-title {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    flex: 1;
+  }
+  
+  .sidebar-close {
+    width: 32px; height: 32px;
+    background: transparent;
+    border: 1px solid $border-default;
+    color: $text-tertiary;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.15s;
+    
+    &amp;:hover {
+      background: $bg-subtle;
+      color: $text-primary;
+    }
+  }
+}
+
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: $space-md 0;
+}
+
+.sidebar-section {
+  padding: 0 $space-md;
+  margin-bottom: $space-lg;
+}
+
+.sidebar-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: $text-muted;
+  padding: $space-sm $space-md;
+  font-family: $font-mono;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: $space-md;
+  width: 100%;
+  padding: 12px $space-md;
+  background: transparent;
+  border: none;
+  color: $text-secondary;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+  
+  &amp;:hover {
+    background: $bg-subtle;
+    color: $text-primary;
+  }
+  
+  .sidebar-icon {
+    font-size: 16px;
+    width: 24px;
+    text-align: center;
+  }
+}
+
+.sidebar-footer {
+  padding: $space-lg;
+  border-top: 1px solid $border-default;
+}
+
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: $space-md;
+  
+  .user-avatar {
+    width: 40px; height: 40px;
+    background: $text-primary;
+    color: $bg-base;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 2px;
+  }
+  
+  .user-name { font-size: 13px; font-weight: 600; }
+  .user-role { font-size: 11px; color: $text-tertiary; }
+}
+
+.sidebar-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.3);
+  z-index: 2400;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HEADER
 // ═══════════════════════════════════════════════════════════════════════════════
 
 .kz-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: $space-md $space-xl;
+  width: 100%;
+  height: $header-height;
+  padding: 0 $space-xl;
   background: linear-gradient(180deg, $bg-elevated 0%, $bg-subtle 100%);
   border-bottom: 1px solid $border-default;
-  position: relative;
+  flex-shrink: 0;
   z-index: 100;
+  gap: $space-lg;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: $space-xl;
+  gap: $space-lg;
+  flex-shrink: 0;
 }
 
-// Logo 组合
+.hamburger-btn {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  width: 40px; height: 40px;
+  background: transparent;
+  border: 1px solid $border-default;
+  cursor: pointer;
+  transition: all 0.15s;
+  
+  &amp;:hover {
+    background: $bg-subtle;
+    border-color: $border-strong;
+  }
+  
+  .hamburger-line {
+    width: 18px; height: 2px;
+    background: $text-primary;
+  }
+}
+
 .logo-group {
   display: flex;
   align-items: center;
@@ -496,13 +721,11 @@ $space-2xl: 48px;
 }
 
 .logo-mark {
-  width: 40px;
-  height: 40px;
+  width: 40px; height: 40px;
   background: $text-primary;
   display: flex;
   align-items: center;
   justify-content: center;
-  // 切角效果
   clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
   
   .logo-letter {
@@ -518,9 +741,7 @@ $space-2xl: 48px;
     font-size: 16px;
     font-weight: 700;
     letter-spacing: 3px;
-    color: $text-primary;
   }
-  
   .logo-subtitle {
     font-size: 9px;
     letter-spacing: 1px;
@@ -529,7 +750,6 @@ $space-2xl: 48px;
   }
 }
 
-// 系统状态徽章
 .system-badge {
   display: flex;
   align-items: center;
@@ -539,16 +759,18 @@ $space-2xl: 48px;
   border: 1px solid $border-default;
   
   .status-dot {
-    width: 6px;
-    height: 6px;
+    width: 6px; height: 6px;
     background: $text-muted;
     border-radius: 1px;
-    transition: all 0.3s ease;
   }
   
   &amp;.online .status-dot {
-    background: $text-primary;
+    background: $accent-success;
     animation: pulse 2s infinite;
+  }
+  
+  &amp;.offline .status-dot {
+    background: $accent-warning;
   }
   
   .status-text {
@@ -565,10 +787,11 @@ $space-2xl: 48px;
   }
 }
 
-// 导航菜单
 .kz-nav {
   display: flex;
   gap: 4px;
+  flex: 1;
+  justify-content: center;
 }
 
 .nav-item {
@@ -584,7 +807,7 @@ $space-2xl: 48px;
   letter-spacing: 1px;
   cursor: pointer;
   font-family: $font-mono;
-  transition: all 0.15s ease;
+  transition: all 0.15s;
   
   &amp;:hover {
     color: $text-secondary;
@@ -597,24 +820,33 @@ $space-2xl: 48px;
     border-color: $text-primary;
   }
   
-  .nav-code {
-    opacity: 0.6;
-  }
-  
-  .nav-divider {
-    opacity: 0.3;
-  }
+  .nav-code { opacity: 0.6; }
+  .nav-divider { opacity: 0.3; }
 }
 
-// Header 右侧
 .header-right {
   display: flex;
   align-items: center;
   gap: $space-lg;
+  flex-shrink: 0;
 }
 
-.time-display,
-.date-display {
+.weather-mini {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  padding: 6px 12px;
+  background: $bg-subtle;
+  border: 1px solid $border-default;
+  cursor: pointer;
+  transition: all 0.15s;
+  
+  &amp;:hover { border-color: $border-strong; }
+  .weather-icon { font-size: 16px; }
+  .weather-temp { font-size: 12px; font-weight: 600; font-family: $font-mono; }
+}
+
+.time-display, .date-display {
   text-align: right;
   
   [class$="-label"] {
@@ -645,47 +877,26 @@ $space-2xl: 48px;
   padding: $space-sm 14px;
   background: $bg-subtle;
   border: 1px solid $border-default;
+  cursor: pointer;
+  transition: all 0.15s;
   
-  .operator-icon {
-    font-size: 14px;
-    color: $text-primary;
-  }
-  
-  .operator-label {
-    font-size: 8px;
-    letter-spacing: 1px;
-    color: $text-tertiary;
-    font-family: $font-mono;
-  }
-  
-  .operator-id {
-    font-size: 11px;
-    font-weight: 600;
-    font-family: $font-mono;
-  }
+  &amp;:hover { border-color: $border-strong; }
+  .operator-icon { font-size: 14px; }
+  .operator-label { font-size: 8px; letter-spacing: 1px; color: $text-tertiary; font-family: $font-mono; }
+  .operator-id { font-size: 11px; font-weight: 600; font-family: $font-mono; }
 }
 
-// 装饰分割线
 .header-rule {
   display: flex;
   align-items: center;
   padding: 0 $space-xl;
   background: $bg-subtle;
   height: 24px;
+  flex-shrink: 0;
   
-  .rule-left,
-  .rule-right {
-    flex: 1;
-    height: 1px;
-  }
-  
-  .rule-left {
-    background: linear-gradient(90deg, transparent, $border-strong);
-  }
-  
-  .rule-right {
-    background: linear-gradient(90deg, $border-strong, transparent);
-  }
+  .rule-left, .rule-right { flex: 1; height: 1px; }
+  .rule-left { background: linear-gradient(90deg, transparent, $border-strong); }
+  .rule-right { background: linear-gradient(90deg, $border-strong, transparent); }
   
   .rule-center {
     display: flex;
@@ -700,29 +911,20 @@ $space-2xl: 48px;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MAIN CONTENT 主内容区
+// MAIN CONTENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
 .kz-main {
+  flex: 1;
   padding: $space-lg $space-xl;
-  min-height: calc(100vh - 140px);
+  overflow-y: auto;
   position: relative;
   z-index: 10;
 }
 
-// Tab 面板
-.tab-panel {
-  animation: fadeIn 0.3s ease;
-  
-  &amp;.fade-in {
-    animation: fadeIn 0.3s ease;
-  }
-}
+.tab-panel { animation: fadeIn 0.3s ease; }
 
-// Section 通用样式
-.section-block {
-  margin-bottom: $space-lg;
-}
+.section-block { margin-bottom: $space-lg; }
 
 .section-header {
   display: flex;
@@ -739,30 +941,24 @@ $space-2xl: 48px;
   background: $text-primary;
   color: $bg-base;
   
-  .tag-code {
-    font-size: 9px;
-    font-family: $font-mono;
-    opacity: 0.6;
-  }
-  
-  .tag-label {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 1px;
-    font-family: $font-mono;
-  }
+  .tag-code { font-size: 9px; font-family: $font-mono; opacity: 0.6; }
+  .tag-label { font-size: 10px; font-weight: 600; letter-spacing: 1px; font-family: $font-mono; }
 }
 
-.section-rule {
-  flex: 1;
-  height: 1px;
-  background: $border-default;
-}
+.section-rule { flex: 1; height: 1px; background: $border-default; }
+.section-time { font-size: 10px; color: $text-tertiary; font-family: $font-mono; }
 
-.section-time {
+.section-action {
+  background: transparent;
+  border: 1px solid $border-default;
+  padding: 4px 12px;
   font-size: 10px;
-  color: $text-tertiary;
   font-family: $font-mono;
+  color: $text-tertiary;
+  cursor: pointer;
+  transition: all 0.15s;
+  
+  &amp;:hover { background: $bg-subtle; color: $text-primary; }
 }
 
 .alert-count {
@@ -775,22 +971,9 @@ $space-2xl: 48px;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// OVERVIEW TAB 总览页面
+// KPI CARDS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Overview 布局
-.tab-panel:first-child {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: $space-lg;
-  
-  .section-kpi,
-  .section-system {
-    grid-column: 1 / -1;
-  }
-}
-
-// KPI 卡片
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -803,31 +986,44 @@ $space-2xl: 48px;
   padding: 20px;
   position: relative;
   overflow: hidden;
-  transition: all 0.2s ease;
+  transition: all 0.2s;
   
-  &amp;:hover {
-    border-color: $border-strong;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  &amp;.clickable {
+    cursor: pointer;
+    
+    &amp;:hover {
+      border-color: $text-primary;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      transform: translateY(-2px);
+      
+      .click-hint { opacity: 1; }
+    }
   }
 }
 
-// 切角装饰
+.click-hint {
+  position: absolute;
+  top: $space-sm;
+  right: $space-sm;
+  font-size: 8px;
+  color: $text-muted;
+  font-family: $font-mono;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
 .chamfer-tr {
   position: absolute;
-  top: 0;
-  right: 0;
-  width: 16px;
-  height: 16px;
+  top: 0; right: 0;
+  width: 16px; height: 16px;
   background: $bg-base;
   clip-path: polygon(0 0, 100% 100%, 100% 0);
 }
 
 .chamfer-bl {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 16px;
-  height: 16px;
+  bottom: 0; left: 0;
+  width: 16px; height: 16px;
   background: $bg-base;
   clip-path: polygon(0 0, 0 100%, 100% 100%);
 }
@@ -837,18 +1033,8 @@ $space-2xl: 48px;
   align-items: baseline;
   margin-bottom: $space-md;
   
-  .kpi-id {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    font-family: $font-mono;
-  }
-  
-  .kpi-index {
-    font-size: 9px;
-    color: $text-muted;
-    font-family: $font-mono;
-  }
+  .kpi-id { font-size: 11px; font-weight: 700; letter-spacing: 1px; font-family: $font-mono; }
+  .kpi-index { font-size: 9px; color: $text-muted; font-family: $font-mono; }
 }
 
 .kpi-body {
@@ -856,19 +1042,8 @@ $space-2xl: 48px;
   align-items: baseline;
   margin-bottom: $space-sm;
   
-  .kpi-value {
-    font-size: 42px;
-    font-weight: 700;
-    line-height: 1;
-    letter-spacing: -1px;
-  }
-  
-  .kpi-unit {
-    font-size: 14px;
-    font-weight: 500;
-    color: $text-tertiary;
-    margin-left: 4px;
-  }
+  .kpi-value { font-size: 42px; font-weight: 700; line-height: 1; letter-spacing: -1px; }
+  .kpi-unit { font-size: 14px; font-weight: 500; color: $text-tertiary; margin-left: 4px; }
 }
 
 .kpi-label {
@@ -889,39 +1064,96 @@ $space-2xl: 48px;
     font-weight: 600;
     font-family: $font-mono;
     
-    &amp;.trend-up { color: $text-primary; }
-    &amp;.trend-down { color: $text-secondary; }
+    &amp;.trend-up { color: $accent-success; }
+    &amp;.trend-down { color: $accent-danger; }
   }
   
-  .kpi-status {
-    font-size: 9px;
-    color: $text-muted;
-    font-family: $font-mono;
-  }
+  .kpi-status { font-size: 9px; color: $text-muted; font-family: $font-mono; }
 }
 
-// 条形码装饰
+// 覆盖修复：确保 KPI 正常闭合，且 Realtime 样式生效
+
 .barcode-deco {
   position: absolute;
-  bottom: $space-sm;
-  right: $space-sm;
+  bottom: 12px;
+  right: 12px;
   display: flex;
   gap: 2px;
   align-items: flex-end;
+  height: 16px;
   
   .bar {
+    display: inline-block;
     width: 2px;
-    height: 8px;
-    background: $text-primary;
-    opacity: 0.1;
+    height: 6px;
+    background: #b0b0b0;
+    opacity: 0.5;
+    animation: equalizer 2s infinite ease-in-out;
     
-    &amp;:nth-child(odd) { height: 12px; }
-    &amp;:nth-child(3n) { height: 6px; }
+    // 简单循环，避免复杂嵌套出错
+    &amp;:nth-child(odd) { height: 8px; }
+    &amp;:nth-child(even) { height: 4px; }
+  }
+} 
+// ↑↑↑ 检查这里！你之前可能少了这个闭合括号，导致下面的样式变成了 .barcode-deco 的子元素
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// REAL-TIME MONITOR (修复版)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+.realtime-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px; // 使用固定值避免变量失效
+  margin-top: 16px;
+}
+
+.realtime-card {
+  background: #ffffff; // 避免变量 $bg-elevated 失效
+  border: 1px solid #e0e0e0;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  
+  &amp;:hover {
+    border-color: #1a1a1a;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  
+  .realtime-icon { font-size: 28px; }
+  .realtime-content { flex: 1; }
+  .realtime-title { font-size: 9px; letter-spacing: 1px; color: #808080; font-family: monospace; }
+  .realtime-value { font-size: 18px; font-weight: 700; color: #1a1a1a; }
+  .realtime-sub { font-size: 11px; color: #808080; }
+  
+  .realtime-extra {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 10px;
+    color: #808080;
+    font-family: monospace;
+  }
+}
+  
+  .realtime-status {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 4px 8px;
+    background: $bg-subtle;
+    font-family: $font-mono;
+    
+    &amp;.level-1, &amp;.level-2 { background: rgba($accent-danger, 0.1); color: $accent-danger; }
+    &amp;.level-3 { background: rgba($accent-warning, 0.1); color: $accent-warning; }
+    &amp;.level-4, &amp;.level-5 { background: rgba($accent-success, 0.1); color: $accent-success; }
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ALERTS SECTION 警报区
+// ALERTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 .section-alerts {
@@ -934,20 +1166,12 @@ $space-2xl: 48px;
   display: flex;
   flex-direction: column;
   gap: $space-sm;
-  max-height: 320px;
+  max-height: 280px;
   overflow-y: auto;
   
-  &amp;::-webkit-scrollbar {
-    width: 4px;
-  }
-  
-  &amp;::-webkit-scrollbar-thumb {
-    background: $border-strong;
-  }
-  
-  &amp;::-webkit-scrollbar-track {
-    background: $bg-subtle;
-  }
+  &amp;::-webkit-scrollbar { width: 4px; }
+  &amp;::-webkit-scrollbar-thumb { background: $border-strong; }
+  &amp;::-webkit-scrollbar-track { background: $bg-subtle; }
 }
 
 .alert-card {
@@ -956,17 +1180,26 @@ $space-2xl: 48px;
   background: $bg-muted;
   border: 1px solid $border-light;
   overflow: hidden;
-  cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.15s;
   
-  &amp;:hover {
-    background: $bg-subtle;
-    border-color: $border-default;
+  &amp;.clickable {
+    cursor: pointer;
+    
+    &amp;:hover {
+      background: $bg-subtle;
+      border-color: $border-default;
+      transform: translateX(4px);
+      
+      .alert-action {
+        background: $text-primary;
+        color: $bg-base;
+      }
+    }
   }
 }
 
 .alert-priority-bar {
-  width: 3px;
+  width: 4px;
   flex-shrink: 0;
   
   .priority-1 &amp; { background: $priority-critical; }
@@ -985,12 +1218,9 @@ $space-2xl: 48px;
   align-items: center;
   gap: 12px;
   margin-bottom: 6px;
+  flex-wrap: wrap;
   
-  .alert-id {
-    font-size: 10px;
-    font-weight: 600;
-    font-family: $font-mono;
-  }
+  .alert-id { font-size: 10px; font-weight: 600; font-family: $font-mono; }
   
   .alert-priority-label {
     font-size: 9px;
@@ -1030,20 +1260,26 @@ $space-2xl: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
+  width: 44px;
   background: $bg-subtle;
   color: $text-tertiary;
-  font-size: 14px;
-  transition: all 0.15s ease;
+  font-size: 16px;
+  transition: all 0.15s;
+}
+
+.alerts-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $space-sm;
+  padding: $space-xl;
+  color: $text-tertiary;
   
-  &amp;:hover {
-    background: $text-primary;
-    color: $bg-base;
-  }
+  .empty-icon { color: $accent-success; }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// INVENTORY SECTION 库存区
+// INVENTORY
 // ═══════════════════════════════════════════════════════════════════════════════
 
 .section-inventory {
@@ -1059,29 +1295,25 @@ $space-2xl: 48px;
 }
 
 .inventory-item {
+  transition: all 0.15s;
+  
+  &amp;.clickable {
+    cursor: pointer;
+    padding: $space-sm;
+    margin: -$space-sm;
+    
+    &amp;:hover { background: $bg-subtle; }
+  }
+  
   .inventory-header {
     display: flex;
     align-items: center;
     gap: 12px;
     margin-bottom: $space-sm;
     
-    .inventory-id {
-      font-size: 9px;
-      font-family: $font-mono;
-      color: $text-tertiary;
-    }
-    
-    .inventory-name {
-      font-size: 12px;
-      font-weight: 500;
-      flex: 1;
-    }
-    
-    .inventory-pct {
-      font-size: 11px;
-      font-weight: 700;
-      font-family: $font-mono;
-    }
+    .inventory-id { font-size: 9px; font-family: $font-mono; color: $text-tertiary; }
+    .inventory-name { font-size: 12px; font-weight: 500; flex: 1; }
+    .inventory-pct { font-size: 11px; font-weight: 700; font-family: $font-mono; }
   }
 }
 
@@ -1099,8 +1331,7 @@ $space-2xl: 48px;
 
 .scale-marker {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  top: 0; bottom: 0;
   width: 1px;
   background: $border-strong;
 }
@@ -1117,7 +1348,7 @@ $space-2xl: 48px;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SYSTEM SECTION 系统状态区
+// SYSTEM STATUS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 .section-system {
@@ -1151,74 +1382,110 @@ $space-2xl: 48px;
     font-weight: 700;
     font-family: $font-mono;
     
-    &amp;.highlight {
-      color: $text-primary;
-    }
+    &amp;.highlight { color: $accent-success; }
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// TACTICAL TAB 战术地图
+// TACTICAL MAP
 // ═══════════════════════════════════════════════════════════════════════════════
 
 .tab-tactical {
-  height: calc(100vh - 200px);
+  height: calc(100vh - 160px);
   position: relative;
-}
-
-.map-wrapper {
-  width: 100%;
-  height: 100%;
-  background: $bg-subtle;
-  border: 1px solid $border-default;
-  
-  // 确保嵌入的 Widget 填满容器
-  sp-widget,
-  sp-widget &gt; div,
-  sp-widget &gt; div &gt; div {
-    display: block;
-    width: 100%;
-    height: 100%;
-  }
+  display: flex;
 }
 
 .map-controls {
   position: absolute;
   top: $space-lg;
   left: $space-lg;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  z-index: 20;
+  background: rgba($bg-elevated, 0.95);
+  border: 1px solid $border-default;
+  min-width: 180px;
+  
+  .map-controls-header {
+    padding: $space-sm $space-md;
+    border-bottom: 1px solid $border-light;
+    
+    .controls-title {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      font-family: $font-mono;
+    }
+  }
+  
+  .map-controls-divider {
+    height: 1px;
+    background: $border-light;
+    margin: $space-sm 0;
+  }
 }
 
 .map-ctrl-btn {
   display: flex;
   align-items: center;
   gap: $space-sm;
-  padding: 10px 14px;
-  background: $bg-elevated;
-  border: 1px solid $border-default;
+  width: 100%;
+  padding: 10px $space-md;
+  background: transparent;
+  border: none;
   color: $text-tertiary;
   font-size: 10px;
   font-family: $font-mono;
-  letter-spacing: 1px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.15s;
+  text-align: left;
   
   &amp;:hover {
     background: $bg-subtle;
-    border-color: $border-strong;
+    color: $text-primary;
   }
   
   &amp;.active {
     background: $text-primary;
-    border-color: $text-primary;
     color: $bg-base;
   }
   
-  .ctrl-code {
-    opacity: 0.5;
+  .ctrl-icon { font-size: 14px; width: 20px; text-align: center; }
+  .ctrl-count { margin-left: auto; opacity: 0.6; }
+}
+
+.map-wrapper {
+  flex: 1;
+  background: $bg-subtle;
+  border: 1px solid $border-default;
+  position: relative;
+  
+  sp-widget, sp-widget &gt; div {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.map-loading {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  
+  .map-loading-spinner {
+    width: 40px; height: 40px;
+    border: 2px solid $border-default;
+    border-top-color: $text-primary;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto $space-md;
+  }
+  
+  .map-loading-text {
+    font-size: 11px;
+    letter-spacing: 2px;
+    font-family: $font-mono;
+    color: $text-tertiary;
   }
 }
 
@@ -1227,37 +1494,131 @@ $space-2xl: 48px;
   bottom: $space-lg;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 10;
+  z-index: 20;
   
   .coord-display {
     display: flex;
     gap: $space-md;
     padding: $space-sm $space-md;
-    background: rgba(255,255,255,0.95);
+    background: rgba($bg-elevated, 0.95);
     border: 1px solid $border-default;
     font-size: 10px;
     font-family: $font-mono;
-    letter-spacing: 1px;
     
-    .coord-sep {
-      color: $text-disabled;
-    }
+    .coord-sep { color: $text-disabled; }
+  }
+}
+
+.map-quick-actions {
+  position: absolute;
+  bottom: $space-lg;
+  right: $space-lg;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+}
+
+.quick-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 56px; height: 56px;
+  background: $bg-elevated;
+  border: 1px solid $border-default;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 18px;
+  
+  &amp;:hover {
+    background: $bg-subtle;
+    border-color: $border-strong;
+  }
+  
+  &amp;.emergency {
+    background: $accent-danger;
+    border-color: $accent-danger;
+    color: white;
+    
+    &amp;:hover { background: darken($accent-danger, 10%); }
+  }
+  
+  span:last-child {
+    font-size: 8px;
+    letter-spacing: 1px;
+    font-family: $font-mono;
+    margin-top: 2px;
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// OPERATIONS TAB 任务看板
+// OPERATIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 .tab-operations {
-  height: calc(100vh - 200px);
+  height: calc(100vh - 160px);
+  display: flex;
+  flex-direction: column;
+}
+
+.ops-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $space-md;
+  padding: $space-sm 0;
+}
+
+.ops-toolbar-left {
+  display: flex;
+  gap: $space-sm;
+}
+
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  padding: $space-sm $space-md;
+  background: $bg-elevated;
+  border: 1px solid $border-default;
+  font-size: 11px;
+  font-family: $font-mono;
+  cursor: pointer;
+  transition: all 0.15s;
+  
+  &amp;:hover {
+    background: $bg-subtle;
+    border-color: $border-strong;
+  }
+}
+
+.ops-filter {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  
+  label {
+    font-size: 10px;
+    font-family: $font-mono;
+    color: $text-tertiary;
+  }
+  
+  select {
+    padding: $space-sm $space-md;
+    border: 1px solid $border-default;
+    background: $bg-elevated;
+    font-size: 11px;
+    font-family: $font-mono;
+  }
 }
 
 .ops-board {
+  flex: 1;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-  height: 100%;
+  gap: $space-md;
+  min-height: 0;
 }
 
 .ops-column {
@@ -1265,6 +1626,7 @@ $space-2xl: 48px;
   border: 1px solid $border-default;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .ops-column-header {
@@ -1275,10 +1637,15 @@ $space-2xl: 48px;
   border-bottom: 1px solid $border-default;
   
   .ops-column-tag {
+    display: flex;
+    align-items: center;
+    gap: $space-sm;
     font-size: 11px;
     font-weight: 600;
-    letter-spacing: 2px;
+    letter-spacing: 1px;
     font-family: $font-mono;
+    
+    .tag-icon { font-size: 14px; }
   }
   
   .ops-column-count {
@@ -1302,10 +1669,15 @@ $space-2xl: 48px;
   background: $bg-muted;
   border: 1px solid $border-light;
   padding: $space-md;
-  transition: all 0.15s ease;
+  transition: all 0.15s;
   
-  &amp;:hover {
-    border-color: $border-default;
+  &amp;.clickable {
+    cursor: pointer;
+    
+    &amp;:hover {
+      border-color: $border-default;
+      background: $bg-subtle;
+    }
   }
 }
 
@@ -1315,15 +1687,17 @@ $space-2xl: 48px;
   gap: $space-sm;
   margin-bottom: $space-sm;
   
-  .op-priority-dot {
-    width: 6px;
-    height: 6px;
-  }
+  .op-priority-dot { width: 8px; height: 8px; border-radius: 1px; }
+  .op-id { font-size: 10px; font-family: $font-mono; color: $text-tertiary; }
   
-  .op-id {
-    font-size: 10px;
+  .op-priority-badge {
+    margin-left: auto;
+    font-size: 9px;
+    font-weight: 600;
+    padding: 2px 6px;
+    background: $bg-elevated;
+    border: 1px solid $border-default;
     font-family: $font-mono;
-    color: $text-tertiary;
   }
 }
 
@@ -1331,6 +1705,7 @@ $space-2xl: 48px;
   font-size: 13px;
   font-weight: 500;
   margin-bottom: $space-sm;
+  line-height: 1.3;
 }
 
 .op-meta {
@@ -1339,6 +1714,9 @@ $space-2xl: 48px;
   font-size: 10px;
   color: $text-muted;
   font-family: $font-mono;
+  margin-bottom: $space-sm;
+  
+  .meta-icon { margin-right: 4px; }
 }
 
 .op-operator {
@@ -1348,15 +1726,14 @@ $space-2xl: 48px;
   margin-bottom: 12px;
   font-size: 11px;
   
-  .op-operator-icon {
-    color: $text-primary;
-  }
+  .op-operator-icon { color: $text-primary; }
 }
 
 .op-progress {
   display: flex;
   align-items: center;
   gap: 12px;
+  margin-bottom: $space-sm;
 }
 
 .op-progress-bar {
@@ -1378,46 +1755,193 @@ $space-2xl: 48px;
   min-width: 35px;
 }
 
-// 已完成显示
+.op-actions {
+  display: flex;
+  gap: $space-xs;
+  margin-top: $space-sm;
+  padding-top: $space-sm;
+  border-top: 1px solid $border-light;
+}
+
+.op-action-btn {
+  flex: 1;
+  padding: $space-xs $space-sm;
+  background: $bg-elevated;
+  border: 1px solid $border-default;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  
+  &amp;:hover {
+    background: $bg-subtle;
+    border-color: $border-strong;
+  }
+}
+
+.ops-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: $space-xl;
+  color: $text-muted;
+  font-size: 12px;
+}
+
 .ops-completed-display {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: $space-lg;
   
-  .completed-value {
-    font-size: 72px;
-    font-weight: 700;
-    line-height: 1;
-  }
+  .completed-value { font-size: 64px; font-weight: 700; line-height: 1; }
+  .completed-label { font-size: 11px; letter-spacing: 2px; color: $text-tertiary; margin-top: $space-md; font-family: $font-mono; }
+  .completed-period { font-size: 10px; color: $text-muted; margin-top: $space-sm; font-family: $font-mono; }
+  .completed-chart { margin-top: $space-lg; width: 100%; }
+}
+
+.mini-chart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  height: 40px;
   
-  .completed-label {
-    font-size: 11px;
-    letter-spacing: 2px;
-    color: $text-tertiary;
-    margin-top: $space-md;
-    font-family: $font-mono;
-  }
-  
-  .completed-period {
-    font-size: 10px;
-    color: $text-muted;
-    margin-top: $space-sm;
-    font-family: $font-mono;
+  .chart-bar {
+    width: 8px;
+    background: $border-default;
+    transition: height 0.3s ease;
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// LOGISTICS TAB 物资管理
+// LOGISTICS &amp; ANALYTICS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-.tab-logistics {
-  .logistics-grid {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 20px;
+.section-analytics { margin-bottom: $space-xl; }
+
+.analytics-period {
+  select {
+    padding: 4px $space-sm;
+    border: 1px solid $border-default;
+    background: $bg-elevated;
+    font-size: 10px;
+    font-family: $font-mono;
   }
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: $space-md;
+}
+
+.analytics-card {
+  background: $bg-elevated;
+  border: 1px solid $border-default;
+  padding: $space-md;
+  
+  &amp;.highlight {
+    border-color: $text-primary;
+    border-width: 2px;
+  }
+}
+
+.analytics-card-header {
+  margin-bottom: $space-md;
+  
+  .analytics-title {
+    font-size: 11px;
+    font-weight: 500;
+    color: $text-secondary;
+  }
+}
+
+// 修复 SVG 巨大化 (合并后的正确代码)
+.analytics-gauge {
+  position: relative;
+  height: 80px;
+  width: 100%;
+  
+  // 刚才变绿的属性，必须放在大括号里面
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden; // 防止溢出
+
+  // SVG 限制规则
+  svg {
+    position: absolute;
+    // ⚠️ 关键：使用 !important 强制覆盖默认的 100% 宽度
+    width: auto !important; 
+    height: 100% !important; 
+    max-width: 100%;
+  }
+}
+  
+  .gauge-value {
+    font-size: 24px;
+    font-weight: 700;
+    font-family: $font-mono;
+    margin-top: 20px;
+  }
+}
+
+.analytics-big-number {
+  font-size: 48px;
+  font-weight: 700;
+  text-align: center;
+  padding: $space-md 0;
+}
+
+.analytics-chart { height: 80px; }
+
+.trend-chart {
+  position: relative;
+  height: 100%;
+  
+  .trend-line {
+    position: relative;
+    height: 60px;
+    border-bottom: 1px solid $border-light;
+  }
+  
+  .trend-point {
+    position: absolute;
+    width: 6px; height: 6px;
+    background: $text-primary;
+    border-radius: 50%;
+  }
+  
+  .trend-value {
+    position: absolute;
+    right: 0; bottom: 0;
+    font-size: 18px;
+    font-weight: 700;
+    font-family: $font-mono;
+  }
+}
+
+.analytics-mini-chart { height: 60px; }
+
+.breach-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 100%;
+  
+  .breach-bar {
+    flex: 1;
+    background: $border-default;
+    min-height: 4px;
+  }
+}
+
+.logistics-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: $space-md;
 }
 
 .logistics-card {
@@ -1426,6 +1950,16 @@ $space-2xl: 48px;
   padding: $space-lg;
   text-align: center;
   position: relative;
+  transition: all 0.2s;
+  
+  &amp;.clickable {
+    cursor: pointer;
+    
+    &amp;:hover {
+      border-color: $text-primary;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+  }
 }
 
 .logistics-card-header {
@@ -1434,17 +1968,8 @@ $space-2xl: 48px;
   align-items: center;
   margin-bottom: $space-sm;
   
-  .logistics-id {
-    font-size: 10px;
-    font-weight: 600;
-    font-family: $font-mono;
-  }
-  
-  .logistics-status {
-    font-size: 9px;
-    font-weight: 700;
-    font-family: $font-mono;
-  }
+  .logistics-id { font-size: 10px; font-weight: 600; font-family: $font-mono; }
+  .logistics-status { font-size: 9px; font-weight: 700; font-family: $font-mono; }
 }
 
 .logistics-name {
@@ -1455,32 +1980,16 @@ $space-2xl: 48px;
 
 .logistics-gauge {
   position: relative;
-  width: 100px;
-  height: 100px;
+  width: 100px; height: 100px;
   margin: 0 auto $space-md;
   
-  .gauge-ring {
-    width: 100%;
-    height: 100%;
-  }
-  
-  .gauge-bg {
-    fill: none;
-    stroke: $border-light;
-    stroke-width: 6;
-  }
-  
-  .gauge-fill {
-    fill: none;
-    stroke-width: 6;
-    stroke-linecap: square;
-    transition: stroke-dasharray 0.5s ease;
-  }
+  .gauge-ring { width: 100%; height: 100%; }
+  .gauge-bg { fill: none; stroke: $border-light; stroke-width: 6; }
+  .gauge-fill { fill: none; stroke-width: 6; stroke-linecap: square; transition: stroke-dasharray 0.5s ease; }
   
   .gauge-value {
     position: absolute;
-    top: 50%;
-    left: 50%;
+    top: 50%; left: 50%;
     transform: translate(-50%, -50%);
     font-size: 22px;
     font-weight: 700;
@@ -1491,14 +2000,35 @@ $space-2xl: 48px;
 .logistics-values {
   font-size: 12px;
   font-family: $font-mono;
+  margin-bottom: $space-md;
   
   .lg-current { font-weight: 600; }
   .lg-divider { color: $text-disabled; margin: 0 4px; }
   .lg-capacity { color: $text-muted; }
 }
 
+.logistics-actions {
+  .lg-action-btn {
+    width: 100%;
+    padding: $space-sm;
+    background: $bg-subtle;
+    border: 1px solid $border-default;
+    font-size: 10px;
+    font-family: $font-mono;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.15s;
+    
+    &amp;:hover {
+      background: $text-primary;
+      color: $bg-base;
+      border-color: $text-primary;
+    }
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// FOOTER 底部状态栏
+// FOOTER
 // ═══════════════════════════════════════════════════════════════════════════════
 
 .kz-footer {
@@ -1512,122 +2042,408 @@ $space-2xl: 48px;
   font-family: $font-mono;
   color: $text-tertiary;
   letter-spacing: 1px;
+  flex-shrink: 0;
 }
 
-.footer-left,
-.footer-center {
+.footer-left, .footer-center, .footer-right {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
 .footer-indicator {
-  width: 6px;
-  height: 6px;
-  background: $text-primary;
+  width: 6px; height: 6px;
+  background: $accent-success;
   border-radius: 1px;
+  
+  &amp;.offline { background: $accent-warning; }
 }
 
-.footer-sep {
-  color: $text-disabled;
+.footer-sep { color: $text-disabled; }
+.footer-dot { color: $text-disabled; font-size: 6px; }
+.footer-muted { color: $text-muted; }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODALS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  animation: fadeIn 0.2s ease;
 }
 
-.footer-dot {
-  color: $text-disabled;
-  font-size: 6px;
+.modal-panel {
+  background: $bg-elevated;
+  border: 1px solid $border-default;
+  width: 480px;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  animation: fadeIn 0.3s ease;
+  
+  &amp;.wide { width: 640px; }
 }
 
-.footer-muted {
-  color: $text-muted;
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: $space-md;
+  padding: $space-md $space-lg;
+  border-bottom: 1px solid $border-default;
+  
+  .modal-title {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: $font-mono;
+  }
+  
+  .priority-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 4px 8px;
+    background: $text-primary;
+    color: $bg-base;
+    font-family: $font-mono;
+  }
+  
+  .modal-close {
+    width: 32px; height: 32px;
+    background: transparent;
+    border: 1px solid $border-default;
+    cursor: pointer;
+    font-size: 14px;
+    color: $text-tertiary;
+    transition: all 0.15s;
+    
+    &amp;:hover { background: $bg-subtle; color: $text-primary; }
+  }
+  
+  &amp;.priority-1 { border-left: 4px solid $priority-critical; }
+  &amp;.priority-2 { border-left: 4px solid $priority-high; }
+  &amp;.priority-3 { border-left: 4px solid $priority-medium; }
+  &amp;.priority-4 { border-left: 4px solid $priority-low; }
+}
+
+.modal-body {
+  flex: 1;
+  padding: $space-lg;
+  overflow-y: auto;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: $space-sm;
+  padding: $space-md $space-lg;
+  border-top: 1px solid $border-default;
+}
+
+.modal-btn {
+  padding: $space-sm $space-lg;
+  background: $bg-subtle;
+  border: 1px solid $border-default;
+  font-size: 11px;
+  font-family: $font-mono;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.15s;
+  
+  &amp;:hover { background: $bg-muted; }
+  
+  &amp;.primary {
+    background: $text-primary;
+    color: $bg-base;
+    border-color: $text-primary;
+  }
+  
+  &amp;.danger {
+    background: $accent-danger;
+    color: white;
+    border-color: $accent-danger;
+  }
+}
+
+// KPI Detail
+.kpi-detail-value {
+  text-align: center;
+  margin-bottom: $space-lg;
+  
+  .big-value { font-size: 64px; font-weight: 700; }
+  .big-unit { font-size: 24px; color: $text-tertiary; margin-left: $space-sm; }
+}
+
+.kpi-detail-trend {
+  text-align: center;
+  margin-bottom: $space-lg;
+  
+  .positive { color: $accent-success; font-weight: 600; }
+  .negative { color: $accent-danger; font-weight: 600; }
+  .trend-label { font-size: 11px; color: $text-muted; margin-left: $space-sm; }
+}
+
+.kpi-detail-chart {
+  margin-bottom: $space-lg;
+  padding: $space-md;
+  background: $bg-subtle;
+  border: 1px solid $border-light;
+}
+
+.detail-chart-container {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  height: 100px;
+  
+  .chart-bar {
+    width: 24px;
+    background: $text-primary;
+    position: relative;
+    
+    .chart-label {
+      position: absolute;
+      bottom: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 9px;
+      color: $text-muted;
+      font-family: $font-mono;
+    }
+  }
+}
+
+.kpi-detail-breakdown {
+  .breakdown-title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    margin-bottom: $space-md;
+    font-family: $font-mono;
+  }
+  
+  .breakdown-item {
+    display: flex;
+    justify-content: space-between;
+    padding: $space-sm 0;
+    border-bottom: 1px solid $border-light;
+    font-size: 12px;
+    
+    .breakdown-label { color: $text-secondary; }
+    .breakdown-value { font-weight: 600; font-family: $font-mono; }
+  }
+}
+
+// Alert Detail
+.alert-detail-message {
+  font-size: 16px;
+  line-height: 1.5;
+  margin-bottom: $space-lg;
+  padding: $space-md;
+  background: $bg-subtle;
+  border-left: 3px solid $text-primary;
+}
+
+.alert-detail-meta {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: $space-md;
+  margin-bottom: $space-lg;
+  
+  .meta-item {
+    text-align: center;
+    padding: $space-md;
+    background: $bg-subtle;
+    
+    .meta-label { font-size: 9px; letter-spacing: 1px; color: $text-muted; margin-bottom: $space-xs; font-family: $font-mono; }
+    .meta-value { font-size: 14px; font-weight: 600; font-family: $font-mono; }
+  }
+}
+
+.alert-detail-actions {
+  display: flex;
+  gap: $space-sm;
+  
+  .action-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: $space-sm;
+    padding: $space-md;
+    background: $bg-subtle;
+    border: 1px solid $border-default;
+    font-size: 11px;
+    font-family: $font-mono;
+    cursor: pointer;
+    transition: all 0.15s;
+    
+    &amp;:hover { background: $bg-muted; border-color: $border-strong; }
+  }
+}
+
+// Weather Modal
+.weather-current {
+  display: flex;
+  gap: $space-xl;
+  margin-bottom: $space-xl;
+  padding-bottom: $space-lg;
+  border-bottom: 1px solid $border-light;
+}
+
+.weather-main {
+  text-align: center;
+  
+  .weather-icon-large { font-size: 64px; display: block; margin-bottom: $space-md; }
+  .weather-temp-large { font-size: 48px; font-weight: 700; }
+  .weather-condition { font-size: 14px; color: $text-secondary; margin-top: $space-sm; }
+}
+
+.weather-details {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: $space-md;
+  
+  .weather-detail-item {
+    padding: $space-md;
+    background: $bg-subtle;
+    text-align: center;
+    
+    .detail-label { font-size: 10px; color: $text-muted; margin-bottom: $space-xs; font-family: $font-mono; }
+    .detail-value { font-size: 16px; font-weight: 600; }
+  }
+}
+
+.weather-forecast {
+  margin-bottom: $space-lg;
+  
+  .forecast-title { font-size: 10px; font-weight: 600; letter-spacing: 1px; margin-bottom: $space-md; font-family: $font-mono; }
+  .forecast-items { display: flex; gap: $space-sm; overflow-x: auto; }
+  
+  .forecast-item {
+    flex-shrink: 0;
+    width: 60px;
+    padding: $space-sm;
+    background: $bg-subtle;
+    text-align: center;
+    
+    .forecast-time { font-size: 10px; color: $text-muted; font-family: $font-mono; }
+    .forecast-icon { font-size: 20px; margin: $space-sm 0; }
+    .forecast-temp { font-size: 12px; font-weight: 600; }
+  }
+}
+
+.weather-warnings {
+  padding: $space-md;
+  background: rgba($accent-warning, 0.1);
+  border: 1px solid $accent-warning;
+  
+  .warning-title { font-size: 11px; font-weight: 600; color: $accent-warning; margin-bottom: $space-sm; }
+  .warning-item { font-size: 12px; padding: $space-xs 0; }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// LOADING OVERLAY 加载覆盖层
+// LOADING
 // ═══════════════════════════════════════════════════════════════════════════════
 
 .loading-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: 0; left: 0; right: 0; bottom: 0;
   background: rgba($bg-base, 0.95);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
+  z-index: 4000;
 }
 
 .loading-spinner {
-  width: 40px;
-  height: 40px;
+  width: 48px; height: 48px;
   border: 2px solid $border-default;
   border-top-color: $text-primary;
+  border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: $space-md;
 }
 
 .loading-text {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 2px;
   font-family: $font-mono;
   color: $text-secondary;
+  margin-bottom: $space-lg;
+}
+
+.loading-progress {
+  width: 200px;
+  height: 4px;
+  background: $border-default;
+  
+  .progress-bar {
+    height: 100%;
+    background: $text-primary;
+    transition: width 0.3s ease;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// RESPONSIVE 响应式
+// RESPONSIVE
 // ═══════════════════════════════════════════════════════════════════════════════
 
 @media (max-width: 1400px) {
-  .kpi-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .logistics-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .logistics-grid { grid-template-columns: repeat(3, 1fr); }
+  .analytics-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 1024px) {
-  .kz-header {
-    flex-direction: column;
-    gap: $space-md;
-    padding: $space-md;
-  }
-  
-  .kz-nav {
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-  
-  .ops-board {
-    grid-template-columns: 1fr;
-    height: auto;
-  }
-  
-  .logistics-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+  .kz-header { padding: 0 $space-md; gap: $space-sm; }
+  .logo-text { display: none; }
+  .system-badge .status-text, .system-badge .version-text { display: none; }
+  .kz-nav .nav-label { display: none; }
+  .weather-mini .weather-temp { display: none; }
+  .date-display { display: none; }
+  .ops-board { grid-template-columns: 1fr; }
+  .logistics-grid { grid-template-columns: repeat(2, 1fr); }
+  .realtime-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 768px) {
-  .kpi-grid {
-    grid-template-columns: 1fr;
+  .kz-header {
+    height: auto;
+    flex-wrap: wrap;
+    padding: $space-sm;
   }
   
-  .system-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+  .header-left { width: 100%; justify-content: space-between; }
+  .kz-nav { width: 100%; justify-content: center; border-top: 1px solid $border-light; padding-top: $space-sm; margin-top: $space-sm; }
+  .header-right { display: none; }
   
-  .logistics-grid {
-    grid-template-columns: 1fr 1fr;
-  }
+  .kpi-grid { grid-template-columns: 1fr; }
+  .system-grid { grid-template-columns: repeat(2, 1fr); }
+  .logistics-grid { grid-template-columns: 1fr 1fr; }
+  .analytics-grid { grid-template-columns: 1fr; }
   
-  .tab-panel:first-child {
-    grid-template-columns: 1fr;
-  }
-}</css>
+  .kz-sidebar { width: 100%; }
+  .modal-panel { width: 100%; max-width: 100%; height: 100%; max-height: 100%; }
+}
+
+@media (max-width: 480px) {
+  .kz-main { padding: $space-md; }
+  .section-header { flex-wrap: wrap; }
+  .kpi-card { padding: $space-md; }
+  .kpi-card .kpi-value { font-size: 32px; }
+  .alert-header { flex-direction: column; align-items: flex-start; gap: $space-xs; }
+  .footer-center { display: none; }
+}
+</css>
         <data_table>sp_instance</data_table>
         <demo_data/>
         <description/>
@@ -1641,21 +2457,31 @@ $space-2xl: 48px;
         <option_schema/>
         <public>false</public>
         <roles/>
-        <script><![CDATA[/* 
-═══════════════════════════════════════════════════════════════════════════════
-  KOKORO COMMAND CENTER - SERVER SCRIPT
-  绝区零/鸣潮 白色工业极简风格
-  
-  复制此代码到 ServiceNow Widget Editor > Server Script
-  
-  ⚠️ 重要: 将下面的表名替换为你实际的表名
-  例如: 'x_1460867_kokoro_request' → 'x_YOUR_SCOPE_request'
-═══════════════════════════════════════════════════════════════════════════════
-*/
-
+        <script><![CDATA[
 (function() {
   
-  // 从 Client Script 接收的动作
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 表名配置 - 修改为你的实际表名
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  var TABLE_REQUEST = 'x_1821654_kokoro_0_silent_wish';
+  var TABLE_INVENTORY = 'x_1821654_kokoro_0_kokoro_inventory';
+  
+  // 字段配置
+  var FLD_REQ_CONTENT = 'wish_content';
+  var FLD_REQ_TRIAGE = 'triage_level';
+  var FLD_REQ_ZONE = 'shelter_zone';
+  var FLD_REQ_STATE = 'state';
+  var FLD_REQ_ASSIGNED = 'assigned_to';
+  
+  var FLD_INV_ITEM_CODE = 'item_code';
+  var FLD_INV_QUANTITY = 'current_quantity';
+  var FLD_INV_MAX_CAP = 'max_capacity';
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 获取动作
+  // ═══════════════════════════════════════════════════════════════════════════
+  
   var action = (input && input.action) ? input.action : 'getData';
   
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1665,17 +2491,16 @@ $space-2xl: 48px;
   if (action === 'getData') {
     
     // ─────────────────────────────────────────────────────────────────────────
-    // KPI 数据
+    // 1. KPI 数据
     // ─────────────────────────────────────────────────────────────────────────
     
     data.kpis = [];
     
-    // KPI 1: 活跃请求数
-    var grActive = new GlideAggregate('x_1821654_kokoro_0_silent_wish');
-    grActive.addQuery('state', 'IN', '1,2'); // New, In Progress
+    // KPI 1: ACTIVE_REQUESTS
+    var grActive = new GlideAggregate(TABLE_REQUEST);
+    grActive.addQuery(FLD_REQ_STATE, 'IN', '1,2');
     grActive.addAggregate('COUNT');
     grActive.query();
-    
     var activeCount = 0;
     if (grActive.next()) {
       activeCount = parseInt(grActive.getAggregate('COUNT')) || 0;
@@ -1685,15 +2510,15 @@ $space-2xl: 48px;
       id: 'REQ',
       value: activeCount,
       label: 'ACTIVE_REQUESTS',
-      status: 'NOMINAL',
+      status: activeCount > 50 ? 'HIGH' : 'NOMINAL',
       trend: 12.4
     });
     
-    // KPI 2: 平均响应时间 (分钟)
-    var grClosed = new GlideRecord('x_1821654_kokoro_0_silent_wish');
-    grClosed.addQuery('state', '3'); // Closed
+    // KPI 2: AVG_RESPONSE (分钟)
+    var grClosed = new GlideRecord(TABLE_REQUEST);
+    grClosed.addQuery(FLD_REQ_STATE, '3');
     grClosed.orderByDesc('sys_updated_on');
-    grClosed.setLimit(100);
+    grClosed.setLimit(50);
     grClosed.query();
     
     var totalMinutes = 0;
@@ -1702,8 +2527,8 @@ $space-2xl: 48px;
     while (grClosed.next()) {
       var created = new GlideDateTime(grClosed.sys_created_on);
       var updated = new GlideDateTime(grClosed.sys_updated_on);
-      var diff = GlideDateTime.subtract(created, updated);
-      totalMinutes += Math.abs(diff.getNumericValue()) / (1000 * 60);
+      var diff = Math.abs(GlideDateTime.subtract(created, updated).getNumericValue());
+      totalMinutes += diff / 60000;
       closedCount++;
     }
     
@@ -1718,11 +2543,10 @@ $space-2xl: 48px;
       trend: -18.2
     });
     
-    // KPI 3: 完成率
-    var grTotal = new GlideAggregate('x_1460867_kokoro_request');
+    // KPI 3: COMPLETION_RATE
+    var grTotal = new GlideAggregate(TABLE_REQUEST);
     grTotal.addAggregate('COUNT');
     grTotal.query();
-    
     var totalCount = 0;
     if (grTotal.next()) {
       totalCount = parseInt(grTotal.getAggregate('COUNT')) || 0;
@@ -1736,169 +2560,196 @@ $space-2xl: 48px;
       unit: '%',
       label: 'COMPLETION_RATE',
       status: 'NOMINAL',
-      trend: 0
+      trend: 0.0
     });
     
-    // KPI 4: 活跃操作员数
-    var grOperators = new GlideAggregate('x_1460867_kokoro_request');
-    grOperators.addQuery('assigned_to', '!=', '');
-    grOperators.addQuery('state', '2'); // In Progress
-    grOperators.groupBy('assigned_to');
-    grOperators.addAggregate('COUNT');
-    grOperators.query();
+    // KPI 4: ACTIVE_OPERATORS
+    var grOp = new GlideAggregate(TABLE_REQUEST);
+    grOp.addQuery(FLD_REQ_ASSIGNED, '!=', '');
+    grOp.addQuery(FLD_REQ_STATE, '2');
+    grOp.groupBy(FLD_REQ_ASSIGNED);
+    grOp.addAggregate('COUNT');
+    grOp.query();
     
-    var operatorCount = 0;
-    while (grOperators.next()) {
-      operatorCount++;
+    var opCount = 0;
+    while (grOp.next()) {
+      opCount++;
     }
     
     data.kpis.push({
       id: 'OPR',
-      value: operatorCount,
+      value: opCount,
       label: 'ACTIVE_OPERATORS',
       status: 'NOMINAL',
       trend: 8.1
     });
     
     // ─────────────────────────────────────────────────────────────────────────
-    // Alerts 数据
+    // 2. Alerts 数据
     // ─────────────────────────────────────────────────────────────────────────
     
     data.alerts = [];
     
-    var grAlerts = new GlideRecord('x_1460867_kokoro_request');
-    grAlerts.addQuery('state', 'IN', '1,2');
-    grAlerts.orderBy('urgency');
+    var grAlerts = new GlideRecord(TABLE_REQUEST);
+    grAlerts.addQuery(FLD_REQ_STATE, 'IN', '1,2');
+    if (grAlerts.isValidField(FLD_REQ_TRIAGE)) {
+      grAlerts.orderBy(FLD_REQ_TRIAGE);
+    }
     grAlerts.orderByDesc('sys_created_on');
     grAlerts.setLimit(10);
     grAlerts.query();
     
     var alertIndex = 847;
     while (grAlerts.next()) {
-      var urgency = parseInt(grAlerts.getValue('urgency')) || 4;
-      var priority = Math.min(4, Math.max(1, urgency));
+      var urgencyVal = 4;
+      if (grAlerts.isValidField(FLD_REQ_TRIAGE)) {
+        urgencyVal = parseInt(grAlerts.getValue(FLD_REQ_TRIAGE)) || 4;
+      }
       
       // 计算经过时间
-      var created = new GlideDateTime(grAlerts.sys_created_on);
+      var alertCreated = new GlideDateTime(grAlerts.sys_created_on);
       var now = new GlideDateTime();
-      var elapsed = GlideDateTime.subtract(created, now);
-      var elapsedMs = Math.abs(elapsed.getNumericValue());
+      var elapsedMs = Math.abs(GlideDateTime.subtract(alertCreated, now).getNumericValue());
       
-      var hours = Math.floor(elapsedMs / (1000 * 60 * 60));
-      var mins = Math.floor((elapsedMs % (1000 * 60 * 60)) / (1000 * 60));
-      var secs = Math.floor((elapsedMs % (1000 * 60)) / 1000);
+      var h = Math.floor(elapsedMs / 3600000);
+      var m = Math.floor((elapsedMs % 3600000) / 60000);
+      var s = Math.floor((elapsedMs % 60000) / 1000);
+      var elapsedStr = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
       
-      var elapsedStr = String(hours).padStart(2, '0') + ':' + 
-                       String(mins).padStart(2, '0') + ':' + 
-                       String(secs).padStart(2, '0');
+      // 获取消息
+      var msg = '';
+      if (grAlerts.isValidField(FLD_REQ_CONTENT)) {
+        msg = grAlerts.getDisplayValue(FLD_REQ_CONTENT);
+      }
+      if (!msg) {
+        msg = grAlerts.getDisplayValue('short_description') || 'New request pending';
+      }
+      
+      // 获取区域
+      var zone = 'Unknown';
+      if (grAlerts.isValidField(FLD_REQ_ZONE)) {
+        zone = grAlerts.getDisplayValue(FLD_REQ_ZONE) || 'Unknown';
+      }
       
       data.alerts.push({
         id: 'ALT-' + String(alertIndex).padStart(4, '0'),
-        priority: priority,
-        message: grAlerts.getDisplayValue('short_description') || 'New request pending',
-        sector: grAlerts.getDisplayValue('location') || 'SEC-' + String.fromCharCode(65 + (alertIndex % 4)),
-        elapsed: elapsedStr
+        priority: Math.min(4, Math.max(1, urgencyVal)),
+        message: msg,
+        sector: zone,
+        elapsed: elapsedStr,
+        sysId: grAlerts.getUniqueValue()
       });
       
       alertIndex++;
     }
     
     // ─────────────────────────────────────────────────────────────────────────
-    // Inventory 数据
+    // 3. Inventory 数据 (固定顺序映射)
     // ─────────────────────────────────────────────────────────────────────────
     
-    data.inventory = [];
-    
-    var categories = [
-      { id: 'FOOD', name: '食料', category: 'food' },
-      { id: 'WATR', name: '飲料水', category: 'water' },
-      { id: 'MEDI', name: '医療品', category: 'medical' },
-      { id: 'CLTH', name: '衣類', category: 'clothing' },
-      { id: 'HYGN', name: '衛生用品', category: 'hygiene' }
+    data.inventory = [
+      { id: 'FOOD', name: '食料', current: 0, capacity: 1000 },
+      { id: 'WATR', name: '飲料水', current: 0, capacity: 1000 },
+      { id: 'MEDI', name: '医療品', current: 0, capacity: 1000 },
+      { id: 'CLTH', name: '衣類', current: 0, capacity: 1000 },
+      { id: 'HYGN', name: '衛生用品', current: 0, capacity: 1000 }
     ];
     
-    categories.forEach(function(cat) {
-      var grInv = new GlideAggregate('x_1460867_kokoro_inventory');
-      grInv.addQuery('category', cat.category);
-      grInv.addAggregate('SUM', 'quantity');
-      grInv.query();
+    var invMap = { 'FOOD': 0, 'WATR': 1, 'MEDI': 2, 'CLTH': 3, 'HYGN': 4 };
+    
+    var grInv = new GlideRecord(TABLE_INVENTORY);
+    grInv.query();
+    
+    while (grInv.next()) {
+      var code = grInv.getValue(FLD_INV_ITEM_CODE);
+      var idx = invMap[code];
       
-      var currentQty = 0;
-      if (grInv.next()) {
-        currentQty = parseInt(grInv.getAggregate('SUM', 'quantity')) || 0;
+      if (idx !== undefined) {
+        var current = parseInt(grInv.getValue(FLD_INV_QUANTITY)) || 0;
+        var max = parseInt(grInv.getValue(FLD_INV_MAX_CAP)) || 1000;
+        data.inventory[idx].current = current;
+        data.inventory[idx].capacity = max;
       }
-      
-      // 默认容量
-      var capacity = 1000;
-      
-      data.inventory.push({
-        id: cat.id,
-        name: cat.name,
-        current: currentQty,
-        capacity: capacity
-      });
-    });
+    }
     
     // ─────────────────────────────────────────────────────────────────────────
-    // Operations 数据
+    // 4. Operations 数据
     // ─────────────────────────────────────────────────────────────────────────
     
-    data.operations = {
-      queue: [],
-      active: [],
-      completed: 0
-    };
+    data.operations = { queue: [], active: [], completed: 0 };
+    var opIdx = 2000;
     
-    // Queue (待处理)
-    var grQueue = new GlideRecord('x_1460867_kokoro_request');
-    grQueue.addQuery('state', '1'); // New
-    grQueue.orderBy('urgency');
+    // Queue (State = 1, New)
+    var grQueue = new GlideRecord(TABLE_REQUEST);
+    grQueue.addQuery(FLD_REQ_STATE, '1');
     grQueue.setLimit(10);
     grQueue.query();
     
-    var opIndex = 2847;
     while (grQueue.next()) {
-      var urgency = parseInt(grQueue.getValue('urgency')) || 4;
+      var qPriority = 4;
+      if (grQueue.isValidField(FLD_REQ_TRIAGE)) {
+        qPriority = parseInt(grQueue.getValue(FLD_REQ_TRIAGE)) || 4;
+      }
+      
+      var qTitle = '';
+      if (grQueue.isValidField(FLD_REQ_CONTENT)) {
+        qTitle = grQueue.getDisplayValue(FLD_REQ_CONTENT);
+      }
+      if (!qTitle) qTitle = 'Task';
+      
+      var qZone = 'A-01';
+      if (grQueue.isValidField(FLD_REQ_ZONE)) {
+        qZone = grQueue.getDisplayValue(FLD_REQ_ZONE) || 'A-01';
+      }
       
       data.operations.queue.push({
-        id: 'OP-' + opIndex,
-        title: grQueue.getDisplayValue('short_description') || 'Task',
-        priority: Math.min(4, Math.max(1, urgency)),
-        zone: grQueue.getDisplayValue('location') || 'A-01',
-        eta: '---'
+        id: 'OP-' + opIdx++,
+        title: qTitle,
+        priority: qPriority,
+        zone: qZone,
+        eta: '---',
+        sysId: grQueue.getUniqueValue()
       });
-      opIndex++;
     }
     
-    // Active (进行中)
-    var grActive2 = new GlideRecord('x_1460867_kokoro_request');
-    grActive2.addQuery('state', '2');
-    grActive2.addQuery('assigned_to', '!=', '');
+    // Active (State = 2, In Progress)
+    var grActive2 = new GlideRecord(TABLE_REQUEST);
+    grActive2.addQuery(FLD_REQ_STATE, '2');
+    grActive2.addQuery(FLD_REQ_ASSIGNED, '!=', '');
     grActive2.setLimit(10);
     grActive2.query();
     
     while (grActive2.next()) {
-      // 估算进度
-      var created = new GlideDateTime(grActive2.sys_created_on);
-      var now = new GlideDateTime();
-      var elapsed = Math.abs(GlideDateTime.subtract(created, now).getNumericValue());
-      var progress = Math.min(95, Math.floor(elapsed / (1000 * 60 * 60) * 15));
+      var aTitle = '';
+      if (grActive2.isValidField(FLD_REQ_CONTENT)) {
+        aTitle = grActive2.getDisplayValue(FLD_REQ_CONTENT);
+      }
+      if (!aTitle) aTitle = 'Task';
+      
+      var aOperator = grActive2.getDisplayValue(FLD_REQ_ASSIGNED) || 'Unknown';
+      if (aOperator.length > 4) aOperator = aOperator.substring(0, 4);
+      
+      // 计算进度 (基于时间)
+      var aCreated = new GlideDateTime(grActive2.sys_created_on);
+      var aNow = new GlideDateTime();
+      var aElapsed = Math.abs(GlideDateTime.subtract(aCreated, aNow).getNumericValue());
+      var aProgress = Math.min(95, Math.floor(aElapsed / (1000 * 60 * 60) * 15));
       
       data.operations.active.push({
-        id: 'OP-' + opIndex,
-        title: grActive2.getDisplayValue('short_description') || 'Task',
-        operator: 'OPR-' + (grActive2.getDisplayValue('assigned_to') || 'Unknown').substring(0, 4),
-        progress: progress
+        id: 'OP-' + opIdx++,
+        title: aTitle,
+        operator: 'OPR-' + aOperator,
+        progress: aProgress,
+        sysId: grActive2.getUniqueValue()
       });
-      opIndex++;
     }
     
-    // Completed (24小时内完成)
+    // Completed (24小时内)
     var yesterday = new GlideDateTime();
     yesterday.addDaysUTC(-1);
     
-    var grCompleted = new GlideAggregate('x_1460867_kokoro_request');
-    grCompleted.addQuery('state', '3');
+    var grCompleted = new GlideAggregate(TABLE_REQUEST);
+    grCompleted.addQuery(FLD_REQ_STATE, '3');
     grCompleted.addQuery('sys_updated_on', '>=', yesterday.getValue());
     grCompleted.addAggregate('COUNT');
     grCompleted.query();
@@ -1908,16 +2759,52 @@ $space-2xl: 48px;
     }
     
     // ─────────────────────────────────────────────────────────────────────────
-    // System 数据
+    // 5. System 数据
     // ─────────────────────────────────────────────────────────────────────────
     
     data.system = {
       status: 'ONLINE',
-      uptime: '99.72%',
+      uptime: '99.9%',
       latency: (Math.floor(Math.random() * 20) + 35) + 'ms',
       nodes: 12
     };
     
+    // ─────────────────────────────────────────────────────────────────────────
+    // 6. Analytics 数据
+    // ─────────────────────────────────────────────────────────────────────────
+    
+    data.analytics = {
+      slaHealth: 85,
+      healthTrend: [60, 65, 70, 75, 80, 82, 85],
+      currentHealth: 77.73,
+      activeRequests: activeCount,
+      volunteerUtil: opCount > 0 ? Math.round((opCount / 20) * 100) : 0,
+      slaTimers: 0,
+      breachTrend: [5, 8, 3, 6, 4, 7, 2]
+    };
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Analytics 单独获取
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  if (action === 'getAnalytics') {
+    var period = input.period || '24h';
+    
+    // 根据期间调整数据
+    var multiplier = 1;
+    if (period === '7d') multiplier = 7;
+    if (period === '30d') multiplier = 30;
+    
+    data.analytics = {
+      slaHealth: 85,
+      healthTrend: [60, 65, 70, 75, 80, 82, 85],
+      currentHealth: 77.73,
+      activeRequests: 37,
+      volunteerUtil: 45,
+      slaTimers: 3,
+      breachTrend: [5, 8, 3, 6, 4, 7, 2]
+    };
   }
   
 })();]]></script>
@@ -1926,24 +2813,81 @@ $space-2xl: 48px;
         <sys_created_by>admin</sys_created_by>
         <sys_created_on>2026-01-23 07:09:26</sys_created_on>
         <sys_id>5d047ae283aaf210f6b1fb96feaad36f</sys_id>
-        <sys_mod_count>9</sys_mod_count>
+        <sys_mod_count>58</sys_mod_count>
         <sys_name>Kokoro Analytics Dashboard</sys_name>
         <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
         <sys_policy/>
         <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
         <sys_update_name>sp_widget_5d047ae283aaf210f6b1fb96feaad36f</sys_update_name>
         <sys_updated_by>admin</sys_updated_by>
-        <sys_updated_on>2026-01-30 01:38:09</sys_updated_on>
-        <template><![CDATA[<!-- 
-═══════════════════════════════════════════════════════════════════════════════
-  KOKORO COMMAND CENTER - HTML TEMPLATE
-  绝区零/鸣潮 白色工业极简风格
-  
-  复制此代码到 ServiceNow Widget Editor > HTML Template
-═══════════════════════════════════════════════════════════════════════════════
--->
+        <sys_updated_on>2026-02-04 07:06:46</sys_updated_on>
+        <template><![CDATA[<style>
+/* SNIPER PROTOCOL: ULTIMATE KILL LIST
+   包含针对 Admin 工具、左侧调试器、右侧聊天栏的全方位覆盖
+*/
 
-<div class="kokoro-zenless" ng-class="{'is-loading': c.loading}">
+/* 1. 基础全屏锁定 */
+html, body {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  overflow: hidden !important;
+  background-color: #fafafa !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+}
+
+/* 2. 隐藏原生导航栏、Header、Footer */
+nav:not(.kz-nav):not(.sidebar-nav), 
+header:not(.kz-header), 
+footer:not(.kz-footer),
+.sp-page-header, .navbar, .polaris-header, .sn-polaris-nav, 
+.navpage-header, .navpage-footer, .sp-row-background {
+  display: none !important;
+}
+
+/* 3. 核打击：右侧 Chat & Virtual Agent */
+.sn-chat-overlay, .help-button-wrapper, .sn-frameset-header,
+[id*="chat"], iframe[title="Chat bot"], .tox-notifications-container {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  z-index: -9999 !important;
+}
+
+/* 4. 核打击：左侧 Admin/Designer 工具 (绿色按钮) */
+.sp-page-row-options, /* 编辑行选项 */
+.sp-page-toolbar,     /* 页面工具栏 */
+div[ng-if="c.options.enable_preview"], /* 预览开关 */
+.icon-accessibility,  /* 无障碍图标 */
+div[style*="left"][style*="bottom"][style*="fixed"], /* 通用左下角定位 */
+div[class*="theme-picker"],
+.sp-ac-root {         /* Accessibility Root */
+  display: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  height: 0 !important;
+  pointer-events: none !important;
+}
+
+/* 5. 确保 KOKORO 在最上层 */
+.kokoro-zenless {
+  z-index: 2147483647 !important;
+  position: relative; /* 配合 fixed body */
+  width: 100%;
+  height: 100%;
+}
+</style>
+
+<div class="kokoro-zenless" ng-class="{'is-loading': c.loading, 'sidebar-open': c.sidebarOpen, 'offline-mode': c.isOffline}">
+  
+  <!-- 离线指示器 -->
+  <div class="offline-banner" ng-if="c.isOffline">
+    <span class="offline-icon">⚠</span>
+    <span>OFFLINE MODE - データはローカルキャッシュから読み込まれています</span>
+  </div>
   
   <!-- 噪点纹理层 -->
   <div class="noise-layer"></div>
@@ -1958,12 +2902,110 @@ $space-2xl: 48px;
   <div class="corner-bracket corner-br"></div>
 
   <!-- ════════════════════════════════════════════════════════════════════════
-       HEADER 顶部导航栏
+       侧边栏 (汉堡菜单)
+       ════════════════════════════════════════════════════════════════════════ -->
+  <aside class="kz-sidebar" ng-class="{'open': c.sidebarOpen}">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <span class="logo-letter">K</span>
+      </div>
+      <span class="sidebar-title">KOKORO</span>
+      <button class="sidebar-close" ng-click="c.toggleSidebar()">✕</button>
+    </div>
+    
+    <nav class="sidebar-nav">
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">MAIN MODULES</div>
+        <button class="sidebar-item" ng-click="c.setActiveTab('overview'); c.toggleSidebar()">
+          <span class="sidebar-icon">◉</span>
+          <span>Overview Dashboard</span>
+        </button>
+        <button class="sidebar-item" ng-click="c.setActiveTab('tactical'); c.toggleSidebar()">
+          <span class="sidebar-icon">◈</span>
+          <span>Tactical Map</span>
+        </button>
+        <button class="sidebar-item" ng-click="c.setActiveTab('operations'); c.toggleSidebar()">
+          <span class="sidebar-icon">▣</span>
+          <span>Operations Board</span>
+        </button>
+        <button class="sidebar-item" ng-click="c.setActiveTab('logistics'); c.toggleSidebar()">
+          <span class="sidebar-icon">◇</span>
+          <span>Logistics & Analytics</span>
+        </button>
+      </div>
+      
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">MANAGEMENT</div>
+        <button class="sidebar-item" ng-click="c.openManagementPanel('users')">
+          <span class="sidebar-icon">]]>👤<![CDATA[</span>
+          <span>User Management</span>
+        </button>
+        <button class="sidebar-item" ng-click="c.openManagementPanel('volunteers')">
+          <span class="sidebar-icon">]]>🤝<![CDATA[</span>
+          <span>Volunteer Control</span>
+        </button>
+        <button class="sidebar-item" ng-click="c.openManagementPanel('shelters')">
+          <span class="sidebar-icon">]]>🏠<![CDATA[</span>
+          <span>Shelter Management</span>
+        </button>
+      </div>
+      
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">REAL-TIME DATA</div>
+        <button class="sidebar-item" ng-click="c.openWeatherPanel()">
+          <span class="sidebar-icon">]]>🌤<![CDATA[</span>
+          <span>Weather Monitor</span>
+        </button>
+        <button class="sidebar-item" ng-click="c.openSeismicPanel()">
+          <span class="sidebar-icon">]]>📊<![CDATA[</span>
+          <span>Seismic Activity</span>
+        </button>
+        <button class="sidebar-item" ng-click="c.openTrafficPanel()">
+          <span class="sidebar-icon">]]>🚗<![CDATA[</span>
+          <span>Traffic Status</span>
+        </button>
+      </div>
+      
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">SYSTEM</div>
+        <button class="sidebar-item" ng-click="c.openSettings()">
+          <span class="sidebar-icon">⚙</span>
+          <span>Settings</span>
+        </button>
+        <button class="sidebar-item" ng-click="c.syncOfflineData()">
+          <span class="sidebar-icon">]]>🔄<![CDATA[</span>
+          <span>Sync Data</span>
+        </button>
+      </div>
+    </nav>
+    
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <span class="user-avatar">{{c.user.id.charAt(0)}}</span>
+        <div class="user-info">
+          <div class="user-name">{{c.user.name}}</div>
+          <div class="user-role">{{c.user.role}}</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+  
+  <!-- 侧边栏遮罩 -->
+  <div class="sidebar-overlay" ng-if="c.sidebarOpen" ng-click="c.toggleSidebar()"></div>
+
+  <!-- ════════════════════════════════════════════════════════════════════════
+       HEADER 顶部导航栏 (修复布局)
        ════════════════════════════════════════════════════════════════════════ -->
   <header class="kz-header">
     
-    <!-- 左侧: Logo + 系统状态 -->
+    <!-- 左侧: 汉堡菜单 + Logo -->
     <div class="header-left">
+      <button class="hamburger-btn" ng-click="c.toggleSidebar()" title="Open Menu">
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+      </button>
+      
       <div class="logo-group">
         <div class="logo-mark">
           <span class="logo-letter">K</span>
@@ -1974,9 +3016,9 @@ $space-2xl: 48px;
         </div>
       </div>
       
-      <div class="system-badge" ng-class="{'online': c.systemOnline}">
+      <div class="system-badge" ng-class="{'online': c.systemOnline, 'offline': c.isOffline}">
         <span class="status-dot"></span>
-        <span class="status-text">SYS_{{c.systemOnline ? 'ONLINE' : 'OFFLINE'}}</span>
+        <span class="status-text">SYS_{{c.isOffline ? 'OFFLINE' : (c.systemOnline ? 'ONLINE' : 'ERROR')}}</span>
         <span class="version-text">{{c.version}}</span>
       </div>
     </div>
@@ -1993,8 +3035,14 @@ $space-2xl: 48px;
       </button>
     </nav>
     
-    <!-- 右侧: 时间 + 操作员 -->
+    <!-- 右侧: 天气 + 时间 + 操作员 -->
     <div class="header-right">
+      <!-- 迷你天气显示 -->
+      <div class="weather-mini" ng-click="c.openWeatherPanel()" title="天気詳細">
+        <span class="weather-icon">{{c.weather.icon}}</span>
+        <span class="weather-temp">{{c.weather.temp}}°C</span>
+      </div>
+      
       <div class="time-display">
         <div class="time-label">SYS_TIME</div>
         <div class="time-value">{{c.currentTime}}</div>
@@ -2003,7 +3051,7 @@ $space-2xl: 48px;
         <div class="date-label">DATE</div>
         <div class="date-value">{{c.currentDate}}</div>
       </div>
-      <div class="operator-badge">
+      <div class="operator-badge" ng-click="c.openUserProfile()">
         <span class="operator-icon">▣</span>
         <div class="operator-info">
           <div class="operator-label">OPERATOR</div>
@@ -2031,7 +3079,7 @@ $space-2xl: 48px;
   <main class="kz-main">
     
     <!-- ══════════════════ TAB 1: OVERVIEW 总览 ══════════════════ -->
-    <div class="tab-panel" ng-if="c.activeTab === 'overview'" ng-class="{'fade-in': true}">
+    <div class="tab-panel" ng-if="c.activeTab === 'overview'">
       
       <!-- KPI 指标卡片区 -->
       <section class="section-block section-kpi">
@@ -2045,14 +3093,19 @@ $space-2xl: 48px;
         </div>
         
         <div class="kpi-grid">
-          <div class="kpi-card" ng-repeat="kpi in c.data.kpis track by kpi.id">
+          <div class="kpi-card clickable" 
+               ng-repeat="kpi in c.data.kpis track by kpi.id"
+               ng-click="c.openKpiDetail(kpi)">
             <!-- 切角装饰 -->
             <div class="chamfer-tr"></div>
             <div class="chamfer-bl"></div>
             
+            <!-- 点击提示 -->
+            <div class="click-hint">CLICK FOR DETAILS</div>
+            
             <div class="kpi-header">
               <span class="kpi-id">{{kpi.id}}</span>
-              <span class="kpi-index">_{{$index + 1 | limitTo:2}}</span>
+              <span class="kpi-index">_{{$index + 1}}</span>
             </div>
             
             <div class="kpi-body">
@@ -2078,6 +3131,56 @@ $space-2xl: 48px;
         </div>
       </section>
       
+      <!-- 实时监控面板 (天气/地震/交通) -->
+      <section class="section-block section-realtime">
+        <div class="section-header">
+          <div class="section-tag">
+            <span class="tag-code">RT</span>
+            <span class="tag-label">REAL_TIME_MONITOR</span>
+          </div>
+          <div class="section-rule"></div>
+        </div>
+        
+        <div class="realtime-grid">
+          <!-- 天气卡片 -->
+          <div class="realtime-card weather-card" ng-click="c.openWeatherPanel()">
+            <div class="realtime-icon">{{c.weather.icon}}</div>
+            <div class="realtime-content">
+              <div class="realtime-title">WEATHER</div>
+              <div class="realtime-value">{{c.weather.temp}}°C</div>
+              <div class="realtime-sub">{{c.weather.condition}}</div>
+            </div>
+            <div class="realtime-extra">
+              <span>]]>💧<![CDATA[ {{c.weather.humidity}}%</span>
+              <span>]]>💨<![CDATA[ {{c.weather.wind}}m/s</span>
+            </div>
+          </div>
+          
+          <!-- 地震卡片 -->
+          <div class="realtime-card seismic-card" ng-click="c.openSeismicPanel()" ng-class="{'alert': c.seismic.level > 3}">
+            <div class="realtime-icon">]]>📊<![CDATA[</div>
+            <div class="realtime-content">
+              <div class="realtime-title">SEISMIC</div>
+              <div class="realtime-value">M{{c.seismic.magnitude}}</div>
+              <div class="realtime-sub">{{c.seismic.location}}</div>
+            </div>
+            <div class="realtime-status" ng-class="'level-' + c.seismic.level">
+              {{c.seismic.status}}
+            </div>
+          </div>
+          
+          <!-- 交通卡片 -->
+          <div class="realtime-card traffic-card" ng-click="c.openTrafficPanel()">
+            <div class="realtime-icon">]]>🚗<![CDATA[</div>
+            <div class="realtime-content">
+              <div class="realtime-title">TRAFFIC</div>
+              <div class="realtime-value">{{c.traffic.status}}</div>
+              <div class="realtime-sub">{{c.traffic.blockedRoutes}} routes blocked</div>
+            </div>
+          </div>
+        </div>
+      </section>
+      
       <!-- 警报列表区 -->
       <section class="section-block section-alerts">
         <div class="section-header">
@@ -2087,13 +3190,14 @@ $space-2xl: 48px;
           </div>
           <div class="alert-count">{{c.data.alerts.length}}</div>
           <div class="section-rule"></div>
+          <button class="section-action" ng-click="c.openAllAlerts()">VIEW ALL →</button>
         </div>
         
         <div class="alerts-list">
-          <div class="alert-card" 
+          <div class="alert-card clickable" 
                ng-repeat="alert in c.data.alerts track by alert.id"
                ng-class="'priority-' + alert.priority"
-               ng-click="c.handleAlertClick(alert)">
+               ng-click="c.openAlertDetail(alert)">
             <div class="alert-priority-bar"></div>
             <div class="alert-content">
               <div class="alert-header">
@@ -2104,7 +3208,14 @@ $space-2xl: 48px;
               </div>
               <div class="alert-message">{{alert.message}}</div>
             </div>
-            <div class="alert-action">→</div>
+            <div class="alert-action">
+              <span class="action-icon">→</span>
+            </div>
+          </div>
+          
+          <div class="alerts-empty" ng-if="c.data.alerts.length === 0">
+            <span class="empty-icon">✓</span>
+            <span>No active alerts</span>
           </div>
         </div>
       </section>
@@ -2120,7 +3231,9 @@ $space-2xl: 48px;
         </div>
         
         <div class="inventory-list">
-          <div class="inventory-item" ng-repeat="item in c.data.inventory track by item.id">
+          <div class="inventory-item clickable" 
+               ng-repeat="item in c.data.inventory track by item.id"
+               ng-click="c.openInventoryDetail(item)">
             <div class="inventory-header">
               <span class="inventory-id">[{{item.id}}]</span>
               <span class="inventory-name">{{item.name}}</span>
@@ -2178,23 +3291,41 @@ $space-2xl: 48px;
     </div>
     
     <!-- ══════════════════ TAB 2: TACTICAL 战术地图 ══════════════════ -->
-    <!-- ]]>🔥<![CDATA[ 这里嵌入你的 Mapbox 地图 Widget ]]>🔥<![CDATA[ -->
     <div class="tab-panel tab-tactical" ng-if="c.activeTab === 'tactical'">
       
       <!-- 地图控制面板 -->
       <div class="map-controls">
+        <div class="map-controls-header">
+          <span class="controls-title">LAYERS</span>
+        </div>
         <button class="map-ctrl-btn" 
                 ng-repeat="ctrl in c.mapControls track by ctrl.id"
                 ng-click="c.toggleMapLayer(ctrl.id)"
                 ng-class="{'active': ctrl.active}">
-          <span class="ctrl-code">{{$index + 1 | limitTo:2}}</span>
+          <span class="ctrl-icon">{{ctrl.icon}}</span>
           <span class="ctrl-label">{{ctrl.label}}</span>
+          <span class="ctrl-count" ng-if="ctrl.count">({{ctrl.count}})</span>
+        </button>
+        
+        <div class="map-controls-divider"></div>
+        
+        <button class="map-ctrl-btn" ng-click="c.centerMapOnUser()">
+          <span class="ctrl-icon">]]>📍<![CDATA[</span>
+          <span class="ctrl-label">MY LOCATION</span>
+        </button>
+        <button class="map-ctrl-btn" ng-click="c.refreshMapData()">
+          <span class="ctrl-icon">]]>🔄<![CDATA[</span>
+          <span class="ctrl-label">REFRESH</span>
         </button>
       </div>
       
       <!-- 嵌入地图 Widget -->
       <div class="map-wrapper">
-        <sp-widget widget="c.mapWidget"></sp-widget>
+        <sp-widget widget="c.mapWidget" ng-if="c.mapWidget"></sp-widget>
+        <div class="map-loading" ng-if="!c.mapWidget">
+          <div class="map-loading-spinner"></div>
+          <div class="map-loading-text">LOADING MAP...</div>
+        </div>
       </div>
       
       <!-- 地图信息叠加层 -->
@@ -2203,7 +3334,21 @@ $space-2xl: 48px;
           <span>LAT: {{c.mapCenter.lat}}°N</span>
           <span class="coord-sep">|</span>
           <span>LNG: {{c.mapCenter.lng}}°E</span>
+          <span class="coord-sep">|</span>
+          <span>ZOOM: {{c.mapZoom}}</span>
         </div>
+      </div>
+      
+      <!-- 快速操作面板 -->
+      <div class="map-quick-actions">
+        <button class="quick-action-btn emergency" ng-click="c.createEmergencyMarker()">
+          <span>]]>🆘<![CDATA[</span>
+          <span>SOS</span>
+        </button>
+        <button class="quick-action-btn" ng-click="c.createNewRequest()">
+          <span>➕</span>
+          <span>REQUEST</span>
+        </button>
       </div>
       
     </div>
@@ -2211,25 +3356,63 @@ $space-2xl: 48px;
     <!-- ══════════════════ TAB 3: OPERATIONS 任务看板 ══════════════════ -->
     <div class="tab-panel tab-operations" ng-if="c.activeTab === 'operations'">
       
+      <!-- 操作栏 -->
+      <div class="ops-toolbar">
+        <div class="ops-toolbar-left">
+          <button class="toolbar-btn" ng-click="c.createNewTask()">
+            <span>➕</span> NEW TASK
+          </button>
+          <button class="toolbar-btn" ng-click="c.refreshOperations()">
+            <span>]]>🔄<![CDATA[</span> REFRESH
+          </button>
+        </div>
+        <div class="ops-toolbar-right">
+          <div class="ops-filter">
+            <label>FILTER:</label>
+            <select ng-model="c.opsFilter" ng-change="c.applyOpsFilter()">
+              <option value="all">All</option>
+              <option value="critical">Critical Only</option>
+              <option value="my">My Tasks</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      
       <div class="ops-board">
         
         <!-- 待处理列 -->
         <div class="ops-column">
           <div class="ops-column-header">
-            <span class="ops-column-tag">QUEUE</span>
+            <span class="ops-column-tag">
+              <span class="tag-icon">]]>📋<![CDATA[</span>
+              QUEUE
+            </span>
             <span class="ops-column-count">{{c.data.operations.queue.length}}</span>
           </div>
           <div class="ops-column-list">
-            <div class="op-card" ng-repeat="op in c.data.operations.queue track by op.id">
+            <div class="op-card clickable" 
+                 ng-repeat="op in c.data.operations.queue track by op.id"
+                 ng-click="c.openTaskDetail(op)"
+                 draggable="true"
+                 ng-dragstart="c.onDragStart($event, op)">
               <div class="op-card-header">
                 <span class="op-priority-dot" ng-style="{'background-color': c.getPriorityColor(op.priority)}"></span>
                 <span class="op-id">{{op.id}}</span>
+                <span class="op-priority-badge">P{{op.priority}}</span>
               </div>
               <div class="op-title">{{op.title}}</div>
               <div class="op-meta">
-                <span>ZONE: {{op.zone}}</span>
-                <span>ETA: {{op.eta}}</span>
+                <span><span class="meta-icon">]]>📍<![CDATA[</span> {{op.zone}}</span>
+                <span><span class="meta-icon">⏱</span> {{op.eta}}</span>
               </div>
+              <div class="op-actions">
+                <button class="op-action-btn" ng-click="c.assignTask(op, $event)" title="Assign">]]>👤<![CDATA[</button>
+                <button class="op-action-btn" ng-click="c.startTask(op, $event)" title="Start">▶</button>
+              </div>
+            </div>
+            
+            <div class="ops-empty" ng-if="c.data.operations.queue.length === 0">
+              <span>No pending tasks</span>
             </div>
           </div>
         </div>
@@ -2237,11 +3420,16 @@ $space-2xl: 48px;
         <!-- 进行中列 -->
         <div class="ops-column">
           <div class="ops-column-header">
-            <span class="ops-column-tag">ACTIVE</span>
+            <span class="ops-column-tag">
+              <span class="tag-icon">⚡</span>
+              ACTIVE
+            </span>
             <span class="ops-column-count">{{c.data.operations.active.length}}</span>
           </div>
           <div class="ops-column-list">
-            <div class="op-card" ng-repeat="op in c.data.operations.active track by op.id">
+            <div class="op-card clickable" 
+                 ng-repeat="op in c.data.operations.active track by op.id"
+                 ng-click="c.openTaskDetail(op)">
               <div class="op-card-header">
                 <span class="op-id">{{op.id}}</span>
               </div>
@@ -2256,6 +3444,14 @@ $space-2xl: 48px;
                 </div>
                 <span class="op-progress-value">{{op.progress}}%</span>
               </div>
+              <div class="op-actions">
+                <button class="op-action-btn" ng-click="c.updateProgress(op, $event)" title="Update">]]>📝<![CDATA[</button>
+                <button class="op-action-btn" ng-click="c.completeTask(op, $event)" title="Complete">✓</button>
+              </div>
+            </div>
+            
+            <div class="ops-empty" ng-if="c.data.operations.active.length === 0">
+              <span>No active tasks</span>
             </div>
           </div>
         </div>
@@ -2263,13 +3459,22 @@ $space-2xl: 48px;
         <!-- 已完成列 -->
         <div class="ops-column">
           <div class="ops-column-header">
-            <span class="ops-column-tag">COMPLETE</span>
+            <span class="ops-column-tag">
+              <span class="tag-icon">✓</span>
+              COMPLETE
+            </span>
             <span class="ops-column-count">{{c.data.operations.completed}}</span>
           </div>
           <div class="ops-completed-display">
             <div class="completed-value">{{c.data.operations.completed}}</div>
             <div class="completed-label">OPERATIONS_RESOLVED</div>
             <div class="completed-period">// 24H_CYCLE</div>
+            <div class="completed-chart">
+              <!-- 简单的完成趋势图 -->
+              <div class="mini-chart">
+                <div class="chart-bar" ng-repeat="h in c.completedHistory" ng-style="{'height': h + '%'}"></div>
+              </div>
+            </div>
           </div>
         </div>
         
@@ -2277,42 +3482,158 @@ $space-2xl: 48px;
       
     </div>
     
-    <!-- ══════════════════ TAB 4: LOGISTICS 物资管理 ══════════════════ -->
+    <!-- ══════════════════ TAB 4: LOGISTICS 物资管理 + Analytics ══════════════════ -->
     <div class="tab-panel tab-logistics" ng-if="c.activeTab === 'logistics'">
       
-      <div class="logistics-grid">
-        <div class="logistics-card" ng-repeat="item in c.data.inventory track by item.id">
-          <div class="chamfer-tr"></div>
-          
-          <div class="logistics-card-header">
-            <span class="logistics-id">{{item.id}}</span>
-            <span class="logistics-status" ng-style="{'color': item.statusColor}">
-              {{item.statusLabel}}
-            </span>
+      <!-- Analytics 仪表盘 -->
+      <section class="section-block section-analytics">
+        <div class="section-header">
+          <div class="section-tag">
+            <span class="tag-code">PA</span>
+            <span class="tag-label">PLATFORM_ANALYTICS</span>
           </div>
-          
-          <div class="logistics-name">{{item.name}}</div>
-          
-          <div class="logistics-gauge">
-            <svg viewBox="0 0 100 100" class="gauge-ring">
-              <circle cx="50" cy="50" r="42" class="gauge-bg"></circle>
-              <circle cx="50" cy="50" r="42" 
-                      class="gauge-fill"
-                      ng-attr-stroke="{{item.statusColor}}"
-                      ng-attr-stroke-dasharray="{{item.percentage * 2.64}} 264"
-                      transform="rotate(-90 50 50)">
-              </circle>
-            </svg>
-            <div class="gauge-value">{{item.percentage}}%</div>
-          </div>
-          
-          <div class="logistics-values">
-            <span class="lg-current">{{item.current}}</span>
-            <span class="lg-divider">/</span>
-            <span class="lg-capacity">{{item.capacity}}</span>
+          <div class="section-rule"></div>
+          <div class="analytics-period">
+            <select ng-model="c.analyticsPeriod" ng-change="c.refreshAnalytics()">
+              <option value="24h">Last 24 Hours</option>
+              <option value="7d">Last 7 Days</option>
+              <option value="30d">Last 30 Days</option>
+            </select>
           </div>
         </div>
-      </div>
+        
+        <div class="analytics-grid">
+          <!-- SLA Health -->
+          <div class="analytics-card">
+            <div class="analytics-card-header">
+              <span class="analytics-title">Real-time SLA Health</span>
+            </div>
+            <div class="analytics-gauge">
+              <svg viewBox="0 0 100 60" class="sla-gauge">
+                <path d="M10,55 A40,40 0 0,1 90,55" fill="none" stroke="#e0e0e0" stroke-width="8"/>
+                <path d="M10,55 A40,40 0 0,1 90,55" fill="none" stroke="#1a1a1a" stroke-width="8"
+                      ng-attr-stroke-dasharray="{{c.analytics.slaHealth * 1.26}} 126"/>
+              </svg>
+              <div class="gauge-value">{{c.analytics.slaHealth}}</div>
+            </div>
+          </div>
+          
+          <!-- Health Trend -->
+          <div class="analytics-card">
+            <div class="analytics-card-header">
+              <span class="analytics-title">7-Day Health Trend</span>
+            </div>
+            <div class="analytics-chart">
+              <div class="trend-chart">
+                <div class="trend-line">
+                  <span class="trend-point" ng-repeat="p in c.analytics.healthTrend" 
+                        ng-style="{'bottom': p + '%', 'left': ($index * 14) + '%'}"></span>
+                </div>
+                <div class="trend-value">{{c.analytics.currentHealth}}</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Active Requests -->
+          <div class="analytics-card highlight">
+            <div class="analytics-card-header">
+              <span class="analytics-title">Active Rescue Requests</span>
+            </div>
+            <div class="analytics-big-number">
+              {{c.analytics.activeRequests}}
+            </div>
+          </div>
+          
+          <!-- Volunteer Utilization -->
+          <div class="analytics-card">
+            <div class="analytics-card-header">
+              <span class="analytics-title">Volunteer Utilization</span>
+            </div>
+            <div class="analytics-gauge">
+              <svg viewBox="0 0 100 60" class="util-gauge">
+                <path d="M10,55 A40,40 0 0,1 90,55" fill="none" stroke="#e0e0e0" stroke-width="8"/>
+                <path d="M10,55 A40,40 0 0,1 90,55" fill="none" stroke="#404040" stroke-width="8"
+                      ng-attr-stroke-dasharray="{{c.analytics.volunteerUtil * 1.26}} 126"/>
+              </svg>
+              <div class="gauge-value">{{c.analytics.volunteerUtil}}%</div>
+            </div>
+          </div>
+          
+          <!-- SLA Timers -->
+          <div class="analytics-card">
+            <div class="analytics-card-header">
+              <span class="analytics-title">Active SLA Timers</span>
+            </div>
+            <div class="analytics-big-number">
+              {{c.analytics.slaTimers}}
+            </div>
+          </div>
+          
+          <!-- Breach Rate -->
+          <div class="analytics-card">
+            <div class="analytics-card-header">
+              <span class="analytics-title">SLA Breach Rate Trend</span>
+            </div>
+            <div class="analytics-mini-chart">
+              <div class="breach-chart">
+                <div class="breach-bar" ng-repeat="b in c.analytics.breachTrend" 
+                     ng-style="{'height': b + '%'}"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      
+      <!-- 物资圆环仪表 -->
+      <section class="section-block">
+        <div class="section-header">
+          <div class="section-tag">
+            <span class="tag-code">INV</span>
+            <span class="tag-label">INVENTORY_GAUGES</span>
+          </div>
+          <div class="section-rule"></div>
+        </div>
+        
+        <div class="logistics-grid">
+          <div class="logistics-card clickable" 
+               ng-repeat="item in c.data.inventory track by item.id"
+               ng-click="c.openInventoryDetail(item)">
+            <div class="chamfer-tr"></div>
+            
+            <div class="logistics-card-header">
+              <span class="logistics-id">{{item.id}}</span>
+              <span class="logistics-status" ng-style="{'color': item.statusColor}">
+                {{item.statusLabel}}
+              </span>
+            </div>
+            
+            <div class="logistics-name">{{item.name}}</div>
+            
+            <div class="logistics-gauge">
+              <svg viewBox="0 0 100 100" class="gauge-ring">
+                <circle cx="50" cy="50" r="42" class="gauge-bg"></circle>
+                <circle cx="50" cy="50" r="42" 
+                        class="gauge-fill"
+                        ng-attr-stroke="{{item.statusColor}}"
+                        ng-attr-stroke-dasharray="{{item.percentage * 2.64}} 264"
+                        transform="rotate(-90 50 50)">
+                </circle>
+              </svg>
+              <div class="gauge-value">{{item.percentage}}%</div>
+            </div>
+            
+            <div class="logistics-values">
+              <span class="lg-current">{{item.current}}</span>
+              <span class="lg-divider">/</span>
+              <span class="lg-capacity">{{item.capacity}}</span>
+            </div>
+            
+            <div class="logistics-actions">
+              <button class="lg-action-btn" ng-click="c.requestRestock(item, $event)">RESTOCK</button>
+            </div>
+          </div>
+        </div>
+      </section>
       
     </div>
     
@@ -2323,7 +3644,7 @@ $space-2xl: 48px;
        ════════════════════════════════════════════════════════════════════════ -->
   <footer class="kz-footer">
     <div class="footer-left">
-      <span class="footer-indicator"></span>
+      <span class="footer-indicator" ng-class="{'offline': c.isOffline}"></span>
       <span class="footer-text">KOKORO_SYS</span>
       <span class="footer-sep">|</span>
       <span class="footer-text">STATUS: {{c.data.system.status}}</span>
@@ -2339,13 +3660,159 @@ $space-2xl: 48px;
     </div>
     <div class="footer-right">
       <span class="footer-muted">SERVICENOW_INTEGRATION</span>
+      <span class="footer-sep">|</span>
+      <span class="footer-muted" ng-if="c.lastSync">SYNC: {{c.lastSync}}</span>
     </div>
   </footer>
   
+  <!-- ════════════════════════════════════════════════════════════════════════
+       MODAL 弹窗系统
+       ════════════════════════════════════════════════════════════════════════ -->
+  
+  <!-- KPI 详情弹窗 -->
+  <div class="modal-overlay" ng-if="c.showKpiModal" ng-click="c.closeModal()">
+    <div class="modal-panel modal-kpi" ng-click="$event.stopPropagation()">
+      <div class="modal-header">
+        <span class="modal-title">{{c.selectedKpi.id}} - {{c.selectedKpi.label}}</span>
+        <button class="modal-close" ng-click="c.closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="kpi-detail-value">
+          <span class="big-value">{{c.selectedKpi.value}}</span>
+          <span class="big-unit" ng-if="c.selectedKpi.unit">{{c.selectedKpi.unit}}</span>
+        </div>
+        <div class="kpi-detail-trend">
+          <span ng-class="{'positive': c.selectedKpi.trend > 0, 'negative': c.selectedKpi.trend < 0}">
+            {{c.selectedKpi.trendDisplay}}
+          </span>
+          <span class="trend-label">vs last period</span>
+        </div>
+        <div class="kpi-detail-chart">
+          <!-- 历史趋势图 -->
+          <div class="detail-chart-container">
+            <div class="chart-bar" ng-repeat="v in c.selectedKpi.history" ng-style="{'height': v + '%'}">
+              <span class="chart-label">{{v}}</span>
+            </div>
+          </div>
+        </div>
+        <div class="kpi-detail-breakdown">
+          <div class="breakdown-title">BREAKDOWN</div>
+          <div class="breakdown-item" ng-repeat="item in c.selectedKpi.breakdown">
+            <span class="breakdown-label">{{item.label}}</span>
+            <span class="breakdown-value">{{item.value}}</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn" ng-click="c.exportKpiData()">EXPORT DATA</button>
+        <button class="modal-btn primary" ng-click="c.closeModal()">CLOSE</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Alert 详情弹窗 -->
+  <div class="modal-overlay" ng-if="c.showAlertModal" ng-click="c.closeModal()">
+    <div class="modal-panel modal-alert" ng-click="$event.stopPropagation()">
+      <div class="modal-header" ng-class="'priority-' + c.selectedAlert.priority">
+        <span class="modal-title">{{c.selectedAlert.id}}</span>
+        <span class="priority-badge">P{{c.selectedAlert.priority}}</span>
+        <button class="modal-close" ng-click="c.closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="alert-detail-message">{{c.selectedAlert.message}}</div>
+        <div class="alert-detail-meta">
+          <div class="meta-item">
+            <span class="meta-label">SECTOR</span>
+            <span class="meta-value">{{c.selectedAlert.sector}}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">ELAPSED</span>
+            <span class="meta-value">{{c.selectedAlert.elapsed}}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">CATEGORY</span>
+            <span class="meta-value">{{c.selectedAlert.category || 'General'}}</span>
+          </div>
+        </div>
+        <div class="alert-detail-actions">
+          <button class="action-btn" ng-click="c.assignAlert(c.selectedAlert)">
+            <span>]]>👤<![CDATA[</span> ASSIGN
+          </button>
+          <button class="action-btn" ng-click="c.viewOnMap(c.selectedAlert)">
+            <span>]]>🗺<![CDATA[</span> VIEW ON MAP
+          </button>
+          <button class="action-btn" ng-click="c.escalateAlert(c.selectedAlert)">
+            <span>⬆</span> ESCALATE
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn danger" ng-click="c.dismissAlert(c.selectedAlert)">DISMISS</button>
+        <button class="modal-btn primary" ng-click="c.resolveAlert(c.selectedAlert)">RESOLVE</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 天气面板 -->
+  <div class="modal-overlay" ng-if="c.showWeatherPanel" ng-click="c.closeModal()">
+    <div class="modal-panel modal-weather wide" ng-click="$event.stopPropagation()">
+      <div class="modal-header">
+        <span class="modal-title">]]>🌤<![CDATA[ WEATHER MONITOR</span>
+        <button class="modal-close" ng-click="c.closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="weather-current">
+          <div class="weather-main">
+            <span class="weather-icon-large">{{c.weather.icon}}</span>
+            <div class="weather-temp-large">{{c.weather.temp}}°C</div>
+            <div class="weather-condition">{{c.weather.condition}}</div>
+          </div>
+          <div class="weather-details">
+            <div class="weather-detail-item">
+              <span class="detail-label">Humidity</span>
+              <span class="detail-value">{{c.weather.humidity}}%</span>
+            </div>
+            <div class="weather-detail-item">
+              <span class="detail-label">Wind</span>
+              <span class="detail-value">{{c.weather.wind}} m/s</span>
+            </div>
+            <div class="weather-detail-item">
+              <span class="detail-label">Pressure</span>
+              <span class="detail-value">{{c.weather.pressure}} hPa</span>
+            </div>
+            <div class="weather-detail-item">
+              <span class="detail-label">Visibility</span>
+              <span class="detail-value">{{c.weather.visibility}} km</span>
+            </div>
+          </div>
+        </div>
+        <div class="weather-forecast">
+          <div class="forecast-title">24H FORECAST</div>
+          <div class="forecast-items">
+            <div class="forecast-item" ng-repeat="f in c.weather.forecast">
+              <div class="forecast-time">{{f.time}}</div>
+              <div class="forecast-icon">{{f.icon}}</div>
+              <div class="forecast-temp">{{f.temp}}°</div>
+            </div>
+          </div>
+        </div>
+        <div class="weather-warnings" ng-if="c.weather.warnings.length > 0">
+          <div class="warning-title">⚠ WEATHER WARNINGS</div>
+          <div class="warning-item" ng-repeat="w in c.weather.warnings">
+            {{w}}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
   <!-- 加载覆盖层 -->
-  <div class="loading-overlay" ng-if="c.loading">
+  <div class="loading-overlay" ng-if="c.loading && !c.initialLoadComplete">
     <div class="loading-spinner"></div>
     <div class="loading-text">INITIALIZING_SYSTEM...</div>
+    <div class="loading-progress" ng-if="c.loadingProgress">
+      <div class="progress-bar" ng-style="{'width': c.loadingProgress + '%'}"></div>
+    </div>
   </div>
   
 </div>]]></template>

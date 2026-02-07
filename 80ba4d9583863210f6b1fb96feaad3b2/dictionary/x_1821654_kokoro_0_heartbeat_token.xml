@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="4731978f8372f210f6b1fb96feaad351" label="Heartbeat Token" max_length="40" name="x_1821654_kokoro_0_heartbeat_token" type="collection">
+        <element label="Target User" max_length="32" name="target_user" reference="sys_user" type="reference"/>
+        <element label="Is Used" max_length="40" name="is_used" type="boolean"/>
+        <element label="Token" max_length="60" name="token" type="string"/>
+        <element label="Created At" max_length="40" name="created_at" type="glide_date_time"/>
+        <element label="Userd At" max_length="40" name="userd_at" type="glide_date_time"/>
+        <element label="Guest Token" max_length="64" name="guest_token" type="string"/>
+        <element label="Expires At" max_length="40" name="expires_at" type="glide_date_time"/>
+        <index name="index">
+            <element name="target_user"/>
+        </index>
+    </element>
+</database>

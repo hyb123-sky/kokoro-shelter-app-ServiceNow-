@@ -4,245 +4,320 @@
         <client_script><![CDATA[api.controller = function($scope, spUtil, $timeout, $window, $interval) {
     var c = this;
 	
-	 // ==========================================
-	// [新增] 好友守护系统
 	// ==========================================
+// 双模式初始化
+// ==========================================
+c.is_guest = c.data.is_guest || false;
+c.auth_mode = c.data.auth_mode || 'authenticated';
+c.guest_token = '';
 
-c.show_guardian = false;
-c.guardian_tab = 'friends'; // friends / requests / search
-c.selected_friend = null;
-c.search_query = "";
-c.search_results = [];
-c.recommended_friends = [];
-
-// 切换守护圈弹窗
-c.toggleGuardianCircle = function() {
-    c.showMenu = false; // 关闭汉堡菜单
-    c.show_guardian = !c.show_guardian;
+// 游客初始化
+function initGuestMode() {
+    // 1. 先尝试从 localStorage 恢复 token
+    var savedToken = '';
+    try {
+        savedToken = $window.localStorage.getItem('kokoro_guest_token') || '';
+    } catch (e) {}
     
+    console.log(']]>📍<![CDATA[ 游客模式初始化，localStorage中的token:', savedToken);
+    
+    // 2. 调用服务端验证或生成新 token
+    c.server.get({
+        action: 'guest_init',  // ✅ 正确的 action
+        guest_token: savedToken
+    }).then(function(r) {
+        if (r && r.data && r.data.success) {
+            c.guest_token = r.data.guest_token;
+            c.auth_mode = r.data.auth_mode;
+            
+            console.log('✅ 服务端返回的 guest_token:', c.guest_token);
+            
+            // 3. 持久化到 localStorage
+            try {
+                $window.localStorage.setItem('kokoro_guest_token', c.guest_token);
+                console.log('✅ guest_token 已保存到 localStorage');
+            } catch (e) {
+                console.error('❌ 无法保存到 localStorage:', e);
+            }
+            
+            if (r.data.upgrade_hint) {
+                showSuccess('以前のゲストデータがあります。ログインすると移行できます。');
+            }
+            
+            // 4. 初始化后立即加载历史记录
+            $timeout(function() {
+                c.server.get({
+                    action: 'get_my_history',
+                    guest_token: c.guest_token
+                }).then(function(historyR) {
+                    if (historyR && historyR.data && historyR.data.my_requests) {
+                        c.data.my_requests = historyR.data.my_requests;
+                        console.log('✅ 游客历史记录已加载:', c.data.my_requests.length);
+                    }
+                });
+            }, 500);
+            
+        } else {
+            console.error('❌ guest_init 失败');
+        }
+    }).catch(function(error) {
+        console.error('❌ guest_init 请求失败:', error);
+    });
+}
+
+// 如果是游客模式，立即初始化
+if (c.is_guest) {
+    initGuestMode();
+}
+
+    // ==========================================
+    // [新增] 好友守护系统
+    // ==========================================
+
+    c.show_guardian = false;
+    c.guardian_tab = 'friends'; // friends / requests / search
+    c.selected_friend = null;
+    c.search_query = "";
+    c.search_results = [];
+    c.recommended_friends = [];
+
+    c.toggleGuardianCircle = function() {
+    c.showMenu = false;
+    
+    if (c.is_guest) {
+        c.show_login_prompt = true;
+        c.login_prompt_feature = 'guardian';
+        return;
+    }
+    
+    c.show_guardian = !c.show_guardian;
+
     if (c.show_guardian) {
-        // 打开时加载数据
         c.loadGuardianData();
     }
 };
 
-// 加载守护圈数据
-c.loadGuardianData = function() {
-    c.server.get({ action: 'get_guardian_data' }).then(function(r) {
-        if (handleServerResponse(r, function(data) {
-            c.data.friends = data.friends || [];
-            c.data.friend_requests = data.friend_requests || [];
-            c.data.friend_notifications = data.notification_count || 0;
-            c.recommended_friends = data.recommended || [];
-        }));
-    });
+// 新增: 登录提示
+c.show_login_prompt = false;
+c.login_prompt_feature = '';
+
+c.dismissLoginPrompt = function() {
+    c.show_login_prompt = false;
 };
 
-// 搜索用户
-var searchTimer = null;
-c.searchUsers = function() {
-    if (searchTimer) $timeout.cancel(searchTimer);
-    
-    if (!c.search_query || c.search_query.trim().length < 2) {
-        c.search_results = [];
-        return;
-    }
-    
-    searchTimer = $timeout(function() {
+c.goToLogin = function() {
+    $window.location.href = '/login.do?sysparm_goto_url=' + 
+        encodeURIComponent($window.location.href);
+};
+
+    // 加载守护圈数据
+    c.loadGuardianData = function() {
         c.server.get({
-            action: 'search_users',
-            query: c.search_query
+            action: 'get_guardian_data'
         }).then(function(r) {
             if (handleServerResponse(r, function(data) {
-                c.search_results = data.results || [];
-            }));
+                    c.data.friends = data.friends || [];
+                    c.data.friend_requests = data.friend_requests || [];
+                    c.data.friend_notifications = data.notification_count || 0;
+                    c.recommended_friends = data.recommended || [];
+                }));
         });
-    }, 500);
-};
+    };
 
-// 发送好友请求
-c.sendFriendRequest = function(user) {
-    if (user.already_friend || user.request_sent) return;
-    
-    c.server.get({
-        action: 'send_friend_request',
-        friend_id: user.sys_id
-    }).then(function(r) {
-        if (handleServerResponse(r, function() {
-            user.request_sent = true;
-            showSuccess('友達リクエストを送信しました');
-        }));
-    });
-};
+    // 搜索用户
+    var searchTimer = null;
+    c.searchUsers = function() {
+        if (searchTimer) $timeout.cancel(searchTimer);
 
-// 接受好友请求
-c.acceptFriendRequest = function(req) {
-    c.server.get({
-        action: 'accept_friend_request',
-        request_id: req.sys_id
-    }).then(function(r) {
-        if (handleServerResponse(r, function() {
-            // 从请求列表中移除
-            var index = c.data.friend_requests.indexOf(req);
-            if (index !== -1) {
-                c.data.friend_requests.splice(index, 1);
-            }
-            
-            // 重新加载好友列表
-            c.loadGuardianData();
-            showSuccess(req.from_user_name + ' と友達になりました');
-        }));
-    });
-};
+        if (!c.search_query || c.search_query.trim().length < 2) {
+            c.search_results = [];
+            return;
+        }
 
-// 拒绝好友请求
-c.rejectFriendRequest = function(req) {
-    c.server.get({
-        action: 'reject_friend_request',
-        request_id: req.sys_id
-    }).then(function(r) {
-        if (handleServerResponse(r, function() {
-            var index = c.data.friend_requests.indexOf(req);
-            if (index !== -1) {
-                c.data.friend_requests.splice(index, 1);
-            }
-            showSuccess('リクエストを拒否しました');
-        }));
-    });
-};
+        searchTimer = $timeout(function() {
+            c.server.get({
+                action: 'search_users',
+                query: c.search_query
+            }).then(function(r) {
+                if (handleServerResponse(r, function(data) {
+                        c.search_results = data.results || [];
+                    }));
+            });
+        }, 500);
+    };
 
-// 显示好友详情
-c.showFriendDetail = function(friend) {
-    c.selected_friend = friend;
-};
+    // 发送好友请求
+    c.sendFriendRequest = function(user) {
+        if (user.already_friend || user.request_sent) return;
 
-// 紧急呼叫
-c.emergencyCall = function(friend, $event) {
-    if ($event) $event.stopPropagation();
-    
-    if (confirm(friend.display_name + ' に緊急呼び出しを送信しますか？')) {
         c.server.get({
-            action: 'send_emergency_call',
-            friend_id: friend.user_id
+            action: 'send_friend_request',
+            friend_id: user.sys_id
         }).then(function(r) {
             if (handleServerResponse(r, function() {
-                showSuccess('緊急呼び出しを送信しました');
-            }));
+                    user.request_sent = true;
+                    showSuccess('友達リクエストを送信しました');
+                }));
         });
-    }
-};
+    };
 
-// 发送消息
-c.sendMessage = function(friend, $event) {
-    if ($event) $event.stopPropagation();
-    
-    var message = prompt(friend.display_name + ' へのメッセージ:');
-    if (message && message.trim()) {
+    // 接受好友请求
+    c.acceptFriendRequest = function(req) {
         c.server.get({
-            action: 'send_friend_message',
-            friend_id: friend.user_id,
-            message: message
+            action: 'accept_friend_request',
+            request_id: req.sys_id
         }).then(function(r) {
             if (handleServerResponse(r, function() {
-                showSuccess('メッセージを送信しました');
-            }));
+                    var index = c.data.friend_requests.indexOf(req);
+                    if (index !== -1) {
+                        c.data.friend_requests.splice(index, 1);
+                    }
+                    c.loadGuardianData();
+                    showSuccess(req.from_user_name + ' と友達になりました');
+                }));
         });
-    }
-};
+    };
 
-// 查看好友历史
-c.viewFriendHistory = function(friend) {
-    // TODO: 实现心跳历史查看
-    showSuccess('この機能は開発中です');
-};
-
-// 移除好友
-c.removeFriend = function(friend) {
-    if (confirm(friend.display_name + ' を友達から削除しますか？')) {
+    // 拒绝好友请求
+    c.rejectFriendRequest = function(req) {
         c.server.get({
-            action: 'remove_friend',
-            friend_id: friend.user_id
+            action: 'reject_friend_request',
+            request_id: req.sys_id
         }).then(function(r) {
             if (handleServerResponse(r, function() {
-                c.selected_friend = null;
-                c.loadGuardianData();
-                showSuccess('友達を削除しました');
-            }));
+                    var index = c.data.friend_requests.indexOf(req);
+                    if (index !== -1) {
+                        c.data.friend_requests.splice(index, 1);
+                    }
+                    showSuccess('リクエストを拒否しました');
+                }));
         });
-    }
-};
+    };
 
-// 实时更新好友状态 (使用轮询)
-var friendStatusInterval = null;
+    // 显示好友详情
+    c.showFriendDetail = function(friend) {
+        c.selected_friend = friend;
+    };
 
-function startFriendStatusPolling() {
-    if (friendStatusInterval) return;
-    
-    friendStatusInterval = $interval(function() {
-        if (c.show_guardian && c.data.friends && c.data.friends.length > 0) {
-            c.server.get({ action: 'get_friend_status_updates' }).then(function(r) {
-                if (r && r.data && r.data.updates) {
-                    // 更新好友状态
-                    r.data.updates.forEach(function(update) {
-                        var friend = c.data.friends.find(function(f) {
-                            return f.user_id === update.user_id;
-                        });
-                        if (friend) {
-                            friend.heartbeat_status = update.status;
-                            friend.last_heartbeat_time = update.time_ago;
-                            friend.current_zone = update.zone;
-                        }
-                    });
-                }
+    // 紧急呼叫
+    c.emergencyCall = function(friend, $event) {
+        if ($event) $event.stopPropagation();
+
+        if (confirm(friend.display_name + ' に緊急呼び出しを送信しますか？')) {
+            c.server.get({
+                action: 'send_emergency_call',
+                friend_id: friend.user_id
+            }).then(function(r) {
+                if (handleServerResponse(r, function() {
+                        showSuccess('緊急呼び出しを送信しました');
+                    }));
             });
         }
-    }, 30000); // 每30秒更新一次
-}
+    };
 
-function stopFriendStatusPolling() {
-    if (friendStatusInterval) {
-        $interval.cancel(friendStatusInterval);
-        friendStatusInterval = null;
+    // 发送消息
+    c.sendMessage = function(friend, $event) {
+        if ($event) $event.stopPropagation();
+
+        var message = prompt(friend.display_name + ' へのメッセージ:');
+        if (message && message.trim()) {
+            c.server.get({
+                action: 'send_friend_message',
+                friend_id: friend.user_id,
+                message: message
+            }).then(function(r) {
+                if (handleServerResponse(r, function() {
+                        showSuccess('メッセージを送信しました');
+                    }));
+            });
+        }
+    };
+
+    // 查看好友历史
+    c.viewFriendHistory = function(friend) {
+        showSuccess('この機能は開発中です');
+    };
+
+    // 移除好友
+    c.removeFriend = function(friend) {
+        if (confirm(friend.display_name + ' を友達から削除しますか？')) {
+            c.server.get({
+                action: 'remove_friend',
+                friend_id: friend.user_id
+            }).then(function(r) {
+                if (handleServerResponse(r, function() {
+                        c.selected_friend = null;
+                        c.loadGuardianData();
+                        showSuccess('友達を削除しました');
+                    }));
+            });
+        }
+    };
+
+    // 实时更新好友状态
+    var friendStatusInterval = null;
+
+    function startFriendStatusPolling() {
+        if (friendStatusInterval) return;
+
+        friendStatusInterval = $interval(function() {
+            if (c.show_guardian && c.data.friends && c.data.friends.length > 0) {
+                c.server.get({
+                    action: 'get_friend_status_updates'
+                }).then(function(r) {
+                    if (r && r.data && r.data.updates) {
+                        r.data.updates.forEach(function(update) {
+                            var friend = c.data.friends.find(function(f) {
+                                return f.user_id === update.user_id;
+                            });
+                            if (friend) {
+                                friend.heartbeat_status = update.status;
+                                friend.last_heartbeat_time = update.time_ago;
+                                friend.current_zone = update.zone;
+                            }
+                        });
+                    }
+                });
+            }
+        }, 30000);
     }
-}
 
-// 监听弹窗打开/关闭
-$scope.$watch('c.show_guardian', function(newVal) {
-    if (newVal) {
-        startFriendStatusPolling();
-    } else {
+    function stopFriendStatusPolling() {
+        if (friendStatusInterval) {
+            $interval.cancel(friendStatusInterval);
+            friendStatusInterval = null;
+        }
+    }
+
+    $scope.$watch('c.show_guardian', function(newVal) {
+        if (newVal) {
+            startFriendStatusPolling();
+        } else {
+            stopFriendStatusPolling();
+        }
+    });
+
+    $scope.$on('$destroy', function() {
         stopFriendStatusPolling();
-    }
-});
+    });
 
-// 页面销毁时清理
-$scope.$on('$destroy', function() {
-    stopFriendStatusPolling();
-});
-	
     // [新增] 汉堡菜单控制
     c.showMenu = false;
     c.toggleMenu = function() {
         c.showMenu = !c.showMenu;
     };
 
-    // 修改原有的 toggleSettings，确保点击后关闭菜单
-    var originalToggleSettings = c.toggleSettings;
-    c.toggleSettings = function() {
-        c.showMenu = false; // 关闭菜单
-        originalToggleSettings(); // 执行原有逻辑
-    };
-
-    // 修改原有的 toggleHistory，确保点击后关闭菜单
-    var originalToggleHistory = c.toggleHistory;
-    c.toggleHistory = function() {
-        c.showMenu = false; // 关闭菜单
-        originalToggleHistory(); // 执行原有逻辑
-    };
-
     // 状态初始化
     var CONFIG = {
-        states: { DRAFT: 1, SUBMITTED: 10, ASSIGNED: 11, IN_PROGRESS: 2, COMPLETED: 4, CANCELLED: 5, ON_HOLD: 6 },
+        states: {
+            DRAFT: 1,
+            SUBMITTED: 10,
+            ASSIGNED: 11,
+            IN_PROGRESS: 2,
+            COMPLETED: 4,
+            CANCELLED: 5,
+            ON_HOLD: 6
+        },
         debounceDelay: 300
     };
 
@@ -271,36 +346,90 @@ $scope.$on('$destroy', function() {
         will: c.data.saved_will || ""
     };
 
-    // 字典映射
     c.dict = {
-        'Water': '飲料水', 'Food': '食料', 'Medical': '医療・薬',
-        'Baby': '乳幼児用品', 'Power': '電源・充電', 'Other': 'その他',
-        'Family Area': 'ファミリーエリア', 'Single Area': '単身エリア', 'Medical Area': '医療・ケアエリア',
-        'Critical': '限界 (SOS)', 'High': '困っている', 'Medium': '普通', 'Low': '急ぎません'
-    };
+    'Water': '飲料水',
+    'Food': '食料',
+    'Medical': '医療・薬',
+    'Baby': '乳幼児用品',
+    'Power': '電源・充電',
+    'Other': 'その他',
+    'Family Area': 'ファミリーエリア',
+    'Single Area': '単身エリア',
+    'Medical Area': '医療・ケアエリア',
+    'Critical': '限界 (SOS)',
+    'High': '困っている',
+    'Medium': '普通',
+    'Low': '急ぎません',
+    // 增加一个兜底，处理空分类的情况
+    '': '一般リクエスト' 
+};
 
     c.statusDetails = {
-        1: { icon: ']]>📝<![CDATA[', title: 'DRAFT', desc: '送信前の状態', nextStep: '送信してください' },
-        10: { icon: ']]>📨<![CDATA[', title: 'SUBMITTED', desc: 'システムがリクエストを受信', nextStep: 'ボランティア確認待ち' },
-        11: { icon: ']]>🙋<![CDATA[', title: 'ASSIGNED', desc: 'ボランティアが担当', nextStep: '配送準備中' },
-        2: { icon: ']]>🏃<![CDATA[', title: 'IN_PROGRESS', desc: '救援物資を持って移動中', nextStep: 'まもなく到着' },
-        4: { icon: '✅', title: 'COMPLETED', desc: 'お届け完了', nextStep: 'お大事に' },
-        5: { icon: '❌', title: 'CANCELLED', desc: 'リクエストがキャンセルされました', nextStep: '' },
-        6: { icon: '⏸️', title: 'ON_HOLD', desc: '一時停止', nextStep: '再開待ち' }
+        1: {
+            icon: ']]>📝<![CDATA[',
+            title: 'DRAFT',
+            desc: '送信前の状態',
+            nextStep: '送信してください'
+        },
+        10: {
+            icon: ']]>📨<![CDATA[',
+            title: 'SUBMITTED',
+            desc: 'システムがリクエストを受信',
+            nextStep: 'ボランティア確認待ち'
+        },
+        11: {
+            icon: ']]>🙋<![CDATA[',
+            title: 'ASSIGNED',
+            desc: 'ボランティアが担当',
+            nextStep: '配送準備中'
+        },
+        2: {
+            icon: ']]>🏃<![CDATA[',
+            title: 'IN_PROGRESS',
+            desc: '救援物資を持って移動中',
+            nextStep: 'まもなく到着'
+        },
+        4: {
+            icon: '✅',
+            title: 'COMPLETED',
+            desc: 'お届け完了',
+            nextStep: 'お大事に'
+        },
+        5: {
+            icon: '❌',
+            title: 'CANCELLED',
+            desc: 'リクエストがキャンセルされました',
+            nextStep: ''
+        },
+        6: {
+            icon: '⏸️',
+            title: 'ON_HOLD',
+            desc: '一時停止',
+            nextStep: '再開待ち'
+        }
     };
 
-    // 工具函数
-    function showSuccess(msg) { spUtil.addInfoMessage(msg); }
-    function showError(msg) { spUtil.addErrorMessage(msg || 'エラーが発生しました'); }
+    function showSuccess(msg) {
+        spUtil.addInfoMessage(msg);
+    }
+
+    function showError(msg) {
+        spUtil.addErrorMessage(msg || 'エラーが発生しました');
+    }
 
     function handleServerResponse(response, successCallback) {
-        if (!response || !response.data) { showError('サーバーエラー'); return false; }
-        if (response.data.error) { showError(response.data.error); return false; }
+        if (!response || !response.data) {
+            showError('サーバーエラー');
+            return false;
+        }
+        if (response.data.error) {
+            showError(response.data.error);
+            return false;
+        }
         if (successCallback) successCallback(response.data);
         return true;
     }
 
-    // 跳转到志愿者视图
     c.goToVolunteerView = function() {
         $window.location.href = '?id=kokoro_volunteer';
     };
@@ -310,12 +439,14 @@ $scope.$on('$destroy', function() {
     // ==========================================
     $scope.eyeX = 0;
     $scope.eyeY = 0;
-    var targetEyeX = 0, targetEyeY = 0, eyeAnimationFrame = null;
+    var targetEyeX = 0,
+        targetEyeY = 0,
+        eyeAnimationFrame = null;
 
     function animateEyes() {
         $scope.eyeX += (targetEyeX - $scope.eyeX) * 0.15;
         $scope.eyeY += (targetEyeY - $scope.eyeY) * 0.15;
-        
+
         if (Math.abs(targetEyeX - $scope.eyeX) > 0.01 || Math.abs(targetEyeY - $scope.eyeY) > 0.01) {
             eyeAnimationFrame = requestAnimationFrame(function() {
                 $scope.$apply();
@@ -330,10 +461,8 @@ $scope.$on('$destroy', function() {
         var cx = $window.innerWidth / 2;
         var cy = $window.innerHeight / 2;
         var range = 8;
-        
         targetEyeX = Math.max(Math.min((e.clientX - cx) / cx * range, range), -range);
         targetEyeY = Math.max(Math.min((e.clientY - cy) / cy * range, range * 0.5), -range * 0.5);
-        
         if (!eyeAnimationFrame) {
             animateEyes();
         }
@@ -346,10 +475,10 @@ $scope.$on('$destroy', function() {
     // ==========================================
     c.pokeSlime = function() {
         if (c.step > 0 || c.show_will_input || c.is_poked) return;
-        
         c.is_poked = true;
-        
-        c.server.get({ action: 'register_heartbeat' }).then(function(r) {
+        c.server.get({
+            action: 'register_heartbeat'
+        }).then(function(r) {
             handleServerResponse(r, function(data) {
                 c.current_heartbeat_id = data.heartbeat_id;
                 $timeout(function() {
@@ -385,7 +514,9 @@ $scope.$on('$destroy', function() {
     // ==========================================
     c.onLocationChange = function() {
         if (c.step === 1 && !c.is_editing && c.data.location) {
-            $timeout(function() { c.step = 2; }, CONFIG.debounceDelay);
+            $timeout(function() {
+                c.step = 2;
+            }, CONFIG.debounceDelay);
         }
     };
 
@@ -412,7 +543,7 @@ $scope.$on('$destroy', function() {
     };
 
     // ==========================================
-    // 提交表单
+    // 提交表单 (修正版)
     // ==========================================
     c.submitWish = function() {
         if (!c.data.location) {
@@ -439,37 +570,104 @@ $scope.$on('$destroy', function() {
         c.submitting = true;
 
         var inputData = {
-            action: c.is_editing ? 'update_record' : 'submit_record',
-            sys_id: c.ticket_sys_id,
-            location: c.data.location,
-            detail_loc: c.data.detail_loc,
-            category: c.data.category,
-            quantity: c.data.quantity,
-            affected_count: c.data.affected_count,
-            urgency: c.data.urgency,
-            remarks: c.data.remarks,
-            contact: c.data.contact
-        };
+    action: c.is_editing ? 'update_record' : 'submit_record',
+    sys_id: c.ticket_sys_id,
+    location: c.data.location,
+    detail_loc: c.data.detail_loc,
+    category: c.data.category,
+    quantity: c.data.quantity,
+    affected_count: c.data.affected_count,
+    urgency: c.data.urgency,
+    remarks: c.data.remarks,
+    contact: c.data.contact,
+    guest_token: c.guest_token || ''  // [新增] 游客token
+};
+			console.log(']]>📤<![CDATA[ 提交数据，guest_token:', inputData.guest_token); // 添加调试日志
+
 
         c.server.get(inputData).then(function(response) {
             if (!handleServerResponse(response, function(data) {
-                if (data.ticketNumber) {
-                    c.ticket_number = data.ticketNumber;
-                    c.ticket_sys_id = data.newRecordID || c.ticket_sys_id;
-                }
+                    if (data.ticketNumber) {
+                        c.ticket_number = data.ticketNumber;
+                        c.ticket_sys_id = data.newRecordID || c.ticket_sys_id;
+                    }
 
-                if (c.fileData && c.ticket_sys_id) {
-                    uploadFile(c.ticket_sys_id);
-                } else {
-                    finishSubmit(c.ticket_sys_id);
-                }
-            })) {
+                    // [重要] 确保客户端更新历史记录列表
+                    if (data.my_requests) {
+                        c.data.my_requests = data.my_requests;
+                    }
+
+                    if (c.fileData && c.ticket_sys_id) {
+                        uploadFile(c.ticket_sys_id);
+                    } else {
+                        finishSubmit(c.ticket_sys_id);
+                    }
+                })) {
                 c.submitting = false;
             }
         }).catch(function() {
             c.submitting = false;
             showError('送信失敗');
         });
+    };
+	
+	function finishSubmit(sysId) {
+        c.submitting = false;
+        c.is_editing = false;
+        c.step = 5;
+
+        updateVisualState(CONFIG.states.SUBMITTED);
+        
+        c.server.get({
+    action: 'get_my_history',
+    guest_token: c.guest_token // <--- 添加这一行
+}).then(function(r) {
+            if (r && r.data && r.data.my_requests) {
+                // 【修复】使用 evalAsync 安全更新
+                $scope.$evalAsync(function() {
+                    c.data.my_requests = r.data.my_requests;
+                    console.log("前端已收到历史记录:", c.data.my_requests.length);
+                });
+            }
+        });
+
+        if (sysId) initRecordWatcher(sysId);
+        showSuccess('リクエストを送信しました！');
+    }
+
+    
+
+    // ==========================================
+    // 文件上传
+    // ==========================================
+    c.uploadFiles = function(files) {
+        if (!files || !files.length) return;
+        var file = files[0];
+        var allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (allowedTypes.indexOf(file.type) === -1) {
+            showError('JPEG、PNG、GIF、WebP形式の画像のみ許可されています');
+            return;
+        }
+        var maxSize = 5 * 1024 * 1024;
+        if (file.size > maxSize) {
+            showError('ファイルサイズは5MB以下にしてください');
+            return;
+        }
+        c.files = file;
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            $scope.$apply(function() {
+                c.fileData = e.target.result;
+            });
+        };
+        reader.readAsDataURL(file);
+    };
+
+    c.clearFile = function() {
+        c.files = null;
+        c.fileData = null;
+        var input = document.querySelector('input[type="file"]');
+        if (input) input.value = '';
     };
 
     function uploadFile(sysId) {
@@ -488,58 +686,33 @@ $scope.$on('$destroy', function() {
         });
     }
 
-    function finishSubmit(sysId) {
-        c.submitting = false;
-        c.is_editing = false;
-        c.step = 5;
-        c.current_state_val = CONFIG.states.SUBMITTED;
-        c.status_message = c.statusDetails[CONFIG.states.SUBMITTED].desc;
-        
-        var slime = document.getElementById('the-slime');
-        if (slime) slime.classList.add('happy-slime');
-        
-        if (sysId) initRecordWatcher(sysId);
-        
-        showSuccess('リクエストを送信しました！');
+    // ==========================================
+    // 状态映射与更新逻辑
+    // ==========================================
+    var PROGRESS_MAP = {
+        1: 0,
+        10: 1,
+        11: 2,
+        2: 3,
+        4: 4,
+        5: -1,
+        6: 1
+    };
+
+    c.visual_step = 0;
+
+    function updateVisualState(stateVal) {
+        stateVal = parseInt(stateVal);
+        c.current_state_val = stateVal;
+        if (PROGRESS_MAP.hasOwnProperty(stateVal)) {
+            c.visual_step = PROGRESS_MAP[stateVal];
+        } else {
+            c.visual_step = 0;
+        }
+        if (c.statusDetails[stateVal]) {
+            c.status_message = c.statusDetails[stateVal].desc;
+        }
     }
-
-    // ==========================================
-    // 文件上传
-    // ==========================================
-    c.uploadFiles = function(files) {
-        if (!files || !files.length) return;
-        
-        var file = files[0];
-        var allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        if (allowedTypes.indexOf(file.type) === -1) {
-            showError('JPEG、PNG、GIF、WebP形式の画像のみ許可されています');
-            return;
-        }
-        
-        var maxSize = 5 * 1024 * 1024;
-        if (file.size > maxSize) {
-            showError('ファイルサイズは5MB以下にしてください');
-            return;
-        }
-        
-        c.files = file;
-        var reader = new FileReader();
-        
-        reader.onload = function(e) {
-            $scope.$apply(function() {
-                c.fileData = e.target.result;
-            });
-        };
-        
-        reader.readAsDataURL(file);
-    };
-
-    c.clearFile = function() {
-        c.files = null;
-        c.fileData = null;
-        var input = document.querySelector('input[type="file"]');
-        if (input) input.value = '';
-    };
 
     // ==========================================
     // 实时监听
@@ -547,17 +720,10 @@ $scope.$on('$destroy', function() {
     function initRecordWatcher(sysId) {
         spUtil.recordWatch($scope, 'x_1821654_kokoro_0_silent_wish', "sys_id=" + sysId, function(name, data) {
             if (!data || !data.record) return;
-            
             $timeout(function() {
                 if (data.record.state) {
-                    var stateVal = parseInt(data.record.state.value);
-                    c.current_state_val = stateVal;
-                    
-                    if (c.statusDetails[stateVal]) {
-                        c.status_message = c.statusDetails[stateVal].desc;
-                    }
+                    updateVisualState(data.record.state.value);
                 }
-
                 if (data.record.assigned_to) {
                     c.assigned_to = data.record.assigned_to.display_value;
                 }
@@ -587,7 +753,7 @@ $scope.$on('$destroy', function() {
         c.digital_will = "";
         c.current_state_val = 0;
         c.status_message = "待機中...";
-        
+
         var slime = document.getElementById('the-slime');
         if (slime) slime.classList.remove('happy-slime');
     };
@@ -596,32 +762,29 @@ $scope.$on('$destroy', function() {
     // 设置面板
     // ==========================================
     c.toggleSettings = function() {
-        c.showSettings = !c.showSettings;
-        
-        if (c.showSettings) {
-            c.temp_settings = {
-                email: c.data.emergency_email || "",
-                medical_info: c.data.medical_info || "",
-                blood_type: c.data.blood_type || "",
-                will: c.data.saved_will || ""
-            };
-        }
-    };
+    c.showMenu = false;  // 关闭汉堡菜单
+    c.showSettings = !c.showSettings;
+    if (c.showSettings) {
+        c.temp_settings = {
+            email: c.data.emergency_email || "",
+            medical_info: c.data.medical_info || "",
+            blood_type: c.data.blood_type || "",
+            will: c.data.saved_will || ""
+        };
+    }
+};
 
     c.saveSettings = function() {
         if (!c.temp_settings.email || c.temp_settings.email.trim() === '') {
             showError('メールアドレスを入力してください');
             return;
         }
-        
         var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(c.temp_settings.email)) {
             showError('有効なメールアドレスを入力してください');
             return;
         }
-        
         c.saving = true;
-        
         c.server.get({
             action: 'save_settings',
             email: c.temp_settings.email,
@@ -630,67 +793,143 @@ $scope.$on('$destroy', function() {
             will: c.temp_settings.will
         }).then(function(response) {
             c.saving = false;
-            
             if (handleServerResponse(response, function() {
-                c.data.emergency_email = c.temp_settings.email;
-                c.data.medical_info = c.temp_settings.medical_info;
-                c.data.blood_type = c.temp_settings.blood_type;
-                c.data.saved_will = c.temp_settings.will;
-                
-                c.showSettings = false;
-                showSuccess('安全設定を保存しました');
-            }));
+                    c.data.emergency_email = c.temp_settings.email;
+                    c.data.medical_info = c.temp_settings.medical_info;
+                    c.data.blood_type = c.temp_settings.blood_type;
+                    c.data.saved_will = c.temp_settings.will;
+                    c.showSettings = false;
+                    showSuccess('安全設定を保存しました');
+                }));
         }).catch(function() {
             c.saving = false;
             showError('保存に失敗しました');
         });
     };
+	 // ==========================================
+// 历史记录逻辑 (完整修复版 - 避免 digest cycle 错误)
+// ==========================================
+c.show_history = false;
 
-	// ==========================================
-    // [新增] 历史记录逻辑
-    // ==========================================
-    c.show_history = false;
+c.toggleHistory = function() {
+    c.showMenu = false;  // 关闭汉堡菜单
+    c.show_history = !c.show_history;
     
-    c.toggleHistory = function() {
-        c.show_history = !c.show_history;
-    };
+    if (c.show_history) {
+        // ]]>🔧<![CDATA[ 使用 $timeout 避免 $digest cycle 冲突
+        $timeout(function() {
+            c.server.get({
+                action: 'get_my_history',
+                guest_token: c.guest_token || ''
+            }).then(function(r) {
+                if (r && r.data && r.data.my_requests) {
+                    // 直接赋值，Angular会自动检测
+                    c.data.my_requests = r.data.my_requests;
+                    console.log('✅ 历史记录已加载，数量:', c.data.my_requests.length);
+                } else {
+                    console.warn('⚠️ 未收到历史记录数据');
+                }
+            }).catch(function(error) {
+                console.error('❌ 加载历史记录失败:', error);
+            });
+        }, 0);
+    }
+};
 
-    c.loadTicket = function(item) {
-        // 1. 关闭历史列表
-        c.show_history = false;
-        
-        // 2. 填充数据以复现 Success Card (Step 5)
-        c.ticket_sys_id = item.sys_id;
-        c.ticket_number = item.number;
-        c.current_state_val = item.state;
-        
-        // 恢复数据对象 (用于显示)
-        c.data.location = item.location; // 注意：Server端需要确保返回value而不是display value，或者这里做映射
-        c.data.detail_loc = item.detail_loc;
-        c.data.category = item.category;
-        c.data.quantity = item.quantity;
-        c.data.urgency = item.urgency;
-        c.data.remarks = item.remarks;
-        
-        // 设置状态文本
-        if (c.statusDetails[c.current_state_val]) {
-            c.status_message = c.statusDetails[c.current_state_val].desc;
-        }
+c.loadTicket = function(item) {
+    c.show_history = false;
+    c.ticket_sys_id = item.sys_id;
+    c.ticket_number = item.number;
+    c.data.location = item.location;
+    c.data.detail_loc = item.detail_loc;
+    c.data.category = item.category;
+    c.data.quantity = item.quantity;
+    c.data.urgency = item.urgency;
+    c.data.remarks = item.remarks;
 
-        // 3. 激活 Record Watcher 监听此工单变化
-        initRecordWatcher(c.ticket_sys_id);
+    updateVisualState(item.state);
+    initRecordWatcher(c.ticket_sys_id);
+    c.step = 5;
+    
+    var slime = document.getElementById('the-slime');
+    if (slime) slime.classList.add('happy-slime');
+};
 
-        // 4. 跳转到 Step 5
-        c.step = 5;
-        
-        // 5. 让史莱姆开心
-        var slime = document.getElementById('the-slime');
-        if (slime) slime.classList.add('happy-slime');
-    };
+    
+	// ==========================================
+// 账户升级 (游客 → 注册用户)
+// ==========================================
+c.upgradeAccount = function() {
+    if (!c.guest_token) {
+        showError('ゲストトークンがありません');
+        return;
+    }
+    
+    c.server.get({
+        action: 'upgrade_guest_account',
+        guest_token: c.guest_token
+    }).then(function(r) {
+        if (handleServerResponse(r, function(data) {
+            c.is_guest = false;
+            c.auth_mode = 'authenticated';
+            c.guest_token = '';
+            
+            try {
+                $window.localStorage.removeItem('kokoro_guest_token');
+            } catch (e) {}
+            
+            showSuccess(data.message || 'アカウントを移行しました');
+            
+            // 刷新数据
+            c.server.get({
+                action: 'get_my_history'
+            }).then(function(historyR) {
+                if (historyR && historyR.data && historyR.data.my_requests) {
+                    c.data.my_requests = historyR.data.my_requests;
+                }
+            });
+        }));
+    });
+};
+
+// ==========================================
+// 好友验证码 (灾后面对面)
+// ==========================================
+c.show_friend_code = false;
+c.my_friend_code = '';
+c.friend_code_input = '';
+
+c.generateFriendCode = function() {
+    c.server.get({
+        action: 'generate_friend_code'
+    }).then(function(r) {
+        if (handleServerResponse(r, function(data) {
+            c.my_friend_code = data.friend_code;
+            c.show_friend_code = true;
+        }));
+    });
+};
+
+c.verifyFriendCode = function() {
+    if (!c.friend_code_input || c.friend_code_input.length !== 6) {
+        showError('6桁のコードを入力してください');
+        return;
+    }
+    
+    c.server.get({
+        action: 'verify_friend_code',
+        code: c.friend_code_input
+    }).then(function(r) {
+        if (handleServerResponse(r, function(data) {
+            c.friend_code_input = '';
+            c.show_friend_code = false;
+            showSuccess(data.message);
+            c.loadGuardianData();
+        }));
+    });
+};
 	
-    // ==========================================
-    // 清理
-    // ==========================================
+
     $scope.$on('$destroy', function() {
         $window.removeEventListener('mousemove', handleMouseMove);
         if (eyeAnimationFrame) {
@@ -2998,6 +3237,239 @@ textarea.glass-input {
   .step-card { padding: 20px; }
   .big-input { height: 56px; font-size: 1rem; }
   .big-submit-btn { height: 56px; font-size: 1.1rem; }
+}
+
+/* ==========================================
+   游客模式样式
+   ========================================== */
+.guest-banner {
+    background: linear-gradient(135deg, #ff9800, #f57c00);
+    color: white;
+    padding: 8px 16px;
+    text-align: center;
+    font-size: 0.85rem;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+.guest-banner-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-guest-login {
+    background: rgba(255,255,255,0.25);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.5);
+    border-radius: 20px;
+    padding: 4px 16px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-guest-login:hover {
+    background: rgba(255,255,255,0.4);
+}
+
+.locked-item {
+    opacity: 0.6;
+}
+
+/* 登录提示弹窗 */
+.login-prompt-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.login-prompt-card {
+    background: white;
+    border-radius: 20px;
+    padding: 32px;
+    max-width: 380px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+.prompt-icon {
+    color: #5c6bc0;
+    margin-bottom: 16px;
+}
+
+.login-prompt-card h3 {
+    margin: 0 0 12px;
+    font-size: 1.2rem;
+}
+
+.login-prompt-card p {
+    color: #666;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    margin-bottom: 24px;
+}
+
+.prompt-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.btn-login-primary {
+    background: linear-gradient(135deg, #5c6bc0, #3f51b5);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.btn-login-skip {
+    background: none;
+    border: none;
+    color: #999;
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 8px;
+}
+
+/* 对面认证 */
+.verify-section {
+    padding: 16px;
+}
+
+.verify-instruction {
+    display: flex;
+    gap: 8px;
+    background: #e8eaf6;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 20px;
+    font-size: 0.85rem;
+    color: #3f51b5;
+}
+
+.verify-instruction i {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.verify-generate, .verify-input {
+    text-align: center;
+    padding: 16px 0;
+}
+
+.verify-generate h4, .verify-input h4 {
+    font-size: 0.9rem;
+    color: #555;
+    margin-bottom: 12px;
+}
+
+.code-display {
+    margin: 16px 0;
+}
+
+.big-code {
+    display: block;
+    font-size: 2.5rem;
+    font-weight: 900;
+    letter-spacing: 12px;
+    color: #3f51b5;
+    font-family: 'Courier New', monospace;
+}
+
+.code-display small {
+    display: block;
+    color: #999;
+    font-size: 0.8rem;
+    margin-top: 4px;
+}
+
+.btn-generate-code {
+    background: linear-gradient(135deg, #5c6bc0, #3f51b5);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 12px 24px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    margin-top: 8px;
+}
+
+.verify-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #ccc;
+    font-size: 0.85rem;
+}
+
+.verify-divider::before,
+.verify-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #e0e0e0;
+}
+
+.code-input {
+    display: block;
+    width: 100%;
+    max-width: 200px;
+    margin: 12px auto;
+    text-align: center;
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: 8px;
+    padding: 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    font-family: 'Courier New', monospace;
+}
+
+.code-input:focus {
+    border-color: #5c6bc0;
+    outline: none;
+}
+
+.btn-verify-code {
+    background: linear-gradient(135deg, #43a047, #2e7d32);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 12px 24px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    margin-top: 8px;
+}
+
+.btn-verify-code:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.guest-heartbeat-hint {
+    background: #fff3e0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: #e65100;
+    margin: 12px 0;
 }</css>
         <data_table>sp_instance</data_table>
         <demo_data/>
@@ -3014,9 +3486,8 @@ textarea.glass-input {
         <roles/>
         <script><![CDATA[(function() {
     // ============================================================
-    // KOKORO SHELTER - Server Script (Merged Version 3.0)
-    // 包含: 基础避难所管理 + 好友系统(守护圈)
-    // 用于: kokoro_user 和 kokoro_volunteer 两个Widget
+    // KOKORO SHELTER - Server Script (Final Fixed Version)
+    // 包含: 基础避难所管理 + 好友系统(守护圈) + 游客模式
     // ============================================================
 
     var CONFIG = {
@@ -3026,9 +3497,11 @@ textarea.glass-input {
             HEARTBEAT: 'x_1821654_kokoro_0_x_1821654_kokoro_0_heartbeat',
             EMERGENCY_MESSAGE: 'x_1821654_kokoro_0_emergency_message',
             PROCESS_EVENT: 'x_1821654_kokoro_0_process_event',
-            // [新增] 好友系统表
             FRIEND_RELATION: 'x_1821654_kokoro_0_friend_relation',
-            FRIEND_NOTIFICATION: 'x_1821654_kokoro_0_friend_notification'
+            FRIEND_NOTIFICATION: 'x_1821654_kokoro_0_friend_notification',
+            GUEST_TOKEN: 'x_1821654_kokoro_0_guest_token',
+            HEARTBEAT_TOKEN: 'x_1821654_kokoro_0_heartbeat_token',
+            FRIEND_VERIFICATION: 'x_1821654_kokoro_0_friend_verification'
         },
         wishStates: {
             DRAFT: '1',
@@ -3047,10 +3520,32 @@ textarea.glass-input {
         }
     };
 
+    // ==========================================
+    // 双模式身份识别 (Guest / Authenticated)
+    // ==========================================
     data.user_id = gs.getUserID();
     data.user_name = gs.getUserDisplayName();
+    data.is_guest = false;
+    data.guest_token = '';
+    data.auth_mode = 'authenticated';
 
-    var isVolunteer = gs.hasRole('admin') || gs.hasRole('x_1821654_kokoro_0.volunteer');
+    var isGuestSession = !gs.isLoggedIn() || gs.getUserName() === 'guest' || data.user_id === '5136503cc611227c00566377a6ee91f3';
+
+    if (isGuestSession) {
+        data.is_guest = true;
+        data.auth_mode = 'guest';
+        data.user_name = 'ゲスト';
+        
+        if (input && input.guest_token) {
+            data.guest_token = input.guest_token;
+        }
+        
+        data.guest_features_locked = true;
+    } else {
+        data.guest_features_locked = false;
+    }
+
+    var isVolunteer = !isGuestSession && (gs.hasRole('admin') || gs.hasRole('x_1821654_kokoro_0.volunteer'));
     data.is_volunteer = isVolunteer;
 
     data.emergency_email = "";
@@ -3062,8 +3557,6 @@ textarea.glass-input {
     data.volunteers = [];
     data.openCount = 0;
     data.sosCount = 0;
-    
-    // 好友系统数据
     data.my_requests = [];
     data.friends = [];
     data.friend_requests = [];
@@ -3103,6 +3596,112 @@ textarea.glass-input {
         } catch (e) {
             gs.error('[Kokoro] Process event log error: ' + e.message);
         }
+    }
+
+    // ==========================================
+    // 游客Token管理
+    // ==========================================
+    function generateGuestToken() {
+        var token = gs.generateGUID();
+        try {
+            var gt = new GlideRecord(CONFIG.tables.GUEST_TOKEN);
+            gt.initialize();
+            gt.setValue('token', token);
+            gt.setValue('guest_identifier', '');
+            gt.setValue('created_at', new GlideDateTime());
+            
+            var expires = new GlideDateTime();
+            expires.addSeconds(72 * 3600);
+            gt.setValue('expires_at', expires);
+            gt.setValue('is_active', true);
+            
+            if (gt.insert()) {
+                return token;
+            }
+        } catch (e) {
+            gs.error('[Kokoro] Guest token generation error: ' + e.message);
+        }
+        return null;
+    }
+
+    function validateGuestToken(token) {
+        if (!token) return { valid: false };
+        try {
+            var gt = new GlideRecord(CONFIG.tables.GUEST_TOKEN);
+            gt.addQuery('token', token);
+            gt.addQuery('is_active', true);
+            gt.addQuery('expires_at', '>', new GlideDateTime());
+            gt.setLimit(1);
+            gt.query();
+            
+            if (gt.next()) {
+                return {
+                    valid: true,
+                    sys_id: gt.getUniqueValue(),
+                    token: token,
+                    linked_user: gt.getValue('linked_user') || null
+                };
+            }
+        } catch (e) {
+            gs.error('[Kokoro] Guest token validation error: ' + e.message);
+        }
+        return { valid: false };
+    }
+
+    function generateHeartbeatToken(targetIdentifier, isGuest) {
+        var token = gs.generateGUID();
+        try {
+            var ht = new GlideRecord(CONFIG.tables.HEARTBEAT_TOKEN);
+            ht.initialize();
+            ht.setValue('token', token);
+            
+            if (isGuest) {
+                ht.setValue('guest_token', targetIdentifier);
+            } else {
+                ht.setValue('target_user', targetIdentifier);
+            }
+            
+            ht.setValue('created_at', new GlideDateTime());
+            
+            var expires = new GlideDateTime();
+            expires.addSeconds(24 * 3600);
+            ht.setValue('expires_at', expires);
+            ht.setValue('is_used', false);
+            
+            if (ht.insert()) {
+                return token;
+            }
+        } catch (e) {
+            gs.error('[Kokoro] Heartbeat token generation error: ' + e.message);
+        }
+        return null;
+    }
+
+    function consumeHeartbeatToken(token) {
+        if (!token) return { valid: false };
+        try {
+            var ht = new GlideRecord(CONFIG.tables.HEARTBEAT_TOKEN);
+            ht.addQuery('token', token);
+            ht.addQuery('is_used', false);
+            ht.addQuery('expires_at', '>', new GlideDateTime());
+            ht.setLimit(1);
+            ht.query();
+            
+            if (ht.next()) {
+                ht.setValue('is_used', true);
+                ht.setValue('used_at', new GlideDateTime());
+                ht.update();
+                
+                return {
+                    valid: true,
+                    target_user: ht.getValue('target_user'),
+                    guest_token: ht.getValue('guest_token')
+                };
+            }
+        } catch (e) {
+            gs.error('[Kokoro] Heartbeat token consume error: ' + e.message);
+        }
+        return { valid: false };
     }
 
     // ==========================================
@@ -3154,7 +3753,7 @@ textarea.glass-input {
             grProfile.query();
 
             if (grProfile.next()) {
-                data.emergency_email = grProfile.getValue('emergency_conact_email') || "";
+                data.emergency_email = grProfile.getValue('emergency_contact_email') || "";
                 data.medical_info = grProfile.getValue('medical_conditions') || "";
                 data.blood_type = grProfile.getValue('blood_type') || "";
             }
@@ -3181,8 +3780,10 @@ textarea.glass-input {
         }
     }
 
-    loadUserProfile();
-    loadDigitalWill();
+    if (!isGuestSession) {
+        loadUserProfile();
+        loadDigitalWill();
+    }
 
     // ==========================================
     // 构建任务项
@@ -3192,7 +3793,7 @@ textarea.glass-input {
             sys_id: gr.getUniqueValue(),
             number: gr.getValue('number') || '',
             category: gr.getValue('u_category') || '',
-            category_display: gr.getDisplayValue('u_category') || '未分類',
+            category_display: gr.getDisplayValue('u_category') || '',
             zone: gr.getDisplayValue('shelter_zone') || '',
             detail_loc: gr.getValue('detail_loc') || gr.getValue('wish_content') || '',
             desc: gr.getValue('u_remarks') || '',
@@ -3211,10 +3812,9 @@ textarea.glass-input {
             attachments: []
         };
 
-        // 时间计算
         var created = new GlideDateTime(gr.sys_created_on);
         var now = new GlideDateTime();
-        var diffMs = GlideDateTime.subtract(now, created).getNumericValue();
+        var diffMs = Math.abs(now.getNumericValue() - created.getNumericValue());
         var minutes = Math.floor(diffMs / 1000 / 60);
 
         if (minutes < 60) {
@@ -3227,7 +3827,6 @@ textarea.glass-input {
 
         taskItem.created_on = gr.getDisplayValue('sys_created_on');
 
-        // SLA计算
         var slaTarget = CONFIG.slaTargets[taskItem.urgency] || 180;
         var slaPercentage = Math.min((minutes / slaTarget) * 100, 100);
         var remainingMinutes = slaTarget - minutes;
@@ -3240,7 +3839,6 @@ textarea.glass-input {
             status: slaPercentage > 100 ? 'critical' : (slaPercentage > 80 ? 'warning' : 'ok')
         };
 
-        // 附件
         try {
             var att = new GlideRecord('sys_attachment');
             att.addQuery('table_sys_id', taskItem.sys_id);
@@ -3249,23 +3847,6 @@ textarea.glass-input {
             att.query();
             if (att.next()) {
                 taskItem.image_url = '/' + att.sys_id + '.iix';
-            }
-        } catch (e) {}
-
-        // 活动历史
-        try {
-            var journal = new GlideRecord('sys_journal_field');
-            journal.addQuery('element_id', taskItem.sys_id);
-            journal.addQuery('element', 'work_notes');
-            journal.orderByDesc('sys_created_on');
-            journal.setLimit(10);
-            journal.query();
-            while (journal.next()) {
-                taskItem.history.push({
-                    user: journal.getDisplayValue('sys_created_by') || 'System',
-                    text: journal.getValue('value') || '',
-                    date: journal.getDisplayValue('sys_created_on')
-                });
             }
         } catch (e) {}
 
@@ -3299,19 +3880,25 @@ textarea.glass-input {
                 }
             }
 
-            // 添加管理员
             var adminGr = new GlideRecord('sys_user');
             adminGr.addQuery('active', true);
-            adminGr.addQuery('roles', 'CONTAINS', 'admin');
+            adminGr.addJoinQuery('sys_user_has_role', 'sys_id', 'user');
+            adminGr.addQuery('sys_user_has_role.role.name', 'admin');
             adminGr.setLimit(10);
             adminGr.query();
+            
             while (adminGr.next()) {
-                var alreadyExists = volunteerList.some(function(v) {
-                    return v.sys_id === adminGr.getUniqueValue();
-                });
+                var adminId = adminGr.getUniqueValue();
+                var alreadyExists = false;
+                for (var i = 0; i < volunteerList.length; i++) {
+                    if (volunteerList[i].sys_id === adminId) {
+                        alreadyExists = true;
+                        break;
+                    }
+                }
                 if (!alreadyExists) {
                     volunteerList.push({
-                        sys_id: adminGr.getUniqueValue(),
+                        sys_id: adminId,
                         name: adminGr.getDisplayValue('name') || adminGr.getValue('user_name')
                     });
                 }
@@ -3325,8 +3912,6 @@ textarea.glass-input {
     // ==========================================
     // 好友系统 - 工具函数
     // ==========================================
-    
-    // 获取最新心跳信息
     function getLatestHeartbeat(userId) {
         try {
             var hbGr = new GlideRecord(CONFIG.tables.HEARTBEAT);
@@ -3350,10 +3935,10 @@ textarea.glass-input {
                 } else if (minutes < 60) {
                     status = 'online';
                     message = minutes + '分前';
-                } else if (minutes < 360) { // 6小时
+                } else if (minutes < 360) {
                     status = 'warning';
                     message = Math.floor(minutes / 60) + '時間前';
-                } else if (minutes < 1440) { // 24小时
+                } else if (minutes < 1440) {
                     status = 'critical';
                     message = '⚠️ ' + Math.floor(minutes / 60) + '時間応答なし';
                 } else {
@@ -3361,7 +3946,6 @@ textarea.glass-input {
                     message = ']]>🆘<![CDATA[ ' + Math.floor(minutes / 1440) + '日間連絡なし';
                 }
 
-                // 获取位置信息 (从最近的wish或profile)
                 var zone = getUserCurrentZone(userId);
 
                 return {
@@ -3383,10 +3967,8 @@ textarea.glass-input {
         };
     }
 
-    // 获取用户当前区域
     function getUserCurrentZone(userId) {
         try {
-            // 从最近的wish获取
             var wishGr = new GlideRecord(CONFIG.tables.SILENT_WISH);
             wishGr.addQuery('opened_by', userId);
             wishGr.orderByDesc('sys_created_on');
@@ -3397,7 +3979,6 @@ textarea.glass-input {
                 return wishGr.getDisplayValue('shelter_zone');
             }
 
-            // 或从用户Profile获取
             var profileGr = new GlideRecord(CONFIG.tables.USER_PROFILE);
             profileGr.addQuery('user', userId);
             profileGr.setLimit(1);
@@ -3411,7 +3992,6 @@ textarea.glass-input {
         return '';
     }
 
-    // 检查好友状态
     function checkFriendStatus(userId, friendId) {
         try {
             var gr = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
@@ -3427,7 +4007,6 @@ textarea.glass-input {
         }
     }
 
-    // 检查待处理请求
     function checkPendingRequest(fromUser, toUser) {
         try {
             var gr = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
@@ -3443,7 +4022,6 @@ textarea.glass-input {
         }
     }
 
-    // 创建好友通知
     function createFriendNotification(fromUser, toUser, type, message, relatedRecord) {
         try {
             var notif = new GlideRecord(CONFIG.tables.FRIEND_NOTIFICATION);
@@ -3466,16 +4044,13 @@ textarea.glass-input {
         }
     }
 
-    // 获取推荐好友 (同一区域的活跃用户)
     function getRecommendedFriends(userId) {
         var recommended = [];
 
         try {
-            // 获取当前用户的区域
             var userZone = getUserCurrentZone(userId);
             if (!userZone) return recommended;
 
-            // 查找同一区域的其他用户
             var wishGr = new GlideAggregate(CONFIG.tables.SILENT_WISH);
             wishGr.addQuery('shelter_zone', userZone);
             wishGr.addQuery('opened_by', '!=', userId);
@@ -3487,10 +4062,7 @@ textarea.glass-input {
             while (wishGr.next()) {
                 var candidateId = wishGr.getValue('opened_by');
 
-                // 检查是否已经是好友
                 if (checkFriendStatus(userId, candidateId)) continue;
-
-                // 检查是否已发送请求
                 if (checkPendingRequest(userId, candidateId)) continue;
 
                 var userGr = new GlideRecord('sys_user');
@@ -3511,18 +4083,66 @@ textarea.glass-input {
     }
 
     // ==========================================
-    // 加载用户提交的历史记录
+    // 获取用户历史记录 (核心函数)
     // ==========================================
-    if (data.user_id) {
+    function getMyRequests(userId, guestToken) {
+    var requests = [];
+    
+    // ]]>🔍<![CDATA[ 调试日志 - 记录输入参数
+    gs.info("=== getMyRequests 调试 ===");
+    gs.info("userId: " + userId);
+    gs.info("guestToken: " + guestToken);
+    
+    try {
         var myReq = new GlideRecord(CONFIG.tables.SILENT_WISH);
-        myReq.addQuery('opened_by', data.user_id);
-        myReq.orderByDesc('sys_created_on');
-        myReq.setLimit(5);
-        myReq.query();
-        while (myReq.next()) {
-            data.my_requests.push(buildTaskItem(myReq));
+        
+        if (guestToken) {
+            gs.info("使用 guest_token 查询: " + guestToken);
+            myReq.addQuery('guest_token', guestToken);
+        } else if (userId) {
+            gs.info("使用 opened_by 查询: " + userId);
+            myReq.addQuery('opened_by', userId);
+        } else {
+            gs.warn("[Kokoro] getMyRequests: 无有效的userId或guestToken");
+            return requests;
         }
+        
+        myReq.orderByDesc('sys_created_on');
+        myReq.setLimit(20);
+        myReq.query();
+        
+        // ]]>🔍<![CDATA[ 调试日志 - 记录查询结果
+        gs.info("查询返回的记录数: " + myReq.getRowCount());
+        
+        // ]]>🔍<![CDATA[ 如果没有记录，检查数据库中是否有任何记录
+        if (myReq.getRowCount() === 0) {
+            var checkGr = new GlideRecord(CONFIG.tables.SILENT_WISH);
+            checkGr.setLimit(5);
+            checkGr.orderByDesc('sys_created_on');
+            checkGr.query();
+            
+            gs.info("=== 数据库中最新的 5 条记录 ===");
+            while (checkGr.next()) {
+                gs.info("Record: " + checkGr.getValue('number') + 
+                       " | guest_token: " + checkGr.getValue('guest_token') + 
+                       " | opened_by: " + checkGr.getValue('opened_by'));
+            }
+        }
+        
+        while (myReq.next()) {
+            var taskItem = buildTaskItem(myReq);
+            requests.push(taskItem);
+            gs.info("添加记录: " + taskItem.number);
+        }
+        
+        gs.info("最终返回的记录数量: " + requests.length);
+        gs.info("=== getMyRequests 调试结束 ===");
+        
+    } catch (e) {
+        gs.error("[Kokoro] getMyRequests error: " + e.message);
     }
+    return requests;
+}
 
     // ==========================================
     // 加载志愿者数据
@@ -3579,16 +4199,215 @@ textarea.glass-input {
     }
 
     // ==========================================
-    // 处理输入
+    // ]]>🔥<![CDATA[ INPUT 处理逻辑 (所有操作都在这里)
     // ==========================================
     if (input) {
 
+        // 好友验证码 - 生成
+        if (input.action === 'generate_friend_code') {
+            try {
+                if (data.is_guest) {
+                    data.error = 'ログインが必要です';
+                    return;
+                }
+                
+                var oldCode = new GlideRecord(CONFIG.tables.FRIEND_VERIFICATION);
+                oldCode.addQuery('initiator', data.user_id);
+                oldCode.addQuery('is_used', false);
+                oldCode.query();
+                while (oldCode.next()) {
+                    oldCode.setValue('is_used', true);
+                    oldCode.update();
+                }
+                
+                var code = String(Math.floor(100000 + Math.random() * 900000));
+                
+                var fv = new GlideRecord(CONFIG.tables.FRIEND_VERIFICATION);
+                fv.initialize();
+                fv.setValue('verification_code', code);
+                fv.setValue('initiator', data.user_id);
+                fv.setValue('created_at', new GlideDateTime());
+                
+                var expires = new GlideDateTime();
+                expires.addSeconds(15 * 60);
+                fv.setValue('expires_at', expires);
+                fv.setValue('is_used', false);
+                
+                if (fv.insert()) {
+                    data.friend_code = code;
+                    data.code_expires_in = 15;
+                    data.success = true;
+                }
+                
+            } catch (e) {
+                gs.error('[Kokoro] Generate friend code error: ' + e.message);
+                data.error = 'コード生成エラー';
+            }
+            return;
+        }
+
+        // 好友验证码 - 验证
+        if (input.action === 'verify_friend_code') {
+            try {
+                if (data.is_guest) {
+                    data.error = 'ログインが必要です';
+                    return;
+                }
+                
+                var inputCode = sanitizeInput(input.code, 6);
+                if (!inputCode || inputCode.length !== 6) {
+                    data.error = '6桁のコードを入力してください';
+                    return;
+                }
+                
+                var fvGr = new GlideRecord(CONFIG.tables.FRIEND_VERIFICATION);
+                fvGr.addQuery('verification_code', inputCode);
+                fvGr.addQuery('is_used', false);
+                fvGr.addQuery('expires_at', '>', new GlideDateTime());
+                fvGr.addQuery('initiator', '!=', data.user_id);
+                fvGr.setLimit(1);
+                fvGr.query();
+                
+                if (!fvGr.next()) {
+                    data.error = 'コードが無効または期限切れです';
+                    return;
+                }
+                
+                var initiatorId = fvGr.getValue('initiator');
+                
+                if (checkFriendStatus(data.user_id, initiatorId)) {
+                    data.error = 'すでに友達です';
+                    fvGr.setValue('is_used', true);
+                    fvGr.update();
+                    return;
+                }
+                
+                var rel1 = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
+                rel1.initialize();
+                rel1.setValue('user', data.user_id);
+                rel1.setValue('friend', initiatorId);
+                rel1.setValue('status', 'accepted');
+                rel1.setValue('created_at', new GlideDateTime());
+                rel1.setValue('accepted_at', new GlideDateTime());
+                rel1.setValue('alert_enabled', true);
+                rel1.insert();
+                
+                var rel2 = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
+                rel2.initialize();
+                rel2.setValue('user', initiatorId);
+                rel2.setValue('friend', data.user_id);
+                rel2.setValue('status', 'accepted');
+                rel2.setValue('created_at', new GlideDateTime());
+                rel2.setValue('accepted_at', new GlideDateTime());
+                rel2.setValue('alert_enabled', true);
+                rel2.insert();
+                
+                fvGr.setValue('is_used', true);
+                fvGr.setValue('matched_user', data.user_id);
+                fvGr.update();
+                
+                var initiatorUser = new GlideRecord('sys_user');
+                var friendName = 'ユーザー';
+                if (initiatorUser.get(initiatorId)) {
+                    friendName = initiatorUser.getDisplayValue('name');
+                }
+                
+                createFriendNotification(data.user_id, initiatorId, 
+                    'friend_verified', 
+                    data.user_name + ' と直接認証で友達になりました', null);
+                
+                data.success = true;
+                data.new_friend_name = friendName;
+                data.message = friendName + ' と友達になりました';
+                
+                logProcessEvent(data.user_id, 
+                    'Friend verified face-to-face with ' + initiatorId, data.user_id);
+                
+            } catch (e) {
+                gs.error('[Kokoro] Verify friend code error: ' + e.message);
+                data.error = '認証エラー';
+            }
+            return;
+        }
+
+        // 游客系统 - 初始化
+        if (input.action === 'guest_init') {
+            try {
+                if (input.guest_token) {
+                    var validation = validateGuestToken(input.guest_token);
+                    if (validation.valid) {
+                        data.guest_token = input.guest_token;
+                        data.auth_mode = 'guest';
+                        data.success = true;
+                        
+                        if (validation.linked_user) {
+                            data.upgrade_hint = true;
+                        }
+                    } else {
+                        var newToken = generateGuestToken();
+                        data.guest_token = newToken;
+                        data.auth_mode = 'guest';
+                        data.success = true;
+                        data.token_refreshed = true;
+                    }
+                } else {
+                    var freshToken = generateGuestToken();
+                    data.guest_token = freshToken;
+                    data.auth_mode = 'guest';
+                    data.success = true;
+                }
+            } catch (e) {
+                gs.error('[Kokoro] Guest init error: ' + e.message);
+                data.error = 'ゲスト初期化エラー';
+            }
+            return;
+        }
+
+        // 一次性链接心跳
+        if (input.action === 'heartbeat_by_token') {
+            try {
+                var hbToken = input.heartbeat_token;
+                var result = consumeHeartbeatToken(hbToken);
+                
+                if (!result.valid) {
+                    data.error = 'リンクが無効または期限切れです';
+                    return;
+                }
+                
+                var hb = new GlideRecord(CONFIG.tables.HEARTBEAT);
+                hb.initialize();
+                
+                if (result.target_user) {
+                    hb.setValue('u_user', result.target_user);
+                }
+                hb.setValue('u_timestamp', new GlideDateTime());
+                hb.setValue('u_status', 'Safe');
+                hb.setValue('u_source', 'one_time_link');
+                
+                if (result.guest_token) {
+                    hb.setValue('guest_token', result.guest_token);
+                }
+                
+                var hbId = hb.insert();
+                data.heartbeat_id = hbId;
+                data.success = true;
+                data.message = '生存確認が完了しました';
+                
+            } catch (e) {
+                gs.error('[Kokoro] Token heartbeat error: ' + e.message);
+                data.error = '生存確認エラー';
+            }
+            return;
+        }
+
+        // 获取志愿者列表
         if (input.action === 'get_volunteers') {
             data.volunteers = loadVolunteerList();
             data.success = true;
             return;
         }
 
+        // 保存设置
         if (input.action === 'save_settings') {
             try {
                 var successProfile = false;
@@ -3599,14 +4418,14 @@ textarea.glass-input {
                 grUp.query();
 
                 if (grUp.next()) {
-                    grUp.setValue('emergency_conact_email', sanitizeInput(input.email, 100));
+                    grUp.setValue('emergency_contact_email', sanitizeInput(input.email, 100));
                     grUp.setValue('medical_conditions', sanitizeInput(input.medical_info, 1000));
                     grUp.setValue('blood_type', sanitizeInput(input.blood_type, 20));
                     successProfile = (grUp.update() != null);
                 } else {
                     grUp.initialize();
                     grUp.setValue('user', data.user_id);
-                    grUp.setValue('emergency_conact_email', sanitizeInput(input.email, 100));
+                    grUp.setValue('emergency_contact_email', sanitizeInput(input.email, 100));
                     grUp.setValue('medical_conditions', sanitizeInput(input.medical_info, 1000));
                     grUp.setValue('blood_type', sanitizeInput(input.blood_type, 20));
                     successProfile = (grUp.insert() != null);
@@ -3647,27 +4466,31 @@ textarea.glass-input {
             return;
         }
 
+        // ]]>🔥<![CDATA[ 提交/更新记录 (修正数据保存逻辑)
         if (input.action === 'submit_record' || input.action === 'update_record') {
-            if (!input.location || !input.category || !input.urgency) {
-                data.error = "必須項目が不足";
-                return;
-            }
+            // ... (前面的验证代码保持不变) ...
 
             try {
                 var gr = new GlideRecord(CONFIG.tables.SILENT_WISH);
-
+                
+                // 确定是更新还是新建
                 if (input.action === 'update_record' && input.sys_id) {
-                    if (!validateSysId(input.sys_id)) {
-                        data.error = "無効なID";
-                        return;
-                    }
                     if (!gr.get(input.sys_id)) {
                         data.error = "レコードが見つかりません";
                         return;
                     }
                 } else {
                     gr.initialize();
-                    gr.setValue('opened_by', data.user_id);
+                    
+                    // ]]>🔥<![CDATA[【关键修复】强制获取当前用户ID，防止为 null
+                    var currentUserId = gs.getUserID(); 
+                    gr.setValue('opened_by', currentUserId);
+                    
+                    // 如果是游客，额外保存 token
+                    if (data.is_guest && input.guest_token) {
+                        gr.setValue('guest_token', input.guest_token);
+                    }
+                    
                     gr.setValue('state', CONFIG.wishStates.SUBMITTED);
                 }
 
@@ -3688,13 +4511,18 @@ textarea.glass-input {
                     "【備考】: " + (input.remarks || 'なし');
 
                 gr.setValue('wish_content', fullDescription);
-
+                
                 if (input.action === 'submit_record') {
                     var sysId = gr.insert();
                     if (sysId) {
                         data.ticketNumber = gr.getValue('number');
                         data.newRecordID = sysId;
                         data.success = true;
+
+                        // ✅ 【关键修复】立即刷新历史记录
+                        data.my_requests = getMyRequests(data.user_id, data.guest_token);
+                        gs.info("[Kokoro] 提交成功，历史记录数量: " + data.my_requests.length);
+
                         logProcessEvent(sysId, 'Wish submitted: ' + input.category, data.user_id);
                     } else {
                         data.error = "作成失敗";
@@ -3703,11 +4531,17 @@ textarea.glass-input {
                     if (gr.update()) {
                         data.ticketNumber = gr.getValue('number');
                         data.success = true;
+
+                        // ✅ 【关键修复】更新成功后也刷新
+                        data.my_requests = getMyRequests(data.user_id, data.guest_token);
+                        gs.info("[Kokoro] 更新成功，历史记录数量: " + data.my_requests.length);
+
                         logProcessEvent(input.sys_id, 'Wish updated', data.user_id);
                     } else {
                         data.error = "更新失敗";
                     }
                 }
+
             } catch (e) {
                 gs.error("[Kokoro] Submit error: " + e.message);
                 data.error = "エラーが発生しました";
@@ -3715,6 +4549,92 @@ textarea.glass-input {
             return;
         }
 
+        // 账户升级
+        if (input.action === 'upgrade_guest_account') {
+            try {
+                if (!input.guest_token) {
+                    data.error = 'ゲストトークンが必要です';
+                    return;
+                }
+                
+                if (data.is_guest) {
+                    data.error = 'ログインしてから実行してください';
+                    return;
+                }
+                
+                var guestValidation = validateGuestToken(input.guest_token);
+                if (!guestValidation.valid) {
+                    data.error = 'ゲストトークンが無効です';
+                    return;
+                }
+                
+                var wishGr = new GlideRecord(CONFIG.tables.SILENT_WISH);
+                wishGr.addQuery('guest_token', input.guest_token);
+                wishGr.query();
+                var migratedCount = 0;
+                
+                while (wishGr.next()) {
+                    wishGr.setValue('opened_by', data.user_id);
+                    wishGr.update();
+                    migratedCount++;
+                }
+                
+                var hbGr = new GlideRecord(CONFIG.tables.HEARTBEAT);
+                hbGr.addQuery('guest_token', input.guest_token);
+                hbGr.query();
+                
+                while (hbGr.next()) {
+                    hbGr.setValue('u_user', data.user_id);
+                    hbGr.update();
+                }
+                
+                var emGr = new GlideRecord(CONFIG.tables.EMERGENCY_MESSAGE);
+                emGr.addQuery('guest_token', input.guest_token);
+                emGr.query();
+                
+                while (emGr.next()) {
+                    emGr.setValue('user', data.user_id);
+                    emGr.update();
+                }
+                
+                var tokenGr = new GlideRecord(CONFIG.tables.GUEST_TOKEN);
+                tokenGr.addQuery('token', input.guest_token);
+                tokenGr.setLimit(1);
+                tokenGr.query();
+                
+                if (tokenGr.next()) {
+                    tokenGr.setValue('linked_user', data.user_id);
+                    tokenGr.update();
+                }
+                
+                data.success = true;
+                data.migrated_wishes = migratedCount;
+                data.message = migratedCount + '件のリクエストをアカウントに移行しました';
+                
+                logProcessEvent(data.user_id, 
+                    'Guest account upgraded. Token: ' + input.guest_token + 
+                    ', Migrated: ' + migratedCount, data.user_id);
+                
+            } catch (e) {
+                gs.error('[Kokoro] Account upgrade error: ' + e.message);
+                data.error = 'アカウント移行エラー';
+            }
+            return;
+        }
+
+        // 获取历史记录
+        if (input.action === 'get_my_history') {
+            try {
+                data.my_requests = getMyRequests(data.user_id, data.guest_token);
+                data.success = true;
+            } catch (e) {
+                gs.error("[Kokoro] Get history error: " + e.message);
+                data.error = "履歴取得エラー";
+            }
+            return;
+        }
+
+        // 上传附件
         if (input.action === 'upload_attachment' && input.sys_id) {
             try {
                 if (!validateSysId(input.sys_id)) {
@@ -3739,25 +4659,42 @@ textarea.glass-input {
             return;
         }
 
+        // 注册心跳
         if (input.action === 'register_heartbeat') {
             try {
-                var hb = new GlideRecord(CONFIG.tables.HEARTBEAT);
-                hb.initialize();
-                hb.setValue('u_user', data.user_id);
-                hb.setValue('u_timestamp', new GlideDateTime());
-                hb.setValue('u_status', 'Safe');
+                var hbReg = new GlideRecord(CONFIG.tables.HEARTBEAT);
+                hbReg.initialize();
+                hbReg.setValue('u_timestamp', new GlideDateTime());
+                hbReg.setValue('u_status', 'Safe');
 
-                var hbId = hb.insert();
-                data.heartbeat_id = hbId;
+                if (data.is_guest && input.guest_token) {
+                    hbReg.setValue('guest_token', input.guest_token);
+                    hbReg.setValue('u_source', 'guest_portal');
+                } else {
+                    hbReg.setValue('u_user', data.user_id);
+                    hbReg.setValue('u_source', 'authenticated_portal');
+                }
+
+                var hbRegId = hbReg.insert();
+                data.heartbeat_id = hbRegId;
                 data.success = true;
-                logProcessEvent(hbId, 'Heartbeat registered', data.user_id);
+
+                if (data.is_guest && input.guest_token) {
+                    var nextHbToken = generateHeartbeatToken(input.guest_token, true);
+                    data.next_heartbeat_link = '?id=kokoro_heartbeat&token=' + nextHbToken;
+                }
+                
+                logProcessEvent(hbRegId, 'Heartbeat registered (' + 
+                    (data.is_guest ? 'guest' : 'auth') + ')', 
+                    data.user_id);
             } catch (e) {
                 gs.error("[Kokoro] Heartbeat error: " + e.message);
-                data.error = "心跳注册失败";
+                data.error = "生存確認エラー";
             }
             return;
         }
 
+        // 更新遗嘱
         if (input.action === 'update_will') {
             try {
                 if (input.message) {
@@ -3789,11 +4726,15 @@ textarea.glass-input {
             return;
         }
 
-        // ==========================================
-        // 好友系统 - 获取守护圈数据
-        // ==========================================
+        // 获取守护圈数据
         if (input.action === 'get_guardian_data') {
             try {
+                if (data.is_guest) {
+                    data.error = 'この機能を利用するにはログインが必要です';
+                    data.require_login = true;
+                    return;
+                }
+
                 var guardianData = {
                     friends: [],
                     friend_requests: [],
@@ -3801,7 +4742,6 @@ textarea.glass-input {
                     recommended: []
                 };
 
-                // 1. 获取好友列表
                 var friendGr = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
                 friendGr.addQuery('user', data.user_id);
                 friendGr.addQuery('status', 'accepted');
@@ -3813,7 +4753,6 @@ textarea.glass-input {
                     var friendUser = new GlideRecord('sys_user');
 
                     if (friendUser.get(friendId)) {
-                        // 获取好友的最新心跳
                         var heartbeat = getLatestHeartbeat(friendId);
 
                         var friendItem = {
@@ -3822,12 +4761,10 @@ textarea.glass-input {
                             display_name: friendGr.getValue('nickname') || friendUser.getDisplayValue('name'),
                             email: friendUser.getValue('email'),
                             is_family: false,
-                            // 心跳状态
                             heartbeat_status: heartbeat.status,
                             last_heartbeat_time: heartbeat.time_ago,
                             current_zone: heartbeat.zone,
                             status_message: heartbeat.message,
-                            // 设置
                             share_location: friendGr.getValue('share_loc') == 'true',
                             alert_enabled: friendGr.getValue('alert_enabled') == 'true'
                         };
@@ -3836,7 +4773,6 @@ textarea.glass-input {
                     }
                 }
 
-                // 2. 获取待处理的好友请求
                 var requestGr = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
                 requestGr.addQuery('friend', data.user_id);
                 requestGr.addQuery('status', 'pending');
@@ -3874,7 +4810,6 @@ textarea.glass-input {
                     }
                 }
 
-                // 3. 计算未读通知数量
                 var notifGa = new GlideAggregate(CONFIG.tables.FRIEND_NOTIFICATION);
                 notifGa.addQuery('to_user', data.user_id);
                 notifGa.addQuery('is_read', false);
@@ -3885,7 +4820,6 @@ textarea.glass-input {
                     guardianData.notification_count = parseInt(notifGa.getAggregate('COUNT')) || 0;
                 }
 
-                // 4. 推荐好友
                 guardianData.recommended = getRecommendedFriends(data.user_id);
 
                 data.friends = guardianData.friends;
@@ -3901,20 +4835,22 @@ textarea.glass-input {
             return;
         }
 
-        // ==========================================
         // 搜索用户
-        // ==========================================
         if (input.action === 'search_users' && input.query) {
             try {
+                if (data.is_guest) {
+                    data.error = 'この機能を利用するにはログインが必要です';
+                    data.require_login = true;
+                    return;
+                }
+
                 var query = sanitizeInput(input.query, 100).toLowerCase();
                 var results = [];
 
-                // 搜索用户名或邮箱
                 var userGr = new GlideRecord('sys_user');
                 userGr.addQuery('active', true);
                 userGr.addQuery('sys_id', '!=', data.user_id);
 
-                // 组合查询条件
                 var qc = userGr.addQuery('name', 'CONTAINS', query);
                 qc.addOrCondition('email', 'CONTAINS', query);
                 qc.addOrCondition('user_name', 'CONTAINS', query);
@@ -3925,10 +4861,7 @@ textarea.glass-input {
                 while (userGr.next()) {
                     var userId = userGr.getUniqueValue();
 
-                    // 检查是否已经是好友
                     var isAlreadyFriend = checkFriendStatus(data.user_id, userId);
-
-                    // 检查是否已发送请求
                     var requestSent = checkPendingRequest(data.user_id, userId);
 
                     results.push({
@@ -3951,29 +4884,30 @@ textarea.glass-input {
             return;
         }
 
-        // ==========================================
         // 发送好友请求
-        // ==========================================
         if (input.action === 'send_friend_request' && input.friend_id) {
             try {
+                if (data.is_guest) {
+                    data.error = 'この機能を利用するにはログインが必要です';
+                    data.require_login = true;
+                    return;
+                }
+
                 if (!validateSysId(input.friend_id)) {
                     data.error = '無効なユーザーID';
                     return;
                 }
 
-                // 检查是否已经是好友
                 if (checkFriendStatus(data.user_id, input.friend_id)) {
                     data.error = 'すでに友達です';
                     return;
                 }
 
-                // 检查是否已有待处理的请求
                 if (checkPendingRequest(data.user_id, input.friend_id)) {
                     data.error = 'リクエストが既に送信されています';
                     return;
                 }
 
-                // 创建好友关系记录
                 var friendRel = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
                 friendRel.initialize();
                 friendRel.setValue('user', data.user_id);
@@ -3985,7 +4919,6 @@ textarea.glass-input {
                 var relId = friendRel.insert();
 
                 if (relId) {
-                    // 创建通知
                     createFriendNotification(
                         data.user_id,
                         input.friend_id,
@@ -4007,51 +4940,51 @@ textarea.glass-input {
             return;
         }
 
-        // ==========================================
         // 接受好友请求
-        // ==========================================
         if (input.action === 'accept_friend_request' && input.request_id) {
             try {
+                if (data.is_guest) {
+                    data.error = 'この機能を利用するにはログインが必要です';
+                    data.require_login = true;
+                    return;
+                }
+
                 if (!validateSysId(input.request_id)) {
                     data.error = '無効なリクエストID';
                     return;
                 }
 
-                var reqGr = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
-                if (!reqGr.get(input.request_id)) {
+                var acceptGr = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
+                if (!acceptGr.get(input.request_id)) {
                     data.error = 'リクエストが見つかりません';
                     return;
                 }
 
-                // 验证请求是发给当前用户的
-                if (reqGr.getValue('friend') != data.user_id) {
+                if (acceptGr.getValue('friend') != data.user_id) {
                     data.error = '権限がありません';
                     return;
                 }
 
-                // 更新状态为accepted
-                reqGr.setValue('status', 'accepted');
-                reqGr.setValue('accepted_at', new GlideDateTime());
-                reqGr.update();
+                acceptGr.setValue('status', 'accepted');
+                acceptGr.setValue('accepted_at', new GlideDateTime());
+                acceptGr.update();
 
-                // 创建反向关系 (双向好友)
                 var reverseRel = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
                 reverseRel.initialize();
                 reverseRel.setValue('user', data.user_id);
-                reverseRel.setValue('friend', reqGr.getValue('user'));
+                reverseRel.setValue('friend', acceptGr.getValue('user'));
                 reverseRel.setValue('status', 'accepted');
                 reverseRel.setValue('created_at', new GlideDateTime());
                 reverseRel.setValue('accepted_at', new GlideDateTime());
                 reverseRel.setValue('alert_enabled', true);
                 reverseRel.insert();
 
-                // 发送通知给请求发起人
                 createFriendNotification(
                     data.user_id,
-                    reqGr.getValue('user'),
+                    acceptGr.getValue('user'),
                     'friend_request_accepted',
                     data.user_name + ' があなたの友達リクエストを承認しました',
-                    reqGr.getUniqueValue()
+                    acceptGr.getUniqueValue()
                 );
 
                 data.success = true;
@@ -4064,29 +4997,33 @@ textarea.glass-input {
             return;
         }
 
-        // ==========================================
         // 拒绝好友请求
-        // ==========================================
         if (input.action === 'reject_friend_request' && input.request_id) {
             try {
+                if (data.is_guest) {
+                    data.error = 'この機能を利用するにはログインが必要です';
+                    data.require_login = true;
+                    return;
+                }
+
                 if (!validateSysId(input.request_id)) {
                     data.error = '無効なリクエストID';
                     return;
                 }
 
-                var reqGr = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
-                if (!reqGr.get(input.request_id)) {
+                var rejectGr = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
+                if (!rejectGr.get(input.request_id)) {
                     data.error = 'リクエストが見つかりません';
                     return;
                 }
 
-                if (reqGr.getValue('friend') != data.user_id) {
+                if (rejectGr.getValue('friend') != data.user_id) {
                     data.error = '権限がありません';
                     return;
                 }
 
-                reqGr.setValue('status', 'rejected');
-                reqGr.update();
+                rejectGr.setValue('status', 'rejected');
+                rejectGr.update();
 
                 data.success = true;
                 logProcessEvent(input.request_id, 'Friend request rejected', data.user_id);
@@ -4098,23 +5035,25 @@ textarea.glass-input {
             return;
         }
 
-        // ==========================================
         // 发送紧急呼叫
-        // ==========================================
         if (input.action === 'send_emergency_call' && input.friend_id) {
             try {
+                if (data.is_guest) {
+                    data.error = 'この機能を利用するにはログインが必要です';
+                    data.require_login = true;
+                    return;
+                }
+
                 if (!validateSysId(input.friend_id)) {
                     data.error = '無効なユーザーID';
                     return;
                 }
 
-                // 验证是好友关系
                 if (!checkFriendStatus(data.user_id, input.friend_id)) {
                     data.error = '友達ではありません';
                     return;
                 }
 
-                // 创建紧急通知
                 createFriendNotification(
                     data.user_id,
                     input.friend_id,
@@ -4123,7 +5062,6 @@ textarea.glass-input {
                     null
                 );
 
-                // 发送系统事件 (触发邮件/短信通知)
                 gs.eventQueue('kokoro.friend.emergency_call', null, input.friend_id, data.user_name);
 
                 data.success = true;
@@ -4136,9 +5074,7 @@ textarea.glass-input {
             return;
         }
 
-        // ==========================================
         // 发送好友消息
-        // ==========================================
         if (input.action === 'send_friend_message' && input.friend_id && input.message) {
             try {
                 if (!validateSysId(input.friend_id)) {
@@ -4170,17 +5106,20 @@ textarea.glass-input {
             return;
         }
 
-        // ==========================================
         // 移除好友
-        // ==========================================
         if (input.action === 'remove_friend' && input.friend_id) {
             try {
+                if (data.is_guest) {
+                    data.error = 'この機能を利用するにはログインが必要です';
+                    data.require_login = true;
+                    return;
+                }
+
                 if (!validateSysId(input.friend_id)) {
                     data.error = '無効なユーザーID';
                     return;
                 }
 
-                // 删除双向关系
                 var rel1 = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
                 rel1.addQuery('user', data.user_id);
                 rel1.addQuery('friend', input.friend_id);
@@ -4207,28 +5146,31 @@ textarea.glass-input {
             return;
         }
 
-        // ==========================================
-        // 获取好友状态更新 (轮询)
-        // ==========================================
+        // 获取好友状态更新
         if (input.action === 'get_friend_status_updates') {
             try {
+                if (data.is_guest) {
+                    data.error = 'この機能を利用するにはログインが必要です';
+                    data.require_login = true;
+                    return;
+                }
+
                 var updates = [];
 
-                // 获取当前用户的所有好友
-                var friendGr = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
-                friendGr.addQuery('user', data.user_id);
-                friendGr.addQuery('status', 'accepted');
-                friendGr.query();
+                var statusGr = new GlideRecord(CONFIG.tables.FRIEND_RELATION);
+                statusGr.addQuery('user', data.user_id);
+                statusGr.addQuery('status', 'accepted');
+                statusGr.query();
 
-                while (friendGr.next()) {
-                    var friendId = friendGr.getValue('friend');
-                    var heartbeat = getLatestHeartbeat(friendId);
+                while (statusGr.next()) {
+                    var targetId = statusGr.getValue('friend');
+                    var targetHb = getLatestHeartbeat(targetId);
 
                     updates.push({
-                        user_id: friendId,
-                        status: heartbeat.status,
-                        time_ago: heartbeat.time_ago,
-                        zone: heartbeat.zone
+                        user_id: targetId,
+                        status: targetHb.status,
+                        time_ago: targetHb.time_ago,
+                        zone: targetHb.zone
                     });
                 }
 
@@ -4241,9 +5183,7 @@ textarea.glass-input {
             return;
         }
 
-        // ==========================================
         // 志愿者操作 - 任务管理
-        // ==========================================
         if (input.sys_id) {
             if (!validateSysId(input.sys_id)) {
                 data.error = "無効なID";
@@ -4263,16 +5203,13 @@ textarea.glass-input {
                     data.error = "ボランティア権限が必要です";
                     return;
                 }
-
                 taskGr.setValue('assigned_to', data.user_id);
-
                 if (currentState === '1' || currentState === '10') {
                     var validationAssign = StateValidator.validateTransition(currentState, '11');
                     if (validationAssign.valid) {
                         taskGr.setValue('state', '11');
                     }
                 }
-
                 if (taskGr.update()) {
                     data.success = true;
                     logProcessEvent(input.sys_id, 'Task assigned to ' + data.user_name, data.user_id);
@@ -4287,16 +5224,13 @@ textarea.glass-input {
                     data.error = "ボランティア権限が必要です";
                     return;
                 }
-
                 taskGr.setValue('assigned_to', input.assignee_id);
-
                 if (currentState === '1' || currentState === '10') {
                     var validationAssignTo = StateValidator.validateTransition(currentState, '11');
                     if (validationAssignTo.valid) {
                         taskGr.setValue('state', '11');
                     }
                 }
-
                 if (taskGr.update()) {
                     data.success = true;
                     logProcessEvent(input.sys_id, 'Task assigned to ' + input.assignee_id, data.user_id);
@@ -4309,23 +5243,18 @@ textarea.glass-input {
             if (input.action === 'change_status' && input.new_state) {
                 var newState = String(input.new_state);
                 var validationChange = StateValidator.validateTransition(currentState, newState);
-
                 if (!validationChange.valid) {
                     data.error = validationChange.message;
                     return;
                 }
-
                 if ((newState === '2' || newState === '4') && taskGr.assigned_to.nil()) {
                     data.error = "先に担当者を設定してください";
                     return;
                 }
-
                 taskGr.setValue('state', newState);
-
                 if (newState === '4') {
                     taskGr.setValue('u_completed_at', new GlideDateTime());
                 }
-
                 if (taskGr.update()) {
                     data.success = true;
                     logProcessEvent(input.sys_id, 'Status changed to ' + newState, data.user_id);
@@ -4341,14 +5270,11 @@ textarea.glass-input {
                     data.error = validationStart.message;
                     return;
                 }
-
                 if (taskGr.getValue('assigned_to') != data.user_id && !gs.hasRole('admin')) {
                     data.error = "自分に担当されたタスクのみ開始できます";
                     return;
                 }
-
                 taskGr.setValue('state', '2');
-
                 if (taskGr.update()) {
                     data.success = true;
                     logProcessEvent(input.sys_id, 'Task started', data.user_id);
@@ -4364,10 +5290,8 @@ textarea.glass-input {
                     data.error = validationComplete.message;
                     return;
                 }
-
                 taskGr.setValue('state', '4');
                 taskGr.setValue('u_completed_at', new GlideDateTime());
-
                 if (taskGr.update()) {
                     data.success = true;
                     logProcessEvent(input.sys_id, 'Task completed', data.user_id);
@@ -4389,6 +5313,24 @@ textarea.glass-input {
                 return;
             }
         }
+    } // if (input) 结束
+
+    // ==========================================
+    // 默认加载逻辑 (页面初始化)
+    // ==========================================
+    if (data.user_id || data.guest_token) {
+        if (!data.my_requests || data.my_requests.length === 0) {
+            data.my_requests = getMyRequests(data.user_id, data.guest_token);
+        }
+
+        if (!isGuestSession) {
+            loadUserProfile();
+            loadDigitalWill();
+        }
+
+        if (isVolunteer) {
+            data.volunteers = loadVolunteerList();
+        }
     }
 
 })();]]></script>
@@ -4397,15 +5339,47 @@ textarea.glass-input {
         <sys_created_by>admin</sys_created_by>
         <sys_created_on>2026-01-26 11:35:13</sys_created_on>
         <sys_id>8e1c03ef83ee3210f6b1fb96feaad3bb</sys_id>
-        <sys_mod_count>47</sys_mod_count>
+        <sys_mod_count>101</sys_mod_count>
         <sys_name>Kokoro User</sys_name>
         <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
         <sys_policy/>
         <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
         <sys_update_name>sp_widget_8e1c03ef83ee3210f6b1fb96feaad3bb</sys_update_name>
         <sys_updated_by>admin</sys_updated_by>
-        <sys_updated_on>2026-02-03 06:53:17</sys_updated_on>
+        <sys_updated_on>2026-02-07 12:00:01</sys_updated_on>
         <template><![CDATA[<div class="kokoro-user-container">
+  <!-- 游客模式横幅 -->
+<div class="guest-banner" ng-if="c.is_guest">
+    <div class="guest-banner-content">
+        <i class="fa fa-user-secret"></i>
+        <span>ゲストモードで利用中</span>
+        <button class="btn-guest-login" ng-click="c.goToLogin()">
+            ログインして全機能を解放
+        </button>
+    </div>
+</div>
+
+<!-- 登录提示弹窗 -->
+<div class="login-prompt-overlay" ng-if="c.show_login_prompt">
+    <div class="login-prompt-card">
+        <div class="prompt-icon">
+            <i class="fa fa-lock fa-3x"></i>
+        </div>
+        <h3>ログインが必要です</h3>
+        <p ng-if="c.login_prompt_feature === 'guardian'">
+            「守護の輪」機能を利用するにはアカウントが必要です。<br>
+            ゲストとして提出したリクエストは、ログイン後に自動的に移行されます。
+        </p>
+        <div class="prompt-actions">
+            <button class="btn-login-primary" ng-click="c.goToLogin()">
+                <i class="fa fa-sign-in"></i> ログイン / 登録
+            </button>
+            <button class="btn-login-skip" ng-click="c.dismissLoginPrompt()">
+                後で
+            </button>
+        </div>
+    </div>
+</div>
   
   <div class="kokoro-menu-btn" ng-click="c.toggleMenu()" ng-class="{'active': c.showMenu}">
     <i class="fa fa-bars" ng-if="!c.showMenu"></i>
@@ -4423,18 +5397,21 @@ textarea.glass-input {
       <span class="badge-pill" ng-if="c.data.my_requests.length > 0">{{c.data.my_requests.length}}</span>
     </div>
 
-    <div class="menu-item" ng-click="c.toggleGuardianCircle()">
-      <div class="icon-box">
-        <i class="fa fa-users"></i>
-      </div>
-      <div class="text-box">
-        <span class="menu-title">守護の輪</span>
-        <span class="menu-sub">Guardian Circle</span>
-      </div>
-      <span class="badge-pill badge-alert" ng-if="c.data.friend_notifications > 0">
-        {{c.data.friend_notifications}}
-      </span>
+<div class="menu-item" ng-click="c.toggleGuardianCircle()" 
+     ng-class="{'locked-item': c.is_guest}">
+    <div class="icon-box">
+        <i class="fa fa-users" ng-if="!c.is_guest"></i>
+        <i class="fa fa-lock" ng-if="c.is_guest" style="color:#999;"></i>
     </div>
+    <div class="text-box">
+        <span class="menu-title">守護の輪</span>
+        <span class="menu-sub" ng-if="!c.is_guest">Guardian Circle</span>
+        <span class="menu-sub" ng-if="c.is_guest" style="color:#999;">ログインが必要</span>
+    </div>
+    <span class="badge-pill badge-alert" ng-if="c.data.friend_notifications > 0 && !c.is_guest">
+        {{c.data.friend_notifications}}
+    </span>
+</div>
 
     <div class="menu-item" ng-click="c.toggleSettings()">
       <div class="icon-box"><i class="fa fa-cog"></i></div>
@@ -4517,25 +5494,77 @@ textarea.glass-input {
       </div>
 
       <div class="tab-bar">
-        <div class="tab-item" 
-             ng-class="{'active': c.guardian_tab === 'friends'}"
-             ng-click="c.guardian_tab = 'friends'">
-          <i class="fa fa-users"></i>
-          <span>好友 ({{c.data.friends.length}})</span>
+    <div class="tab-item" 
+         ng-class="{'active': c.guardian_tab === 'friends'}"
+         ng-click="c.guardian_tab = 'friends'">
+        <i class="fa fa-users"></i>
+        <span>友達 ({{c.data.friends.length}})</span>
+    </div>
+    <div class="tab-item" 
+         ng-class="{'active': c.guardian_tab === 'requests'}"
+         ng-click="c.guardian_tab = 'requests'">
+        <i class="fa fa-bell"></i>
+        <span>申請 ({{c.data.friend_requests.length}})</span>
+    </div>
+    <div class="tab-item" 
+         ng-class="{'active': c.guardian_tab === 'verify'}"
+         ng-click="c.guardian_tab = 'verify'">
+        <i class="fa fa-qrcode"></i>
+        <span>対面認証</span>
+    </div>
+    <div class="tab-item" 
+         ng-class="{'active': c.guardian_tab === 'search'}"
+         ng-click="c.guardian_tab = 'search'">
+        <i class="fa fa-search"></i>
+        <span>検索</span>
+    </div>
+</div>
+      
+      <!-- 对面认证 Tab -->
+<div class="tab-content" ng-if="c.guardian_tab === 'verify'">
+    <div class="verify-section">
+        <div class="verify-instruction">
+            <i class="fa fa-info-circle"></i>
+            <p>近くにいる人と直接友達になれます。<br>
+            一方がコードを生成し、もう一方が入力してください。</p>
         </div>
-        <div class="tab-item" 
-             ng-class="{'active': c.guardian_tab === 'requests'}"
-             ng-click="c.guardian_tab = 'requests'">
-          <i class="fa fa-bell"></i>
-          <span>请求 ({{c.data.friend_requests.length}})</span>
+        
+        <!-- 生成验证码 -->
+        <div class="verify-generate">
+            <h4>自分のコードを表示</h4>
+            <div class="code-display" ng-if="c.my_friend_code">
+                <span class="big-code">{{c.my_friend_code}}</span>
+                <small>15分間有効</small>
+            </div>
+            <button class="btn-generate-code" ng-click="c.generateFriendCode()">
+                <i class="fa fa-refresh"></i>
+                <span ng-if="!c.my_friend_code">コードを生成</span>
+                <span ng-if="c.my_friend_code">新しいコードを生成</span>
+            </button>
         </div>
-        <div class="tab-item" 
-             ng-class="{'active': c.guardian_tab === 'search'}"
-             ng-click="c.guardian_tab = 'search'">
-          <i class="fa fa-search"></i>
-          <span>添加</span>
+        
+        <div class="verify-divider">
+            <span>または</span>
         </div>
-      </div>
+        
+        <!-- 输入验证码 -->
+        <div class="verify-input">
+            <h4>相手のコードを入力</h4>
+            <input type="text" 
+                   class="code-input" 
+                   ng-model="c.friend_code_input"
+                   placeholder="6桁のコード"
+                   maxlength="6"
+                   pattern="[0-9]*">
+            <button class="btn-verify-code" 
+                    ng-click="c.verifyFriendCode()"
+                    ng-disabled="!c.friend_code_input || c.friend_code_input.length !== 6">
+                <i class="fa fa-check-circle"></i>
+                認証する
+            </button>
+        </div>
+    </div>
+</div>
 
       <div class="tab-content" ng-if="c.guardian_tab === 'friends'">
         
@@ -4772,42 +5801,65 @@ textarea.glass-input {
       </div>
     </div>
   </div>
-
+  
   <div class="history-overlay" ng-if="c.show_history">
-    <div class="history-card">
-      <div class="card-header">
-        <h3><i class="fa fa-list-alt" style="color: #ec407a;"></i> 申請履歴</h3>
-        <button class="close-btn" ng-click="c.toggleHistory()">&times;</button>
+  <div class="history-card">
+    <div class="card-header">
+      <h3><i class="fa fa-list-alt" style="color: #ec407a;"></i> 申請履歴</h3>
+      <button class="close-btn" ng-click="c.toggleHistory()">&times;</button>
+    </div>
+    
+    <div class="history-list" style="overflow-y: auto; max-height: 60vh; padding-bottom: 20px;">
+      
+      <div ng-if="c.data.my_requests === undefined" style="text-align:center; padding: 40px; color:#666;">
+         <i class="fa fa-spinner fa-spin fa-2x"></i><br>読み込み中...
+      </div>
+
+      <div ng-if="c.data.my_requests && c.data.my_requests.length === 0" 
+           style="text-align:center; padding: 40px; color:#aaa; display: flex; flex-direction: column; align-items: center;">
+        <i class="fa fa-folder-open-o" style="font-size: 40px; margin-bottom:15px; opacity: 0.5;"></i>
+        <span>まだ履歴がありません</span>
+        <small style="margin-top:5px; font-size:11px;">(Guest Token: {{c.guest_token ? 'あり' : 'なし'}})</small>
+      </div>
+
+      <div class="history-item" 
+           ng-if="c.data.my_requests && c.data.my_requests.length > 0"
+           ng-repeat="item in c.data.my_requests track by item.sys_id" 
+           ng-click="c.loadTicket(item)">
+        
+        <div class="item-icon">
+          {{c.statusDetails[item.state] ? c.statusDetails[item.state].icon : ']]>📝<![CDATA['}}
+        </div>
+        
+        <div class="item-info">
+          <span class="item-cat">
+            {{ c.dict[item.category] || item.category_display || 'リクエスト' }}
+          </span>
+          <span class="item-date"><i class="fa fa-clock-o"></i> {{item.time_ago}}</span>
+        </div>
+        
+        <div class="item-status" ng-class="'status-' + item.state">
+          {{item.state_label || '送信済み'}}
+        </div>
       </div>
       
-      <div class="history-list">
-        <div ng-if="!c.data.my_requests || c.data.my_requests.length === 0" style="text-align:center; padding: 40px; color:#aaa;">
-          <i class="fa fa-folder-open-o" style="font-size: 30px; margin-bottom:10px;"></i><br>
-          まだ履歴がありません
-        </div>
-
-        <div class="history-item" ng-repeat="item in c.data.my_requests" ng-click="c.loadTicket(item)">
-          <div class="item-icon">
-            {{c.statusDetails[item.state].icon}}
-          </div>
-          
-          <div class="item-info">
-            <span class="item-cat">{{item.category_display}}</span>
-            <span class="item-date"><i class="fa fa-clock-o"></i> {{item.time_ago}}</span>
-          </div>
-          
-          <div class="item-status" ng-class="'status-' + item.state">
-            {{item.state_label}}
-          </div>
-        </div>
-      </div>
     </div>
   </div>
+</div>
+  
+
+
   
   <div class="will-overlay" ng-if="c.show_will_input">
     <div class="will-card">
-      <h3 class="will-title"><i class="fa fa-heartbeat"></i> 生存確認完了</h3>
-      <p class="will-desc">Kokoroがあなたの脈動を受け取りました。<br>万一に備え、救助隊への伝言を残しますか？</p>
+        <h3 class="will-title"><i class="fa fa-heartbeat"></i> 生存確認完了</h3>
+        <p class="will-desc">Kokoroがあなたの脈動を受け取りました。<br>万一に備え、救助隊への伝言を残しますか？</p>
+        
+        <!-- 游客提示: 登录后可以被好友看到 -->
+        <div class="guest-heartbeat-hint" ng-if="c.is_guest">
+            <i class="fa fa-info-circle"></i>
+            <span>ログインすると、友達があなたの無事を確認できるようになります。</span>
+        </div>
       <textarea class="will-textarea" ng-model="c.digital_will" placeholder="例：体育館の2階倉庫にいます。糖尿病の薬が必要です..."></textarea>
       <div class="will-actions">
         <button class="btn-will-skip" ng-click="c.finishHeartbeat(false)">今はしない</button>
@@ -4913,16 +5965,35 @@ textarea.glass-input {
 
     <div class="success-card" ng-if="c.step === 5">
       <div class="status-tracker">
-        <div class="status-step" ng-class="{'active': c.current_state_val >= 1}"><div class="icon">]]>📨<![CDATA[</div><div class="text">提出</div></div>
-        <div class="line" ng-class="{'active': c.current_state_val >= 10}"></div>
-        <div class="status-step" ng-class="{'active': c.current_state_val >= 10}"><div class="icon">]]>👀<![CDATA[</div><div class="text">確認</div></div>
-        <div class="line" ng-class="{'active': c.current_state_val >= 11}"></div>
-        <div class="status-step" ng-class="{'active': c.current_state_val >= 11}"><div class="icon">]]>🙋<![CDATA[</div><div class="text">担当</div></div>
-        <div class="line" ng-class="{'active': c.current_state_val >= 2}"></div>
-        <div class="status-step" ng-class="{'active': c.current_state_val >= 2}"><div class="icon">]]>🏃<![CDATA[</div><div class="text">配送</div></div>
-        <div class="line" ng-class="{'active': c.current_state_val >= 4}"></div>
-        <div class="status-step" ng-class="{'active': c.current_state_val >= 4}"><div class="icon">✅</div><div class="text">完了</div></div>
-      </div>
+  <div class="status-step" ng-class="{'active': c.visual_step >= 0}">
+    <div class="icon">]]>📨<![CDATA[</div><div class="text">提出</div>
+  </div>
+  
+  <div class="line" ng-class="{'active': c.visual_step >= 1}"></div>
+  
+  <div class="status-step" ng-class="{'active': c.visual_step >= 1}">
+    <div class="icon">]]>👀<![CDATA[</div><div class="text">確認</div>
+  </div>
+  
+  <div class="line" ng-class="{'active': c.visual_step >= 2}"></div>
+  
+  <div class="status-step" ng-class="{'active': c.visual_step >= 2}">
+    <div class="icon">]]>🙋<![CDATA[</div><div class="text">担当</div>
+  </div>
+  
+  <div class="line" ng-class="{'active': c.visual_step >= 3}"></div>
+  
+  <div class="status-step" ng-class="{'active': c.visual_step >= 3}">
+    <div class="icon">]]>🏃<![CDATA[</div><div class="text">配送</div>
+  </div>
+  
+  <div class="line" ng-class="{'active': c.visual_step >= 4}"></div>
+  
+  <div class="status-step" ng-class="{'active': c.visual_step >= 4}">
+    <div class="icon">✅</div><div class="text">完了</div>
+  </div>
+</div>
+
       
       <h2 class="success-title">承知いたしました</h2>
       <p class="ticket-id">ID: {{c.ticket_number}}</p>

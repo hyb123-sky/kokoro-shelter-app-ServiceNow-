@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="6830d70f8372f210f6b1fb96feaad31b" label="Guest Token" max_length="40" name="x_1821654_kokoro_0_guest_token" type="collection">
+        <element label="Guest Identifier" max_length="100" name="guest_identifier" type="string"/>
+        <element label="Is Active" max_length="40" name="is_active" type="boolean"/>
+        <element label="Expires At" max_length="40" name="expires_at" type="glide_date_time"/>
+        <element label="token" max_length="64" name="token" type="string"/>
+        <element label="Created At" max_length="40" name="created_at" type="glide_date_time"/>
+        <element label="Device Info" max_length="500" name="device_info" type="string"/>
+        <element label="Linked User" max_length="32" name="linked_user" reference="sys_user" type="reference"/>
+        <index name="index">
+            <element name="linked_user"/>
+        </index>
+    </element>
+</database>

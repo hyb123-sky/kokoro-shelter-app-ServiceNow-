@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?><database>
     <element audit="true" db_object_id="334b0dd583863210f6b1fb96feaad32f" label="Silent Wish" max_length="40" name="x_1821654_kokoro_0_silent_wish" text_index="true" type="collection">
+        <element label="Opened by" max_length="32" name="opened_by" reference="sys_user" type="reference"/>
         <element label="Precise Location" max_length="4000" name="precise_location" type="string"/>
         <element label="Geocode Status" max_length="5000" name="geocode_status" type="string"/>
         <element label="longitude" max_length="40" name="longitude" type="float"/>
@@ -31,6 +32,7 @@
                 <element inactive_on_update="false" label="Red" sequence="2" value="red"/>
             </choice>
         </element>
+        <element label="Guest token" max_length="64" name="guest_token" type="string"/>
         <element label="Estimated Arrival" max_length="40" name="u_estimated_arrival" type="glide_date_time"/>
         <element active="false" attributes="edge_encryption_enabled=true" default="javascript:global.getNextObjNumberPadded();" label="Number" max_length="40" name="number" type="string"/>
         <element label="AI Sentiment" max_length="500" name="ai_sentiment" type="string"/>
@@ -77,6 +79,9 @@
         </index>
         <index name="index2">
             <element name="assignment_group"/>
+        </index>
+        <index name="index3">
+            <element name="opened_by"/>
         </index>
     </element>
 </database>
