@@ -3792,21 +3792,21 @@ textarea.glass-input {
         var taskItem = {
             sys_id: gr.getUniqueValue(),
             number: gr.getValue('number') || '',
-            category: gr.getValue('u_category') || '',
-            category_display: gr.getDisplayValue('u_category') || '',
+            category: gr.getValue('request_category') || '',
+            category_display: gr.getDisplayValue('request_category') || '',
             zone: gr.getDisplayValue('shelter_zone') || '',
-            detail_loc: gr.getValue('detail_loc') || gr.getValue('wish_content') || '',
-            desc: gr.getValue('u_remarks') || '',
-            urgency: gr.getValue('u_urgency') || 'Medium',
+            detail_loc: gr.getValue('precise_location') || gr.getValue('wish_content') || '',
+            desc: gr.getValue('wish_content') || '',
+            urgency: gr.getValue('urgency') || 'Medium',
             contact: gr.getValue('u_contact_info') || '',
             reporter_name: gr.getDisplayValue('opened_by') || 'ゲスト',
             assigned_to_name: gr.getDisplayValue('assigned_to') || '',
             assigned_to_id: gr.getValue('assigned_to') || '',
             state: parseInt(gr.getValue('state')) || 10,
             state_label: gr.getDisplayValue('state') || '',
-            quantity: parseInt(gr.getValue('u_quantity')) || 1,
+            quantity: parseInt(gr.getValue('qty')) || 1,
             location: gr.getValue('shelter_zone') || '',
-            remarks: gr.getValue('u_remarks') || '',
+            remarks: gr.getValue('wish_content') || '',
             affected_count: gr.getValue('u_affected_count') || '不明',
             history: [],
             attachments: []
@@ -4184,7 +4184,7 @@ textarea.glass-input {
             }
 
             var gaSOS = new GlideAggregate(CONFIG.tables.SILENT_WISH);
-            gaSOS.addQuery('u_urgency', 'Critical');
+            gaSOS.addQuery('urgency', 'Critical');
             gaSOS.addQuery('state', 'NOT IN', [CONFIG.wishStates.COMPLETED, CONFIG.wishStates.CANCELLED]);
             gaSOS.addAggregate('COUNT');
             gaSOS.query();
@@ -4495,11 +4495,11 @@ textarea.glass-input {
                 }
 
                 gr.setValue('shelter_zone', sanitizeInput(input.location, 100));
-                gr.setValue('u_category', sanitizeInput(input.category, 50));
-                gr.setValue('u_quantity', parseInt(input.quantity) || 1);
-                gr.setValue('u_urgency', sanitizeInput(input.urgency, 20));
+                gr.setValue('request_category', sanitizeInput(input.category, 50));
+                gr.setValue('qty', parseInt(input.quantity) || 1);
+                gr.setValue('urgency', sanitizeInput(input.urgency, 20));
                 gr.setValue('u_affected_count', sanitizeInput(input.affected_count, 10));
-                gr.setValue('u_remarks', sanitizeInput(input.remarks, 1000));
+                gr.setValue('wish_content', sanitizeInput(input.remarks, 1000));
                 gr.setValue('u_contact_info', sanitizeInput(input.contact, 200));
                 gr.setValue('detail_loc', sanitizeInput(input.detail_loc, 200));
 
@@ -5339,47 +5339,45 @@ textarea.glass-input {
         <sys_created_by>admin</sys_created_by>
         <sys_created_on>2026-01-26 11:35:13</sys_created_on>
         <sys_id>8e1c03ef83ee3210f6b1fb96feaad3bb</sys_id>
-        <sys_mod_count>101</sys_mod_count>
+        <sys_mod_count>104</sys_mod_count>
         <sys_name>Kokoro User</sys_name>
         <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
         <sys_policy/>
         <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
         <sys_update_name>sp_widget_8e1c03ef83ee3210f6b1fb96feaad3bb</sys_update_name>
         <sys_updated_by>admin</sys_updated_by>
-        <sys_updated_on>2026-02-07 12:00:01</sys_updated_on>
+        <sys_updated_on>2026-02-09 08:31:04</sys_updated_on>
         <template><![CDATA[<div class="kokoro-user-container">
-  <!-- 游客模式横幅 -->
-<div class="guest-banner" ng-if="c.is_guest">
+  <div class="guest-banner" ng-if="c.is_guest">
     <div class="guest-banner-content">
-        <i class="fa fa-user-secret"></i>
-        <span>ゲストモードで利用中</span>
-        <button class="btn-guest-login" ng-click="c.goToLogin()">
-            ログインして全機能を解放
-        </button>
+      <i class="fa fa-user-secret"></i>
+      <span>ゲストモードで利用中</span>
+      <button class="btn-guest-login" ng-click="c.goToLogin()">
+        ログインして全機能を解放
+      </button>
     </div>
-</div>
+  </div>
 
-<!-- 登录提示弹窗 -->
-<div class="login-prompt-overlay" ng-if="c.show_login_prompt">
+  <div class="login-prompt-overlay" ng-if="c.show_login_prompt">
     <div class="login-prompt-card">
-        <div class="prompt-icon">
-            <i class="fa fa-lock fa-3x"></i>
-        </div>
-        <h3>ログインが必要です</h3>
-        <p ng-if="c.login_prompt_feature === 'guardian'">
-            「守護の輪」機能を利用するにはアカウントが必要です。<br>
-            ゲストとして提出したリクエストは、ログイン後に自動的に移行されます。
-        </p>
-        <div class="prompt-actions">
-            <button class="btn-login-primary" ng-click="c.goToLogin()">
-                <i class="fa fa-sign-in"></i> ログイン / 登録
-            </button>
-            <button class="btn-login-skip" ng-click="c.dismissLoginPrompt()">
-                後で
-            </button>
-        </div>
+      <div class="prompt-icon">
+        <i class="fa fa-lock fa-3x"></i>
+      </div>
+      <h3>ログインが必要です</h3>
+      <p ng-if="c.login_prompt_feature === 'guardian'">
+        「守護の輪」機能を利用するにはアカウントが必要です。<br>
+        ゲストとして提出したリクエストは、ログイン後に自動的に移行されます。
+      </p>
+      <div class="prompt-actions">
+        <button class="btn-login-primary" ng-click="c.goToLogin()">
+          <i class="fa fa-sign-in"></i> ログイン / 登録
+        </button>
+        <button class="btn-login-skip" ng-click="c.dismissLoginPrompt()">
+          後で
+        </button>
+      </div>
     </div>
-</div>
+  </div>
   
   <div class="kokoro-menu-btn" ng-click="c.toggleMenu()" ng-class="{'active': c.showMenu}">
     <i class="fa fa-bars" ng-if="!c.showMenu"></i>
@@ -5397,21 +5395,21 @@ textarea.glass-input {
       <span class="badge-pill" ng-if="c.data.my_requests.length > 0">{{c.data.my_requests.length}}</span>
     </div>
 
-<div class="menu-item" ng-click="c.toggleGuardianCircle()" 
-     ng-class="{'locked-item': c.is_guest}">
-    <div class="icon-box">
+    <div class="menu-item" ng-click="c.toggleGuardianCircle()" 
+         ng-class="{'locked-item': c.is_guest}">
+      <div class="icon-box">
         <i class="fa fa-users" ng-if="!c.is_guest"></i>
         <i class="fa fa-lock" ng-if="c.is_guest" style="color:#999;"></i>
-    </div>
-    <div class="text-box">
+      </div>
+      <div class="text-box">
         <span class="menu-title">守護の輪</span>
         <span class="menu-sub" ng-if="!c.is_guest">Guardian Circle</span>
         <span class="menu-sub" ng-if="c.is_guest" style="color:#999;">ログインが必要</span>
-    </div>
-    <span class="badge-pill badge-alert" ng-if="c.data.friend_notifications > 0 && !c.is_guest">
+      </div>
+      <span class="badge-pill badge-alert" ng-if="c.data.friend_notifications > 0 && !c.is_guest">
         {{c.data.friend_notifications}}
-    </span>
-</div>
+      </span>
+    </div>
 
     <div class="menu-item" ng-click="c.toggleSettings()">
       <div class="icon-box"><i class="fa fa-cog"></i></div>
@@ -5494,77 +5492,74 @@ textarea.glass-input {
       </div>
 
       <div class="tab-bar">
-    <div class="tab-item" 
-         ng-class="{'active': c.guardian_tab === 'friends'}"
-         ng-click="c.guardian_tab = 'friends'">
-        <i class="fa fa-users"></i>
-        <span>友達 ({{c.data.friends.length}})</span>
-    </div>
-    <div class="tab-item" 
-         ng-class="{'active': c.guardian_tab === 'requests'}"
-         ng-click="c.guardian_tab = 'requests'">
-        <i class="fa fa-bell"></i>
-        <span>申請 ({{c.data.friend_requests.length}})</span>
-    </div>
-    <div class="tab-item" 
-         ng-class="{'active': c.guardian_tab === 'verify'}"
-         ng-click="c.guardian_tab = 'verify'">
-        <i class="fa fa-qrcode"></i>
-        <span>対面認証</span>
-    </div>
-    <div class="tab-item" 
-         ng-class="{'active': c.guardian_tab === 'search'}"
-         ng-click="c.guardian_tab = 'search'">
-        <i class="fa fa-search"></i>
-        <span>検索</span>
-    </div>
-</div>
+        <div class="tab-item" 
+             ng-class="{'active': c.guardian_tab === 'friends'}"
+             ng-click="c.guardian_tab = 'friends'">
+            <i class="fa fa-users"></i>
+            <span>友達 ({{c.data.friends.length}})</span>
+        </div>
+        <div class="tab-item" 
+             ng-class="{'active': c.guardian_tab === 'requests'}"
+             ng-click="c.guardian_tab = 'requests'">
+            <i class="fa fa-bell"></i>
+            <span>申請 ({{c.data.friend_requests.length}})</span>
+        </div>
+        <div class="tab-item" 
+             ng-class="{'active': c.guardian_tab === 'verify'}"
+             ng-click="c.guardian_tab = 'verify'">
+            <i class="fa fa-qrcode"></i>
+            <span>対面認証</span>
+        </div>
+        <div class="tab-item" 
+             ng-class="{'active': c.guardian_tab === 'search'}"
+             ng-click="c.guardian_tab = 'search'">
+            <i class="fa fa-search"></i>
+            <span>検索</span>
+        </div>
+      </div>
       
-      <!-- 对面认证 Tab -->
-<div class="tab-content" ng-if="c.guardian_tab === 'verify'">
-    <div class="verify-section">
-        <div class="verify-instruction">
-            <i class="fa fa-info-circle"></i>
-            <p>近くにいる人と直接友達になれます。<br>
-            一方がコードを生成し、もう一方が入力してください。</p>
-        </div>
-        
-        <!-- 生成验证码 -->
-        <div class="verify-generate">
-            <h4>自分のコードを表示</h4>
-            <div class="code-display" ng-if="c.my_friend_code">
-                <span class="big-code">{{c.my_friend_code}}</span>
-                <small>15分間有効</small>
+      <div class="tab-content" ng-if="c.guardian_tab === 'verify'">
+        <div class="verify-section">
+            <div class="verify-instruction">
+                <i class="fa fa-info-circle"></i>
+                <p>近くにいる人と直接友達になれます。<br>
+                一方がコードを生成し、もう一方が入力してください。</p>
             </div>
-            <button class="btn-generate-code" ng-click="c.generateFriendCode()">
-                <i class="fa fa-refresh"></i>
-                <span ng-if="!c.my_friend_code">コードを生成</span>
-                <span ng-if="c.my_friend_code">新しいコードを生成</span>
-            </button>
+            
+            <div class="verify-generate">
+                <h4>自分のコードを表示</h4>
+                <div class="code-display" ng-if="c.my_friend_code">
+                    <span class="big-code">{{c.my_friend_code}}</span>
+                    <small>15分間有効</small>
+                </div>
+                <button class="btn-generate-code" ng-click="c.generateFriendCode()">
+                    <i class="fa fa-refresh"></i>
+                    <span ng-if="!c.my_friend_code">コードを生成</span>
+                    <span ng-if="c.my_friend_code">新しいコードを生成</span>
+                </button>
+            </div>
+            
+            <div class="verify-divider">
+                <span>または</span>
+            </div>
+            
+            <div class="verify-input">
+                <h4>相手のコードを入力</h4>
+                <input type="text" 
+                       class="code-input" 
+                       ng-model="c.friend_code_input"
+                       placeholder="6桁のコード"
+                       maxlength="6"
+                       pattern="[0-9]*">
+                <button class="btn-verify-code" 
+                        ng-click="c.verifyFriendCode()"
+                        ng-disabled="!c.friend_code_input || c.friend_code_input.length !== 6">
+                    <i class="fa fa-check-circle"></i>
+                    認証する
+                </button>
+            </div>
         </div>
-        
-        <div class="verify-divider">
-            <span>または</span>
-        </div>
-        
-        <!-- 输入验证码 -->
-        <div class="verify-input">
-            <h4>相手のコードを入力</h4>
-            <input type="text" 
-                   class="code-input" 
-                   ng-model="c.friend_code_input"
-                   placeholder="6桁のコード"
-                   maxlength="6"
-                   pattern="[0-9]*">
-            <button class="btn-verify-code" 
-                    ng-click="c.verifyFriendCode()"
-                    ng-disabled="!c.friend_code_input || c.friend_code_input.length !== 6">
-                <i class="fa fa-check-circle"></i>
-                認証する
-            </button>
-        </div>
-    </div>
-</div>
+      </div>
 
       <div class="tab-content" ng-if="c.guardian_tab === 'friends'">
         
@@ -5848,14 +5843,12 @@ textarea.glass-input {
 </div>
   
 
-
   
   <div class="will-overlay" ng-if="c.show_will_input">
     <div class="will-card">
         <h3 class="will-title"><i class="fa fa-heartbeat"></i> 生存確認完了</h3>
         <p class="will-desc">Kokoroがあなたの脈動を受け取りました。<br>万一に備え、救助隊への伝言を残しますか？</p>
         
-        <!-- 游客提示: 登录后可以被好友看到 -->
         <div class="guest-heartbeat-hint" ng-if="c.is_guest">
             <i class="fa fa-info-circle"></i>
             <span>ログインすると、友達があなたの無事を確認できるようになります。</span>
@@ -5915,6 +5908,7 @@ textarea.glass-input {
           </select>
           <i class="fa fa-chevron-down select-arrow"></i>
         </div>
+
         <div class="flex-row">
           <div class="half-col">
             <input type="number" class="big-input" ng-model="c.data.quantity" placeholder="数量" ng-change="c.checkInput()" style="text-align:center;">
@@ -5928,6 +5922,11 @@ textarea.glass-input {
             </select>
           </div>
         </div>
+
+        <div class="input-wrapper mb-3" style="margin-top: 15px;">
+           <input type="text" class="big-input" ng-model="c.data.contact" placeholder="連絡先 (電話番号/Email)..." ng-change="c.checkInput()">
+        </div>
+
         <div class="input-wrapper mb-3">
           <select class="big-input" ng-model="c.data.urgency" ng-change="c.checkInput()" ng-class="{'critical-bg': c.data.urgency === 'Critical'}">
             <option value="" disabled selected>緊急度は？</option>
@@ -5965,34 +5964,34 @@ textarea.glass-input {
 
     <div class="success-card" ng-if="c.step === 5">
       <div class="status-tracker">
-  <div class="status-step" ng-class="{'active': c.visual_step >= 0}">
-    <div class="icon">]]>📨<![CDATA[</div><div class="text">提出</div>
-  </div>
-  
-  <div class="line" ng-class="{'active': c.visual_step >= 1}"></div>
-  
-  <div class="status-step" ng-class="{'active': c.visual_step >= 1}">
-    <div class="icon">]]>👀<![CDATA[</div><div class="text">確認</div>
-  </div>
-  
-  <div class="line" ng-class="{'active': c.visual_step >= 2}"></div>
-  
-  <div class="status-step" ng-class="{'active': c.visual_step >= 2}">
-    <div class="icon">]]>🙋<![CDATA[</div><div class="text">担当</div>
-  </div>
-  
-  <div class="line" ng-class="{'active': c.visual_step >= 3}"></div>
-  
-  <div class="status-step" ng-class="{'active': c.visual_step >= 3}">
-    <div class="icon">]]>🏃<![CDATA[</div><div class="text">配送</div>
-  </div>
-  
-  <div class="line" ng-class="{'active': c.visual_step >= 4}"></div>
-  
-  <div class="status-step" ng-class="{'active': c.visual_step >= 4}">
-    <div class="icon">✅</div><div class="text">完了</div>
-  </div>
-</div>
+        <div class="status-step" ng-class="{'active': c.visual_step >= 0}">
+            <div class="icon">]]>📨<![CDATA[</div><div class="text">提出</div>
+        </div>
+        
+        <div class="line" ng-class="{'active': c.visual_step >= 1}"></div>
+        
+        <div class="status-step" ng-class="{'active': c.visual_step >= 1}">
+            <div class="icon">]]>👀<![CDATA[</div><div class="text">確認</div>
+        </div>
+        
+        <div class="line" ng-class="{'active': c.visual_step >= 2}"></div>
+        
+        <div class="status-step" ng-class="{'active': c.visual_step >= 2}">
+            <div class="icon">]]>🙋<![CDATA[</div><div class="text">担当</div>
+        </div>
+        
+        <div class="line" ng-class="{'active': c.visual_step >= 3}"></div>
+        
+        <div class="status-step" ng-class="{'active': c.visual_step >= 3}">
+            <div class="icon">]]>🏃<![CDATA[</div><div class="text">配送</div>
+        </div>
+        
+        <div class="line" ng-class="{'active': c.visual_step >= 4}"></div>
+        
+        <div class="status-step" ng-class="{'active': c.visual_step >= 4}">
+            <div class="icon">✅</div><div class="text">完了</div>
+        </div>
+        </div>
 
       
       <h2 class="success-title">承知いたしました</h2>
@@ -6001,6 +6000,7 @@ textarea.glass-input {
       <div class="summary-card">
         <div class="row-item"><strong>場所:</strong> {{c.dict[c.data.location]}} - {{c.data.detail_loc}}</div>
         <div class="row-item"><strong>内容:</strong> {{c.dict[c.data.category]}} <span class="badge">x{{c.data.quantity}}</span></div>
+        <div class="row-item" ng-if="c.data.contact"><strong>連絡先:</strong> {{c.data.contact}}</div>
         <div class="row-item"><strong>緊急度:</strong> <span ng-class="{'text-crit': c.data.urgency==='Critical'}">{{c.dict[c.data.urgency]}}</span></div>
         <div class="row-item" ng-if="c.data.remarks"><small style="color:#888;">{{c.data.remarks}}</small></div>
       </div>

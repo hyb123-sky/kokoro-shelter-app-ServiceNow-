@@ -2,6 +2,7 @@
     <element audit="true" db_object_id="334b0dd583863210f6b1fb96feaad32f" label="Silent Wish" max_length="40" name="x_1821654_kokoro_0_silent_wish" text_index="true" type="collection">
         <element label="Opened by" max_length="32" name="opened_by" reference="sys_user" type="reference"/>
         <element label="Precise Location" max_length="4000" name="precise_location" type="string"/>
+        <element label="Affected Count" max_length="40" name="u_affected_count" type="integer"/>
         <element label="Geocode Status" max_length="5000" name="geocode_status" type="string"/>
         <element label="longitude" max_length="40" name="longitude" type="float"/>
         <element label="担当ボランティア" max_length="32" name="assigned_to" reference="sys_user" type="reference"/>
@@ -54,6 +55,7 @@
         <element label="assignment Group" max_length="32" name="assignment_group" reference="sys_user_group" type="reference"/>
         <element default="1" label="Qty" max_length="255" name="qty" type="integer"/>
         <element label="Mood Color" max_length="40" name="mood_color" type="string"/>
+        <element label="Contact Info" max_length="80" name="u_contact_info" type="string"/>
         <element label="Additional comments" max_length="4000" name="additional_comments" type="journal_input"/>
         <element choice="3" label="Urgency" max_length="40" name="urgency" type="choice">
             <choice>
