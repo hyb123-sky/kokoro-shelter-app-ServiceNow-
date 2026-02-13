@@ -1825,58 +1825,65 @@
       
       var gr = new GlideRecord('x_1821654_kokoro_0_silent_wish');
       
-      // --- ]]>🛑<![CDATA[ 调试模式：暂时注释掉严格过滤，只要有坐标就抓出来！ ---
-      // gr.addQuery('geocode_status', 'success'); 
-      // gr.addQuery('state', 'IN', '1,10,11,2'); 
+      // --- 1. 筛选逻辑 ---
+      // 数据库真名是 latitude 和 longitude (无 u_)
+      gr.addNotNullQuery('latitude');
+      gr.addNotNullQuery('longitude');
       
-      // 确保有坐标 (尝试标准字段名和 u_ 前缀)
-      var qc = gr.addNotNullQuery('latitude');
-      qc.addOrCondition('u_latitude', '!=', '');
+      // 可选：只看 Open(1) 和 In Progress(2) 的工单，过滤掉已完成的
+      // gr.addQuery('state', 'IN', '1,2'); 
       
       gr.orderByDesc('sys_created_on');
       gr.setLimit(50); 
       gr.query();
       
-      // ]]>📝<![CDATA[ 记录日志：查到了多少条？
-      gs.info('[Kokoro Map Debug] Found ' + gr.getRowCount() + ' records with latitude.');
+      // gs.info('[Kokoro Map] Found ' + gr.getRowCount() + ' records.');
       
       while (gr.next()) {
-        // 尝试获取字段 (兼容带 u_ 和不带 u_ 的情况)
-        var lat = gr.getValue('latitude') || gr.getValue('u_latitude');
-        var lng = gr.getValue('longitude') || gr.getValue('u_longitude');
+        // 获取坐标 (使用真名)
+        var lat = gr.getValue('latitude');
+        var lng = gr.getValue('longitude');
         
-        // 打印第一条记录的详情，帮助我们确认字段名
-        if (data.requests.length === 0) {
-            gs.info('[Kokoro Map Debug] First Record: ' + 
-                    'Number=' + gr.getValue('number') + 
-                    ', State=' + gr.getValue('state') + 
-                    ', Lat=' + lat + 
-                    ', Urgency=' + gr.getValue('urgency'));
-        }
-
         if (lat && lng) {
             var req = {
               sys_id: gr.getUniqueValue(),
               number: gr.getValue('number'),
-              // 各种字段都试一下
-              category: gr.getValue('u_category') || gr.getValue('category') || 'Other',
-              urgency: gr.getValue('u_urgency') || gr.getValue('urgency') || '3',
-              zone: gr.getDisplayValue('shelter_zone'),
-              detail_loc: gr.getValue('detail_loc'),
-              quantity: gr.getValue('u_quantity') || gr.getValue('quantity'),
+
+              // --- ✅ 核心字段修正 (与数据库一致) ---
+              category: gr.getValue('request_category') || 'Other',
+              urgency: gr.getValue('urgency') || 'Medium',
+              quantity: parseInt(gr.getValue('qty')) || 1,
+              remarks: gr.getValue('wish_content') || '',
+              
+              // 地点信息
+              zone: gr.getDisplayValue('shelter_zone') || '',
+              detail_loc: gr.getValue('precise_location') || '', // 对应 precise_location
+              
+              // 坐标
               latitude: parseFloat(lat),
               longitude: parseFloat(lng),
+              
+              // 状态与人员
               assigned_to: gr.getDisplayValue('assigned_to'),
               assigned_to_id: gr.getValue('assigned_to'),
               state: gr.getValue('state'),
-              time_ago: 'Just now', // 简化调试
-              remarks: gr.getValue('u_remarks') || gr.getValue('remarks')
+              
+              // 新增字段 (保持与其他 Widget 一致)
+              contact: gr.getValue('u_contact_info') || '',
+              affected_count: gr.getValue('u_affected_count') || '不明',
+              
+              time_ago: gr.getDisplayValue('sys_created_on')
             };
             
             data.requests.push(req);
             
-            // 简单统计
-            data.stats.pending++; // 暂时全部算作 pending
+            // --- 统计逻辑 ---
+            var state = gr.getValue('state');
+            var urg = gr.getValue('urgency');
+            
+            if (urg === 'Critical') data.stats.critical++;
+            if (state == '1') data.stats.pending++;
+            if (state == '2') data.stats.inProgress++;
         }
       }
     }
@@ -1887,14 +1894,14 @@
         <sys_created_by>admin</sys_created_by>
         <sys_created_on>2026-01-23 05:50:12</sys_created_on>
         <sys_id>28e1ee66832af210f6b1fb96feaad3fb</sys_id>
-        <sys_mod_count>15</sys_mod_count>
+        <sys_mod_count>16</sys_mod_count>
         <sys_name>Kokoro Live Map</sys_name>
         <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
         <sys_policy/>
         <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
         <sys_update_name>sp_widget_28e1ee66832af210f6b1fb96feaad3fb</sys_update_name>
         <sys_updated_by>admin</sys_updated_by>
-        <sys_updated_on>2026-01-25 09:20:51</sys_updated_on>
+        <sys_updated_on>2026-02-10 01:04:35</sys_updated_on>
         <template><![CDATA[<div class="kokoro-map-container">
   
   <!-- 顶部控制栏 - HUD 风格 -->

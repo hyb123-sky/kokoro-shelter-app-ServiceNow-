@@ -1,27 +1,46 @@
 <?xml version="1.0" encoding="UTF-8"?><record_update table="sp_widget">
     <sp_widget action="INSERT_OR_UPDATE">
         <category>custom</category>
-        <client_script><![CDATA[api.controller = function($scope, $uibModal, spUtil, $timeout, $window, $interval, $element) {
+        <client_script><![CDATA[api.controller = function($scope, $uibModal, spUtil, $timeout, $window, $interval, $element, $sce) {
     var c = this;
 
     // ============================================================
-    // 0. 初期化とセーフティネット (INIT & SAFETY NET)
+    // 1. HTML信頼化 & 初期化 (Trust HTML & Init)
+    // ============================================================
+    
+    // HTMLから呼び出せる安全変換関数
+    $scope.trustHtml = function(html_code) {
+        if (!html_code) return "";
+        return $sce.trustAsHtml(html_code);
+    };
+    
+    if (c.data && c.data.list) {
+        c.data.list.forEach(function(item) {
+            if (item.ai_analysis) {
+                item.trusted_ai = $sce.trustAsHtml(item.ai_analysis);
+            }
+        });
+    }
+
+    // ============================================================
+    // 2. セーフティネット初期化 (Data Safety Net)
     // ============================================================
     function initSafetyNet() {
         if (!c.data) c.data = {};
         
-        // 1. 基本配列の初期化
+        // 基本配列
         c.data.resourceStatus = c.data.resourceStatus || [];
         for (var i = c.data.resourceStatus.length; i < 5; i++) {
-            c.data.resourceStatus.push({ percent: 0, name: 'Resource_' + (i+1) })
+            c.data.resourceStatus.push({ percent: 0, name: 'Resource_' + (i+1) });
         }
             
         c.data.list = c.data.list || [];
         c.data.myTasks = c.data.myTasks || [];
         c.data.myRequests = c.data.myRequests || [];
         c.data.volunteers = c.data.volunteers || [];
+        c.data.announcements = c.data.announcements || [];
         
-        // 2. ユーザーとSLA
+        // ユーザーとSLA
         if (!c.data.user_name) c.data.user_name = 'Operator';
         if (!c.data.user_id) c.data.user_id = 'VOL-000000';
         if (!c.data.slaStats) c.data.slaStats = { breached: 0, atRisk: 0, ok: 0 };
@@ -29,38 +48,39 @@
         if (!c.data.sosCount) c.data.sosCount = 0;
         if (!c.data.openCount) c.data.openCount = 0;
 
-        // 3. Process Mining
-        if (!c.data.processMiningStats) {
-            c.data.processMiningStats = { totalEvents: 0, todayEvents: 0, uniqueCases: 0, topActivities: [] };
-        }
+        // 統計データ
+        if (!c.data.processMiningStats) c.data.processMiningStats = { totalEvents: 0, todayEvents: 0, uniqueCases: 0, topActivities: [] };
         if (!c.data.auditStats) c.data.auditStats = { todayLogs: 0, recentActions: [] };
         if (!c.data.overallHealth) c.data.overallHealth = { score: 100, status: 'nominal', components: [] };
 
-        // 4. 辞書と設定
+        // 辞書設定
         c.statusNames = { '1': 'DRAFT', '10': 'SUBMITTED', '11': 'ASSIGNED', '2': 'IN_PROGRESS', '4': 'COMPLETED', '5': 'CANCELLED', '6': 'ON_HOLD' };
         c.dict = { 'Water': '飲料水', 'Food': '食料', 'Medical': '医療・薬', 'Baby': '乳幼児用品', 'Power': '電源・充電', 'Other': 'その他', 'Family Area': 'ファミリーエリア', 'Single Area': '単身エリア', 'Medical Area': '医療・ケアエリア', 'Critical': '限界 (SOS)', 'High': '困っている', 'Medium': '普通', 'Low': '急ぎません' };
         
-        // 5. ボランティア状態
         c.volunteerStatus = c.volunteerStatus || { isOnline: true, currentZone: '', taskCount: 0 };
-        
-        // 6. 管理者フラグ
         c.data.isAdmin = c.data.isAdmin || false; 
     }
-    initSafetyNet();
-	
-	// 构建 capability 选项数组
-c.data.capOptions = [];
-if (c.data.capabilityOptions && c.data.capabilityOptions.length > 0) {
-    for (var ci = 0; ci < c.data.capabilityOptions.length; ci++) {
-        c.data.capOptions.push(c.data.capabilityOptions[ci].value || c.data.capabilityOptions[ci].label);
+    initSafetyNet(); // 実行
+
+    // 通信センター初期化
+    c.broadcastType = 'announcement';
+    c.broadcastTitle = '';
+    c.broadcastBody = '';
+    c.commsFilter = '';
+    
+    // Capability オプション構築
+    c.data.capOptions = [];
+    if (c.data.capabilityOptions && c.data.capabilityOptions.length > 0) {
+        for (var ci = 0; ci < c.data.capabilityOptions.length; ci++) {
+            c.data.capOptions.push(c.data.capabilityOptions[ci].value || c.data.capabilityOptions[ci].label);
+        }
     }
-}
-if (c.data.capOptions.length === 0) {
-    c.data.capOptions = ['General Support', 'Medical', 'Logistics', 'Translation', 'Childcare'];
-}
+    if (c.data.capOptions.length === 0) {
+        c.data.capOptions = ['General Support', 'Medical', 'Logistics', 'Translation', 'Childcare'];
+    }
 
     // ============================================================
-    // 1. カンバン・コアロジック
+    // 3. カンバン・リストロジック (Kanban Logic)
     // ============================================================
     c.showCancelledCol = false;
     c.kanbanData = { todo: [], active: [], done: [], cancelled: [] };
@@ -89,9 +109,7 @@ if (c.data.capOptions.length === 0) {
 
     c.toggleCancelledColumn = function() { c.showCancelledCol = !c.showCancelledCol; };
 
-    // ============================================================
-    // 2. データ処理
-    // ============================================================
+    // 時間フォーマット
     c.formatTime24h = function(createdOn) {
         if (!createdOn) return '--:--';
         try {
@@ -114,17 +132,23 @@ if (c.data.capOptions.length === 0) {
         } catch (e) { return '--:--'; }
     };
 
+    // リスト処理（時間変換＋AI信頼化＋カンバン再構成）
     function processListItems() {
-        if (c.data.list) c.data.list.forEach(function(item) { item.time_24h = c.formatTime24h(item.created_on); });
-        if (c.data.myTasks) c.data.myTasks.forEach(function(item) { item.time_24h = c.formatTime24h(item.created_on); });
-        if (c.data.myRequests) c.data.myRequests.forEach(function(item) { item.time_24h = c.formatTime24h(item.created_on); });
+        var processItem = function(item) {
+            item.time_24h = c.formatTime24h(item.created_on);
+            if (item.ai_analysis) {
+                item.trusted_ai = $sce.trustAsHtml(item.ai_analysis);
+            }
+        };
+
+        if (c.data.list) c.data.list.forEach(processItem);
+        if (c.data.myTasks) c.data.myTasks.forEach(processItem);
+        if (c.data.myRequests) c.data.myRequests.forEach(processItem);
         c.organizeKanban();
     }
-    processListItems();
+    processListItems(); // 初回実行
 
-    // ============================================================
-    // 3. フィルタロジック
-    // ============================================================
+    // フィルタリング
     c.filterByUrgency = function(u) { 
         c.currentFilter = {type:'urgency', value:u}; 
         c.filteredList = c.data.list.filter(function(i){return i.urgency===u;}); 
@@ -140,12 +164,12 @@ if (c.data.capOptions.length === 0) {
         c.filteredList = null; 
         c.organizeKanban(); 
     };
-    
+
     // ============================================================
-    // 4. スタイル注入 (修正済み: 布局保护)
+    // 4. スタイル注入 (Style Injection)
     // ============================================================
     function injectStyles() {
-        var styleId = 'kokoro-force-fix-v43'; 
+        var styleId = 'kokoro-force-fix-v45'; 
         if (document.getElementById(styleId)) return;
 
         var css = '';
@@ -153,14 +177,9 @@ if (c.data.capOptions.length === 0) {
         css += '.sp-page-row-options, .u_p_floating_container, .sn-chat-overlay, .theme-picker, .icon-palette { display: none !important; opacity: 0 !important; pointer-events: none !important; }';
         css += '.kokoro-volunteer-container { position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; width: 100vw !important; height: 100vh !important; z-index: 1000 !important; background: #f4f4f4 !important; overflow: hidden !important; padding: 0 !important; margin: 0 !important; display: flex !important; flex-direction: column !important; }';
         css += '.board-container { width: 100% !important; height: 100% !important; flex: 1 !important; padding: 20px !important; overflow-y: auto !important; box-sizing: border-box !important; max-width: none !important; margin: 0 !important; }';
-        
-        // 允许 Angular 控制显示/隐藏
         css += '.view-dashboard, .view-tactical, .view-mine, .view-requests, .card-section { width: 100% !important; max-width: none !important; }';
-        
         css += '.card-grid, .task-grid { width: 100% !important; display: grid !important; justify-content: start !important; }';
         css += '.zen-sidebar { position: fixed !important; top: 0 !important; left: 0 !important; width: 280px !important; height: 100vh !important; background-color: #ffffff !important; background: #ffffff !important; z-index: 2000 !important; box-shadow: 5px 0 25px rgba(0,0,0,0.5) !important; }';
-        
-        // [新增] 进度条溢出保护 CSS
         css += '.dossier-bar-track { overflow: hidden !important; }';
 
         var style = document.createElement('style');
@@ -169,21 +188,16 @@ if (c.data.capOptions.length === 0) {
         document.head.appendChild(style); 
     }
 
-    // Sniper 逻辑 (防止误伤)
     function runSniper() {
         var windowHeight = $window.innerHeight;
         var allElements = document.body.getElementsByTagName('*');
         for (var i = 0; i < allElements.length; i++) {
             var el = allElements[i];
             if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'LINK') continue;
-            
-            // 安全区豁免
             if (el.classList.contains('kokoro-volunteer-container') || el.closest('.kokoro-volunteer-container')) continue;
             if (el.classList.contains('modal') || el.closest('.modal') || el.classList.contains('modal-backdrop')) continue;
             if (el.classList.contains('zen-sidebar') || el.closest('.zen-sidebar')) continue;
             if (el.classList.contains('operator-modal-overlay') || el.closest('.operator-modal-overlay')) continue;
-            
-            // 交互元素豁免
             if (el.getAttribute('ng-click')) continue; 
             if (el.classList.contains('fa-bars') || el.classList.contains('fa-times')) continue;
 
@@ -204,7 +218,7 @@ if (c.data.capOptions.length === 0) {
     var sniperInterval = $interval(runSniper, 2000);
 
     // ============================================================
-    // 5. インタラクション (COMMON)
+    // 5. インタラクション (Interaction)
     // ============================================================
     c.view = 'dashboard';
     c.showSidebar = false;
@@ -217,16 +231,19 @@ if (c.data.capOptions.length === 0) {
     }
     updateSystemTime();
     var timeInterval = $interval(updateSystemTime, 1000);
+    
+    c.goToUserView = function() {
+        $window.location.href = '?id=kokoro_user_view'; 
+    };
 
     // ============================================================
-    // 5.1 TASK MODAL (KANBAN / TASK LIST)
+    // 6. タスク詳細・モダール (Task Modal)
     // ============================================================
     c.openModal = function(item) {
         if (!c.data.volunteers || c.data.volunteers.length === 0) {
             c.server.get({ action: 'get_volunteers' }).then(function(r) {
                 if (r && r.data && r.data.volunteers) {
                     c.data.volunteers = r.data.volunteers;
-                    // [FIX] 計算負荷：小数点以下1桁を保持
                     angular.forEach(c.data.volunteers, function(vol) {
                         var rawLoad = (vol.open_tasks / 10) * 100;
                         vol.load = rawLoad.toFixed(1);
@@ -247,6 +264,7 @@ if (c.data.capOptions.length === 0) {
         $scope.c = c;
         $scope.newComment = '';
         $scope.statusMenuOpen = false;
+        
         $scope.toggleStatusMenu = function($event) { if ($event) $event.stopPropagation(); $scope.statusMenuOpen = !$scope.statusMenuOpen; };
         $window.onclick = function() { if ($scope.statusMenuOpen) $timeout(function() { $scope.statusMenuOpen = false; }); };
         $scope.cancel = function() { modalInstance.dismiss('cancel'); };
@@ -294,6 +312,9 @@ if (c.data.capOptions.length === 0) {
         modalInstance.result.finally(function() { c.server.update().then(processListItems); });
     };
 
+    // ============================================================
+    // 7. アクションロジック (Assign, Location, etc.)
+    // ============================================================
     c.triggerAutoAssign = function(sysId, forceReassign) {
         if (!sysId) return;
         c.server.get({ action: 'trigger_auto_assign', sys_id: sysId, force_reassign: forceReassign || false })
@@ -307,21 +328,15 @@ if (c.data.capOptions.length === 0) {
         });
     };
 
-    // ============================================
-    // [FIX] 板块 4: 分配任务逻辑 (新增)
-    // ============================================
     c.assignTask = function(ticketId, targetUserId) {
         if (!ticketId || !targetUserId) return;
-
-        c.server.get({
-            action: 'assign_task',
-            ticket_id: ticketId,
-            target_user: targetUserId
-        }).then(function(r) {
-            // 分配成功后的回调
-            spUtil.addInfoMessage('Task dispatched successfully.');
-            // 刷新列表
-            c.server.update().then(processListItems); 
+        c.server.get({ action: 'assign_task', ticket_id: ticketId, target_user: targetUserId }).then(function(r) {
+            if (r && r.data && r.data.error) {
+                spUtil.addErrorMessage(r.data.error);
+            } else {
+                spUtil.addInfoMessage('タスクを分配しました');
+                c.server.update().then(processListItems);
+            }
         });
     };
 
@@ -346,24 +361,16 @@ if (c.data.capOptions.length === 0) {
     };
     
     c.refreshMonitoringData = function() {
-        c.server.update().then(function() { spUtil.addInfoMessage('監視データを更新しました'); });
-    };
-	
-// [FIX] 分配任务函数
-    c.assignTask = function(ticketId, targetUserId) {
-        if (!ticketId || !targetUserId) return;
-        c.server.get({
-            action: 'assign_task',
-            ticket_id: ticketId,
-            target_user: targetUserId
-        }).then(function(r) {
-            spUtil.addInfoMessage('Task dispatched successfully.');
-            // 刷新页面或重新获取数据
-            c.server.update(); 
+        c.server.update().then(function() { 
+            // データ更新時にもHTMLを信頼化
+            if (c.data.global_ai_analysis) c.trusted_global_ai = $sce.trustAsHtml(c.data.global_ai_analysis);
+            processListItems();
+            spUtil.addInfoMessage('監視データを更新しました'); 
         });
     };
+
     // ============================================================
-    // 5.5 OPERATOR UNIT ROSTER LOGIC (干員カードモダール)
+    // 8. オペレーター管理 (Operator Modal)
     // ============================================================
     c.showUserModal = false;
     c.selectedVol = {};
@@ -380,21 +387,99 @@ if (c.data.capOptions.length === 0) {
     };
 
     c.updateCapability = function() {
-    if (!c.data.isAdmin) return;
-    var newCap = c.selectedVol.capability;
-    var targetId = c.selectedVol.sys_id;
+        if (!c.data.isAdmin) return;
+        var newCap = c.selectedVol.capability;
+        var targetId = c.selectedVol.sys_id;
 
-    c.server.get({
-        action: 'specialty',
-        target_id: targetId,
-        new_cap: newCap
-    }).then(function(response) {
-        spUtil.addInfoMessage('能力情報を更新しました');
-    });
-};
+        c.server.get({ action: 'specialty', target_id: targetId, new_cap: newCap }).then(function(response) {
+            spUtil.addInfoMessage('能力情報を更新しました');
+        });
+    };
 
     // ============================================================
-    // 6. ヘルパー (HELPERS)
+    // 9. 通信センター (Comms Center)
+    // ============================================================
+    c.sendBroadcast = function() {
+        if (!c.broadcastTitle || !c.broadcastBody) return;
+        if (c._broadcastSending) return;
+        c._broadcastSending = true;
+        
+        c.server.get({ 
+            action: 'send_broadcast', 
+            msg_type: c.broadcastType || 'announcement', 
+            title: c.broadcastTitle, 
+            body: c.broadcastBody 
+        }).then(function(r) {
+            c._broadcastSending = false;
+            if (r.data.success) {
+                spUtil.addInfoMessage('放送を送信しました');
+                c.data.announcements.unshift({
+                    sys_id: r.data.new_id || 'temp_' + Date.now(),
+                    type: c.broadcastType,
+                    title: c.broadcastTitle,
+                    body: c.broadcastBody,
+                    author: c.data.user_name,
+                    time_ago: '今',
+                    read_count: 0
+                });
+                c.broadcastTitle = '';
+                c.broadcastBody = '';
+            } else {
+                spUtil.addErrorMessage(r.data.error || '送信失敗');
+            }
+        }, function() {
+            c._broadcastSending = false;
+            spUtil.addErrorMessage('通信エラーが発生しました');
+        });
+    };
+
+    c.getFilteredComms = function() {
+        if (!c.data.announcements) return [];
+        if (!c.commsFilter) return c.data.announcements;
+        return c.data.announcements.filter(function(msg) { return msg.type === c.commsFilter; });
+    };
+
+    c.openCommDetail = function(msg) {
+        if (!msg) return;
+        c.selectedComm = msg;
+        c.showCommDetail = true;
+    };
+    
+    c.closeCommDetail = function() {
+        c.showCommDetail = false;
+        c.selectedComm = null;
+    };
+
+    // 削除機能
+    c.deleteComm = function(msg, $event) {
+        if ($event) $event.stopPropagation();
+        c.deleteTarget = msg;
+        c.showDeleteConfirm = true;
+    };
+
+    c.confirmDelete = function() {
+        var msg = c.deleteTarget;
+        if (!msg) return;
+        c.server.get({ action: 'delete_broadcast', sys_id: msg.sys_id }).then(function(r) {
+            if (r.data.success) {
+                var index = c.data.announcements.indexOf(msg);
+                if (index > -1) c.data.announcements.splice(index, 1);
+                spUtil.addInfoMessage('メッセージを削除しました');
+                if (c.selectedComm && c.selectedComm.sys_id === msg.sys_id) c.closeCommDetail();
+            } else {
+                spUtil.addErrorMessage(r.data.error || '削除失敗');
+            }
+        });
+        c.cancelDelete();
+    };
+
+    c.cancelDelete = function() {
+        c.showDeleteConfirm = false;
+        c.deleteTarget = null;
+    };
+
+    // ============================================================
+    // 10. 共通ヘルパー (Helpers)
     // ============================================================
     function showSuccess(msg) { spUtil.addInfoMessage(msg); }
     function showError(msg) { spUtil.addErrorMessage(msg || 'エラーが発生しました'); }
@@ -416,9 +501,7 @@ if (c.data.capOptions.length === 0) {
         var iconMap = { 'Wish_Created': 'fa-plus-circle', 'Wish_Submitted': 'fa-paper-plane', 'Wish_Assigned': 'fa-user-plus', 'Wish_Completed': 'fa-check-circle', 'SLA_Breached': 'fa-exclamation-triangle' };
         return iconMap[activityName] || 'fa-circle';
     };
-    
     c.formatActivityName = function(name) { return name ? name.replace(/_/g, ' ') : 'Unknown'; };
-
     c.getSLABarColor = function(sla) {
         if (!sla) return '#888';
         if (sla.is_breached || sla.status === 'critical') return '#ff3b30';
@@ -427,10 +510,14 @@ if (c.data.capOptions.length === 0) {
     };
 
     // ============================================================
-    // 7. タイマーと監視
+    // 11. リアルタイム監視 (Watchers)
     // ============================================================
     spUtil.recordWatch($scope, 'x_1821654_kokoro_0_silent_wish', '', function(name, data) {
-        c.server.update().then(function() { processListItems(); });
+        c.server.update().then(function() { 
+            // アップデート時にAI分析を再信頼化
+            if (c.data.global_ai_analysis) c.trusted_global_ai = $sce.trustAsHtml(c.data.global_ai_analysis);
+            processListItems(); 
+        });
     });
     
     spUtil.recordWatch($scope, 'x_1821654_kokoro_0_kokoro_inventory', '', function() {
@@ -462,6 +549,11 @@ if (c.data.capOptions.length === 0) {
         if (slaUpdateInterval) $interval.cancel(slaUpdateInterval);
         if (sniperInterval) $interval.cancel(sniperInterval);
     });
+
+    // 詳細表示トグル
+    c.toggleDetail = function(item) {
+        c.selectedTask = (c.selectedTask === item) ? null : item;
+    };
 };]]></client_script>
         <controller_as>c</controller_as>
         <css>/* ═══════════════════════════════════════════════════════════════════════════════════════
@@ -521,11 +613,6 @@ html, body {
 .modal { z-index: 1050000 !important; position: fixed !important; }
 .modal-backdrop { z-index: 1049999 !important; background-color: rgba(0,0,0,0.95) !important; }
 .modal-dialog { z-index: 1050001 !important; }
-
-/* ============================================================
-   [DAY 5] PROCESS MINING &amp; MONITORING STYLES
-   插入位置: &lt;/style&gt; 之前
-   ============================================================ */
 
 /* Monitoring Panel Container */
 .monitoring-panel {
@@ -932,8 +1019,7 @@ html, body {
    COMPONENT FIXES (样式修正)
    ═════════════════════════════════════════════════════════════════════ */
 .kokoro-volunteer-container .wish-card, 
-.kokoro-volunteer-container .sidebar-block, 
-.kokoro-volunteer-container .ai-card {
+.kokoro-volunteer-container .sidebar-block,  {
     background-color: var(--bg-card);
     box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     border: 1px solid var(--border-mid);
@@ -2628,29 +2714,6 @@ html, body {
   align-items: center;
   gap: 10px;
 }
-
-.ai-card {
-  background: var(--bg-tertiary);
-  border: 2px solid var(--border-mid);
-  border-left: 4px solid var(--color-info);
-  padding: 20px;
-  margin-bottom: 26px;
-}
-
-.ai-head {
-  font-family: var(--font-display);
-  font-size: 12px;
-  color: var(--color-info);
-  letter-spacing: 2px;
-  margin-bottom: 10px;
-}
-
-.ai-text {
-  font-size: 14px;
-  color: var(--text-secondary);
-  line-height: 1.6;
-}
-
 .sla-progress {
   height: 10px;
   background: var(--border-mid);
@@ -3550,7 +3613,366 @@ button, .btn-jira, .btn-online, .btn-offline, .tab, .alert-item, .jira-card, .st
     background-color: #000; /* 黑色填充，根据你的截图 */
     border-radius: 3px;
     transition: width 0.3s ease; /* 增加平滑动画 */
-}</css>
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PART: COMMS CENTER STYLES
+   ═══════════════════════════════════════════════════════════════ */
+
+/* --- Broadcast Composer --- */
+.broadcast-composer {
+    background: #fff;
+    border: 1px solid #ddd;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+}
+
+.broadcast-type-selector {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.broadcast-type-btn {
+    flex: 1;
+    padding: 10px 16px;
+    border: 2px solid #e0e0e0;
+    background: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.broadcast-type-btn:hover { border-color: #999; }
+
+.broadcast-type-btn.active {
+    border-color: #000;
+    background: #000;
+    color: #fff;
+}
+
+.broadcast-type-btn:first-child.active {
+    background: #cf222e;
+    border-color: #cf222e;
+}
+
+.broadcast-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.broadcast-title-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #ddd;
+    font-size: 16px;
+    font-weight: 700;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.broadcast-title-input:focus { border-color: #000; }
+
+.broadcast-body-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #ddd;
+    font-size: 14px;
+    resize: vertical;
+    min-height: 80px;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.broadcast-body-input:focus { border-color: #000; }
+
+.broadcast-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.broadcast-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: #999;
+}
+
+.broadcast-type-label {
+    padding: 3px 8px;
+    font-weight: 700;
+    font-size: 11px;
+    border-radius: 2px;
+}
+
+.broadcast-type-label.type-emergency { background: rgba(207,34,46,0.1); color: #cf222e; }
+.broadcast-type-label.type-announcement { background: rgba(210,153,34,0.1); color: #d29922; }
+.broadcast-type-label.type-internal { background: rgba(0,0,0,0.05); color: #666; }
+
+.broadcast-send-btn {
+    padding: 10px 24px;
+    background: #e0e0e0;
+    color: #999;
+    border: none;
+    font-weight: 800;
+    font-size: 13px;
+    letter-spacing: 1px;
+    cursor: not-allowed;
+    transition: all 0.2s;
+}
+
+.broadcast-send-btn.ready {
+    background: #000;
+    color: #fff;
+    cursor: pointer;
+}
+
+.broadcast-send-btn.ready:hover {
+    background: #333;
+    transform: translateY(-1px);
+}
+
+/* --- Timeline --- */
+.comms-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 600px;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+.comm-item {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    display: flex;
+    cursor: pointer;
+    transition: all 0.2s;
+    overflow: hidden;
+}
+
+.comm-item:hover {
+    border-color: #999;
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.comm-priority-bar {
+    width: 4px;
+    flex-shrink: 0;
+    background: #e0e0e0;
+}
+
+.comm-priority-bar.bar-emergency { background: #cf222e; }
+.comm-priority-bar.bar-announcement { background: #d29922; }
+.comm-priority-bar.bar-internal { background: #999; }
+
+.comm-content {
+    flex: 1;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.comm-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.comm-type-badge {
+    font-size: 11px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 2px;
+    letter-spacing: 1px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.comm-type-badge.badge-emergency { background: rgba(207,34,46,0.1); color: #cf222e; }
+.comm-type-badge.badge-announcement { background: rgba(210,153,34,0.1); color: #d29922; }
+.comm-type-badge.badge-internal { background: rgba(0,0,0,0.05); color: #666; }
+
+.comm-time { font-size: 11px; color: #999; }
+.comm-title { font-weight: 800; font-size: 16px; color: #1a1a1a; }
+.comm-body-preview { font-size: 13px; color: #666; line-height: 1.5; }
+
+.comm-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: #999;
+    padding-top: 8px;
+    border-top: 1px dashed #eee;
+}
+
+.comm-author { font-weight: 600; }
+
+/* --- Detail Overlay --- */
+.comm-detail-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 3000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+}
+
+.comm-detail-panel {
+    background: #fff;
+    width: 100%;
+    max-width: 640px;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 32px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    position: relative;
+}
+
+.comm-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.comm-detail-body {
+    font-size: 15px;
+    line-height: 1.8;
+    color: #333;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* --- Filter Button Active State --- */
+.btn-jira.active {
+    background: #000 !important;
+    color: #fff !important;
+    border-color: #000 !important;
+}
+/* --- Delete Confirm Modal --- */
+.delete-confirm-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 4000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.delete-confirm-panel {
+    background: #fff;
+    width: 420px;
+    max-width: 90vw;
+    padding: 32px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.delete-confirm-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: rgba(207,34,46,0.1);
+    color: #cf222e;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+}
+
+.delete-confirm-title {
+    font-size: 18px;
+    font-weight: 800;
+    margin: 0 0 16px;
+    color: #1a1a1a;
+}
+
+.delete-confirm-msg-info {
+    background: #f8f8f8;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: center;
+    font-size: 14px;
+}
+
+.delete-confirm-warning {
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 24px;
+}
+
+.delete-confirm-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.delete-btn-cancel {
+    padding: 10px 28px;
+    background: #f0f0f0;
+    border: 1px solid #ddd;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.delete-btn-cancel:hover {
+    background: #e0e0e0;
+}
+
+.delete-btn-confirm {
+    padding: 10px 28px;
+    background: #cf222e;
+    color: #fff;
+    border: none;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.delete-btn-confirm:hover {
+    background: #a71d2a;
+    transform: translateY(-1px);
+}  
+
+</css>
         <data_table>sp_instance</data_table>
         <demo_data/>
         <description/>
@@ -3592,15 +4014,103 @@ button, .btn-jira, .btn-online, .btn-offline, .tab, .alert-item, .jira-card, .st
     
     // 1.2 [FIX] 处理任务分配
     if (input && input.action === 'assign_task') {
-        var taskGr = new GlideRecord('x_1821654_kokoro_0_silent_wish');
-        if (taskGr.get(input.ticket_id)) {
-            taskGr.setValue('assigned_to', input.target_user);
-            // 可选: 自动将状态改为 In Progress (2)
-            if (taskGr.getValue('state') == '1') {
-                 taskGr.setValue('state', '2');
+    var taskGr = new GlideRecord('x_1821654_kokoro_0_silent_wish');
+    if (taskGr.get(input.ticket_id)) {
+        taskGr.setValue('assigned_to', input.target_user);
+        // 如果是 DRAFT(1) 或 SUBMITTED(10)，自动变为 ASSIGNED(11)
+        var currentState = taskGr.getValue('state');
+        if (currentState == '1' || currentState == '10') {
+            taskGr.setValue('state', '11');
+        }
+        taskGr.update();
+        data.success = true;
+    } else {
+        data.error = 'タスクが見つかりません';
+    }
+    return;
+}
+	
+	// ============================================================
+    // 1.3 [COMMS] 处理广播发送
+    // ============================================================
+    if (input && input.action === 'send_broadcast') {
+        try {
+            // 权限检查
+            if (!gs.hasRole('x_1821654_kokoro_0.volunteer') && !gs.hasRole('admin')) {
+                data.error = '権限がありません';
+                return;
             }
-            taskGr.update();
-            gs.addInfoMessage('Ticket assigned.');
+            
+            // 输入验证
+            var bcTitle = sanitizeInput(input.title, 200);
+            var bcBody = sanitizeInput(input.body, 4000);
+            var bcType = input.msg_type || 'announcement';
+            
+            if (!bcTitle || !bcBody) {
+                data.error = '件名と本文は必須です';
+                return;
+            }
+            
+            // 验证消息类型
+            var validTypes = ['emergency', 'announcement', 'internal'];
+            if (validTypes.indexOf(bcType) === -1) {
+                bcType = 'announcement';
+            }
+            
+            // 写入 emergency_message 表
+            var bcGr = new GlideRecord('x_1821654_kokoro_0_emergency_message');
+            bcGr.initialize();
+            bcGr.setValue('user', gs.getUserID());
+            bcGr.setValue('message_type', bcType);
+            // 用分隔符合并标题和正文，读取时再拆分
+            bcGr.setValue('message_encrypted', bcTitle + '\n---\n' + bcBody);
+            bcGr.setValue('is_active', true);
+            bcGr.setValue('created_at', new GlideDateTime());
+            
+            var newId = bcGr.insert();
+            
+            if (newId) {
+                data.success = true;
+                data.new_id = newId;
+                
+                // 记录流程事件
+                logProcessEvent(newId, 'Broadcast sent: [' + bcType.toUpperCase() + '] ' + bcTitle, gs.getUserID());
+            } else {
+                data.error = '保存に失敗しました';
+            }
+        } catch (e) {
+            data.error = '送信エラー: ' + e.message;
+            gs.error('[Kokoro] Broadcast error: ' + e.message);
+        }
+        return;
+    }
+	
+	// ============================================================
+    // 1.4 [COMMS] 处理广播删除 (仅限 Admin)
+    // ============================================================
+    if (input && input.action === 'delete_broadcast') {
+        try {
+            // 严厉的权限检查：仅 admin 可操作
+            if (!gs.hasRole('admin')) {
+                data.error = 'Security Alert: Admin privilege required.';
+                return;
+            }
+
+            var delSysId = input.sys_id;
+            if (delSysId) {
+                var delGr = new GlideRecord('x_1821654_kokoro_0_emergency_message');
+                if (delGr.get(delSysId)) {
+                    // 软删除：只标记为不活跃，不物理删除
+                    delGr.setValue('is_active', false);
+                    delGr.update();
+                    
+                    data.success = true;
+                    data.deleted_id = delSysId;
+                    gs.info('[Kokoro] Broadcast deactivated by Admin: ' + delSysId);
+                }
+            }
+        } catch (e) {
+            data.error = 'Delete failed: ' + e.message;
         }
         return;
     }
@@ -3959,19 +4469,74 @@ function getResourceStatus() {
     loadUserProfile();
     loadDigitalWill();
 
+	// ==========================================
+// [HELPER] AI Insight Generator (Light Mode)
+// ==========================================
+function generateAiInsight(urgency, category) {
+    // 1. 模拟 AI 计算指标 (随机生成)
+    var confidence = Math.floor(Math.random() * (99 - 85) + 85);
+    var processingTime = (Math.random() * (0.8 - 0.1) + 0.1).toFixed(3);
+    
+    var html = "";
+
+    // Line 1: 头部元数据 (Head Metadata)
+    // 注意：这里移除了白色文字样式，改用深灰色 (#5f6368)
+    html += "<div style='margin-bottom: 4px; font-size: 10px; color: #5f6368; font-family: sans-serif;'>";
+    html += "<span class='ai-tag'>CONFIDENCE: " + confidence + "%</span> ";
+    html += "<span class='ai-tag'>TIME: " + processingTime + "s</span>";
+    html += "</div>";
+    
+    // Line 2: 核心分析 (Core Analysis)
+    // 容器使用深色字体 (#202124)，行高稍微增加以提高可读性
+    html += "<div style='margin-top:2px; font-family: \"Roboto Mono\", \"Courier New\", monospace; font-size: 11px; line-height: 1.5;'>";
+    
+    if (urgency == 'Critical' || urgency == '1') {
+        // [CRITICAL] 使用深红色 (#d93025) 适配白底
+        html += "<span style='color:#d93025; font-weight:800;'>[CRITICAL PATTERN]</span> ";
+        html += "<span style='color:#202124;'>High-priority keyword cluster detected. </span>";
+        html += "<span style='color:#d93025; font-weight:500;'>Action: Immediate escalation to Tier 2 required.</span>";
+        
+    } else if (category && category.toLowerCase().indexOf('food') > -1) {
+        // [LOGISTICS] 使用深绿色 (#188038) 适配白底
+        html += "<span style='color:#188038; font-weight:800;'>[LOGISTICS]</span> ";
+        html += "<span style='color:#202124;'>Supply request identified. Inventory: Auto-verified. </span>";
+        html += "<span style='color:#137333; font-weight:500;'>Optimization: Combine with Route #42 to save fuel.</span>";
+        
+    } else {
+        // [STANDARD] 使用深科技蓝 (#1a73e8) 适配白底
+        html += "<span style='color:#1a73e8; font-weight:800;'>[STANDARD]</span> ";
+        html += "<span style='color:#202124;'>Routine request signature. NLP Sentiment: Neutral. </span>";
+        html += "<span style='color:#5f6368;'>Rec: Standard fulfillment procedure (SOP-01).</span>";
+    }
+    
+    html += "</div>";
+
+    return html;
+}
+	
     // ==========================================
-    // 构建任务项 (Integrated SLA)
+    // 构建任务项 (Integrated SLA & AI)
     // ==========================================
     function buildTaskItem(gr) {
+        // [优化] 提前提取变量，供后续逻辑复用
+        var urgencyVal = gr.getValue('urgency') || 'Medium'; 
+        var categoryVal = gr.getValue('request_category') || '';
+        
         var taskItem = {
             sys_id: gr.getUniqueValue(),
             number: gr.getValue('number') || '',
-            category: gr.getValue('request_category') || '',
+            
+            // 使用提取的变量
+            category: categoryVal, 
             category_display: gr.getDisplayValue('request_category') || '未分類',
+            
             zone: gr.getDisplayValue('shelter_zone') || '',
             detail_loc: gr.getValue('precise_location') || gr.getValue('wish_content') || '',
-            desc: gr.getValue('remarks') || '',
-            urgency: gr.getValue('urgency') || 'Medium',
+            desc: gr.getValue('wish_content') || '',
+            
+            // 使用提取的变量
+            urgency: urgencyVal, 
+            
             contact: gr.getValue('u_contact_info') || '',
             reporter_name: gr.getDisplayValue('sys_created_by') || '一般ユーザー',
             assigned_to_name: gr.getDisplayValue('assigned_to') || '',
@@ -3983,8 +4548,19 @@ function getResourceStatus() {
             affected_count: gr.getValue('u_affected_count') || '不明',
             history: [],
             attachments: [],
-            sla: null 
+            sla: null,
+            
+            // === [新增] AI_INSIGHT 注入 ===
+            // 这里调用上面的 helper 函数动态生成内容
+            ai_analysis: generateAiInsight(
+                urgencyVal, 
+                categoryVal, 
+                gr.getValue('state'), 
+                gr.getValue('wish_content')
+            )
+            // ============================
         };
+			
 			// 时间计算
         var created = new GlideDateTime(gr.sys_created_on);
         var endTime = new GlideDateTime(); // 默认为当前时间
@@ -4336,9 +4912,9 @@ function loadVolunteerList() {
                 gr.setValue('request_category', sanitizeInput(input.category, 50));
                 gr.setValue('qty', parseInt(input.quantity) || 1);
                 gr.setValue('urgency', sanitizeInput(input.urgency, 20));
-                gr.setValue('affected_count', sanitizeInput(input.affected_count, 10));
-                gr.setValue('remarks', sanitizeInput(input.remarks, 1000));
-                gr.setValue('contact_info', sanitizeInput(input.contact, 200));
+                gr.setValue('u_affected_count', sanitizeInput(input.affected_count, 10));
+                gr.setValue('wish_content', sanitizeInput(input.remarks, 1000));
+                gr.setValue('u_contact_info', sanitizeInput(input.contact, 200));
                 gr.setValue('precise_location', sanitizeInput(input.detail_loc, 200));
 
                 var fullDescription =
@@ -4627,6 +5203,53 @@ function loadVolunteerList() {
 
     // 无论身份如何，都加载"我提交的"工单
     data.myRequests = fetchWishes('mine_created');
+	
+	// ============================================================
+    // [COMMS] 加载通信记录
+    // ============================================================
+    data.announcements = [];
+    try {
+        var commGr = new GlideRecord('x_1821654_kokoro_0_emergency_message');
+        commGr.addQuery('is_active', true);
+        commGr.addQuery('message_type', 'IN', 'emergency,announcement,internal');
+        commGr.orderByDesc('created_at');
+        commGr.setLimit(50);
+        commGr.query();
+        
+        while (commGr.next()) {
+            // 拆分标题和正文
+            var rawMsg = commGr.getValue('message_encrypted') || '';
+            var parts = rawMsg.split('\n---\n');
+            var msgTitle = parts[0] || '(無題)';
+            var msgBody = parts.length > 1 ? parts.slice(1).join('\n---\n') : rawMsg;
+            
+            // 计算相对时间
+            var createdAt = new GlideDateTime(
+                commGr.getValue('created_at') || commGr.getValue('sys_created_on')
+            );
+            var nowComm = new GlideDateTime();
+            var diffComm = GlideDateTime.subtract(createdAt, nowComm).getNumericValue();
+            var minsComm = Math.floor(diffComm / 1000 / 60);
+            
+            var timeAgo = '';
+            if (minsComm < 1) timeAgo = '今';
+            else if (minsComm < 60) timeAgo = minsComm + '分前';
+            else if (minsComm < 1440) timeAgo = Math.floor(minsComm / 60) + '時間前';
+            else timeAgo = Math.floor(minsComm / 1440) + '日前';
+            
+            data.announcements.push({
+                sys_id: commGr.getUniqueValue(),
+                type: commGr.getValue('message_type') || 'announcement',
+                title: msgTitle,
+                body: msgBody,
+                author: commGr.getDisplayValue('user') || 'System',
+                time_ago: timeAgo,
+                read_count: 0
+            });
+        }
+    } catch (e) {
+        gs.debug('[Kokoro] Comms load error: ' + e.message);
+    }
 
     if (isVolunteer) {
         // 志愿者额外加载: 分配给我的 + 所有工单
@@ -4844,21 +5467,20 @@ function loadVolunteerList() {
     // ==========================================
     // [END OF DAY 5 INTEGRATION]
     // ==========================================
-
 })();]]></script>
         <servicenow>false</servicenow>
         <sys_class_name>sp_widget</sys_class_name>
         <sys_created_by>admin</sys_created_by>
         <sys_created_on>2026-01-26 11:41:20</sys_created_on>
         <sys_id>f95e8ba383227210f6b1fb96feaad375</sys_id>
-        <sys_mod_count>301</sys_mod_count>
+        <sys_mod_count>403</sys_mod_count>
         <sys_name>Kokoro Volunteer Dashboard</sys_name>
         <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
         <sys_policy/>
         <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
         <sys_update_name>sp_widget_f95e8ba383227210f6b1fb96feaad375</sys_update_name>
         <sys_updated_by>admin</sys_updated_by>
-        <sys_updated_on>2026-02-09 08:50:10</sys_updated_on>
+        <sys_updated_on>2026-02-10 07:53:47</sys_updated_on>
         <template><![CDATA[<style>
 /* ============================================================
    KOKORO DASHBOARD CSS v9.6 (ULTIMATE FUSED EDITION)
@@ -5209,31 +5831,7 @@ body > div[style*="position:fixed"][style*="left"] {
   align-items: center; 
   gap: 10px;
 }
-
-.ai-card { 
-  background: #f3e5f5; 
-  border: 1px solid #e1bee7; 
-  padding: 12px; 
-  margin-bottom: 24px;
-  border-left: 4px solid #7b1fa2;
-}
-
-.ai-head { 
-  color: #7b1fa2; 
-  font-weight: 700; 
-  font-size: 0.8rem; 
-  margin-bottom: 6px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.ai-text { 
-  font-size: 0.85rem; 
-  color: #4a148c; 
-  line-height: 1.4;
-}
-
+  
 .sla-progress { 
   height: 10px; 
   background: #eee; 
@@ -6544,8 +7142,106 @@ body > div[style*="position:fixed"][style*="left"] {
   }
 }
 
+ 
+  
+  /* ============================================================
+   AI TACTICAL TERMINAL V3.0 (ZZZ / ENDFIELD STYLE)
+   ============================================================ */
 
+/* 1. 卡片容器：工业白/灰底色 + 强硬边框 */
+.ai-card {
+    /* 背景：改为高亮的工业灰白，类似 ZZZ 的菜单背景 */
+    background: #f7f8fa; 
+    /* 边框：极细的灰色边框，显得精致 */
+    border: 1px solid #dcdfe6;
+    /* 左侧装饰线：加粗的科技蓝/黑条，增加层级感 */
+    border-left: 4px solid #333; 
+    /* 倒角：右上角切角效果 (模拟 CSS clip-path) */
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+    
+    padding: 12px 16px;
+    margin-bottom: 12px; /* 增加间距 */
+    position: relative;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    /* 修复对齐问题：强制撑满父容器 */
+    width: 100%;
+    box-sizing: border-box;
+    display: block;
+}
+
+/* 2. 悬停交互：微妙的位移和投影，不再大幅变色 */
+.ai-card:hover {
+    background: #ffffff;
+    border-left-color: #0052cc; /* 鼠标放上去左侧变蓝 */
+    box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.1); /* 硬阴影，类似漫画/二游风格 */
+    transform: translate(-2px, -2px);
+}
+
+/* 3. 标题区域：加粗、大写、工业风 */
+.ai-head {
+    font-family: 'Impact', 'Arial Black', sans-serif; /* 硬朗字体 */
+    font-size: 14px;
+    color: #1a1a1a; /* 深黑色标题 */
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    border-bottom: 2px solid #eaeaea; /* 分割线 */
+    padding-bottom: 6px;
+}
+
+/* 4. 图标动画：改为更利落的闪烁 */
+.ai-pulse {
+    color: #ff6600; /* 终末地风格的橙色点缀 */
+    margin-right: 8px;
+    font-size: 12px;
+}
+
+/* 5. 内容文本：高清晰度深灰 */
+.ai-text {
+    font-family: 'Roboto Mono', 'Consolas', monospace; /* 等宽字体 */
+    font-size: 13px;
+    line-height: 1.5;
+    color: #4a4a4a; /* 深灰，保证在白底上看不清 */
+    font-weight: 500;
+}
+
+/* 6. 数据胶囊 (Server端生成的标签) 的样式适配 */
+/* 需要配合 Server Script 生成的 class='ai-tag' */
+.ai-tag {
+    display: inline-block;
+    background: #ebeef5; /* 浅灰底 */
+    color: #606266;      /* 深灰字 */
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: 2px;  /* 微圆角 */
+    margin-right: 6px;
+    border: 1px solid #dcdfe6;
+    text-transform: uppercase;
+}
+
+/* 警告级别 - 覆盖上面的默认色 */
+.ai-level-critical { 
+    background: #fef0f0; 
+    color: #f56c6c; 
+    border-color: #fde2e2; 
+}
+
+/* 7. 装饰性背景纹理 (可选，增加科技感) */
+.ai-card::before {
+    content: "///";
+    position: absolute;
+    right: 5px;
+    bottom: 0px;
+    font-size: 20px;
+    font-weight: 900;
+    color: rgba(0,0,0,0.05);
+    pointer-events: none;
+}
 </style>
+
 <style>
 /* ═════════════════════════════════════════════════════════════════════
    PART 24: KANBAN BOARD ARCHITECTURE (NEW) - INJECTED VIA HTML
@@ -6960,6 +7656,49 @@ body > div[style*="position:fixed"][style*="left"] {
         min-height: 150px;
     }
 }
+  
+  /* ═════════════════════════════════════════════════════════════════════
+   PART 28: RESTORE DYNAMIC FEEL (SMOOTH PULSE & GLOW)
+   ═════════════════════════════════════════════════════════════════════ */
+
+/* 1. 定义柔和的呼吸动画 (不再是剧烈的闪烁) */
+@keyframes soft-pulse {
+    0% { opacity: 1; text-shadow: 0 0 5px #4cd964; }
+    50% { opacity: 0.4; text-shadow: 0 0 2px #4cd964; }
+    100% { opacity: 1; text-shadow: 0 0 5px #4cd964; }
+}
+
+/* 2. 应用到 LIVE 指示器 */
+.terminal-header .live-static {
+    color: #4cd964 !important; /* 鲜艳的终端绿 */
+    font-weight: 900;
+    animation: soft-pulse 3s infinite ease-in-out; /* 3秒一次，非常平滑 */
+    display: inline-block;
+}
+
+/* 3. 增强终端文字的“荧光感” (CRT 风格) */
+.hud-terminal {
+    /* 给整个黑底加上微弱的绿色泛光 */
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(0, 50, 0, 0.1); 
+    border: 1px solid #333;
+}
+
+.term-cmd {
+    /* 命令部分加亮显示 */
+    color: #fff;
+    text-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+}
+
+.term-time {
+    /* 时间戳微弱发光 */
+    color: #888;
+}
+
+/* 4. 让滚动条看起来更像系统原生 */
+.terminal-body::-webkit-scrollbar-thumb {
+    background: #333;
+    border: 1px solid #000;
+}
 </style>
 
 <style>
@@ -7037,6 +7776,362 @@ body > div[style*="position:fixed"][style*="left"] {
     color: #333;
     padding: 8px;
 }
+/* ═══════════════════════════════════════════════════════════════
+   PART: COMMS CENTER STYLES
+   ═══════════════════════════════════════════════════════════════ */
+
+/* --- Broadcast Composer --- */
+.broadcast-composer {
+    background: #fff;
+    border: 1px solid #ddd;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+}
+
+.broadcast-type-selector {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.broadcast-type-btn {
+    flex: 1;
+    padding: 10px 16px;
+    border: 2px solid #e0e0e0;
+    background: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.broadcast-type-btn:hover { border-color: #999; }
+
+.broadcast-type-btn.active {
+    border-color: #000;
+    background: #000;
+    color: #fff;
+}
+
+.broadcast-type-btn:first-child.active {
+    background: #cf222e;
+    border-color: #cf222e;
+}
+
+.broadcast-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.broadcast-title-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #ddd;
+    font-size: 16px;
+    font-weight: 700;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.broadcast-title-input:focus { border-color: #000; }
+
+.broadcast-body-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #ddd;
+    font-size: 14px;
+    resize: vertical;
+    min-height: 80px;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.broadcast-body-input:focus { border-color: #000; }
+
+.broadcast-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.broadcast-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: #999;
+}
+
+.broadcast-type-label {
+    padding: 3px 8px;
+    font-weight: 700;
+    font-size: 11px;
+    border-radius: 2px;
+}
+
+.broadcast-type-label.type-emergency { background: rgba(207,34,46,0.1); color: #cf222e; }
+.broadcast-type-label.type-announcement { background: rgba(210,153,34,0.1); color: #d29922; }
+.broadcast-type-label.type-internal { background: rgba(0,0,0,0.05); color: #666; }
+
+.broadcast-send-btn {
+    padding: 10px 24px;
+    background: #e0e0e0;
+    color: #999;
+    border: none;
+    font-weight: 800;
+    font-size: 13px;
+    letter-spacing: 1px;
+    cursor: not-allowed;
+    transition: all 0.2s;
+}
+
+.broadcast-send-btn.ready {
+    background: #000;
+    color: #fff;
+    cursor: pointer;
+}
+
+.broadcast-send-btn.ready:hover {
+    background: #333;
+    transform: translateY(-1px);
+}
+
+/* --- Timeline --- */
+.comms-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 600px;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+.comm-item {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    display: flex;
+    cursor: pointer;
+    transition: all 0.2s;
+    overflow: hidden;
+}
+
+.comm-item:hover {
+    border-color: #999;
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.comm-priority-bar {
+    width: 4px;
+    flex-shrink: 0;
+    background: #e0e0e0;
+}
+
+.comm-priority-bar.bar-emergency { background: #cf222e; }
+.comm-priority-bar.bar-announcement { background: #d29922; }
+.comm-priority-bar.bar-internal { background: #999; }
+
+.comm-content {
+    flex: 1;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.comm-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.comm-type-badge {
+    font-size: 11px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 2px;
+    letter-spacing: 1px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.comm-type-badge.badge-emergency { background: rgba(207,34,46,0.1); color: #cf222e; }
+.comm-type-badge.badge-announcement { background: rgba(210,153,34,0.1); color: #d29922; }
+.comm-type-badge.badge-internal { background: rgba(0,0,0,0.05); color: #666; }
+
+.comm-time { font-size: 11px; color: #999; }
+.comm-title { font-weight: 800; font-size: 16px; color: #1a1a1a; }
+.comm-body-preview { font-size: 13px; color: #666; line-height: 1.5; }
+
+.comm-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: #999;
+    padding-top: 8px;
+    border-top: 1px dashed #eee;
+}
+
+.comm-author { font-weight: 600; }
+
+/* --- Detail Overlay --- */
+.comm-detail-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 3000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+}
+
+.comm-detail-panel {
+    background: #fff;
+    width: 100%;
+    max-width: 640px;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 32px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    position: relative;
+}
+
+.comm-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.comm-detail-body {
+    font-size: 15px;
+    line-height: 1.8;
+    color: #333;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* --- Filter Button Active State --- */
+.btn-jira.active {
+    background: #000 !important;
+    color: #fff !important;
+    border-color: #000 !important;
+}
+  /* --- Delete Confirm Modal --- */
+.delete-confirm-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 4000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.delete-confirm-panel {
+    background: #fff;
+    width: 420px;
+    max-width: 90vw;
+    padding: 32px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.delete-confirm-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: rgba(207,34,46,0.1);
+    color: #cf222e;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+}
+
+.delete-confirm-title {
+    font-size: 18px;
+    font-weight: 800;
+    margin: 0 0 16px;
+    color: #1a1a1a;
+}
+
+.delete-confirm-msg-info {
+    background: #f8f8f8;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: center;
+    font-size: 14px;
+}
+
+.delete-confirm-warning {
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 24px;
+}
+
+.delete-confirm-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.delete-btn-cancel {
+    padding: 10px 28px;
+    background: #f0f0f0;
+    border: 1px solid #ddd;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.delete-btn-cancel:hover {
+    background: #e0e0e0;
+}
+
+.delete-btn-confirm {
+    padding: 10px 28px;
+    background: #cf222e;
+    color: #fff;
+    border: none;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.delete-btn-confirm:hover {
+    background: #a71d2a;
+    transform: translateY(-1px);
+}
 </style>
 
 <!-- ============================================================
@@ -7092,9 +8187,9 @@ body > div[style*="position:fixed"][style*="left"] {
         <div class="tab" ng-class="{'active': c.view === 'mine'}" ng-click="c.view = 'mine'">
     <span class="tab-number">03</span> / OPERATORS ({{c.data.volunteers.length || 0}})
 </div>
-        <div class="tab" ng-class="{'active': c.view === 'requests'}" ng-click="c.view = 'requests'">
-            <span class="tab-number">04</span> / MY REQUESTS ({{c.data.myRequests.length || 0}})
-        </div>
+        <div class="tab" ng-class="{'active': c.view === 'comms'}" ng-click="c.view = 'comms'">
+    <span class="tab-number">04</span> / COMMS ({{c.data.announcements.length || 0}})
+</div>
     </div>
   
   <div class="board-container">
@@ -7152,7 +8247,9 @@ body > div[style*="position:fixed"][style*="left"] {
                             </div>
                         </div>
                     </div>
-
+                   
+                 
+										
                     <div class="monitoring-panel" ng-if="c.data.processMiningStats">
                         <div class="section-header" style="padding: 0 0 15px 0; margin-bottom: 15px;">
                             <span class="section-tag">02</span>
@@ -7236,17 +8333,10 @@ body > div[style*="position:fixed"][style*="left"] {
                             <div class="metric-mini-bar"><div class="metric-mini-fill" style="width: 78%"></div></div>
                         </div>
                     </div>
-                    <div class="ai-insight-card">
-                        <div class="ai-header"><i class="fa fa-robot"></i> AI_INSIGHT</div>
-                        <div class="ai-content">配送効率は先週比で<strong>+12%</strong>向上。</div>
-                        <div class="ai-tags">
-                            <span class="ai-tag">EFFICIENCY</span><span class="ai-tag">FORECAST</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
+                   <div class="ticket-card-body" style="flex-grow:1;"></div>
+    </div> 
+</div>
+</div>
 
         <div class="view-tactical" ng-if="c.view === 'tactical'" style="height:100%; display:flex; flex-direction:column;">
             
@@ -7559,77 +8649,144 @@ body > div[style*="position:fixed"][style*="left"] {
         </div>
     </div>
 </div>
+    
+    <div class="view-comms" ng-if="c.view === 'comms'">
 
-        <!-- ============================================================
-             My Requests View (FIX 5: 正确放置在 board-container 内部)
-             ============================================================ -->
-        <div class="view-requests" ng-if="c.view === 'requests'">
-            <div class="card-section">
-                <div class="section-header">
-                    <span class="section-tag">04</span>
-                    <span class="section-title">MY SUBMISSIONS</span>
-                    <span class="section-tag" style="margin-left:auto; background:var(--border-mid); box-shadow:none;">
-                        {{c.data.myRequests.length}} TRACKING
-                    </span>
-                </div>
-                <div class="task-grid">
-                    <div class="jira-card" 
-                         ng-class="'priority-' + item.urgency" 
-                         ng-repeat="item in c.data.myRequests" 
-                         ng-click="c.openModal(item)">
-                        <div class="card-top">
-                            <span class="card-id">{{item.number}}</span>
-                            <span class="status-tag" ng-class="'status-' + item.state">
-                                {{c.statusNames[item.state] || item.state_label || 'OPEN'}}
-                            </span>
-                        </div>
-                        <div class="card-title">
-                            {{c.dict[item.category] || item.category_display || item.category}}
-                            <span class="qty-badge">x{{item.quantity}}</span>
-                        </div>
-                        <div class="card-loc">
-                            <i class="fa fa-map-marker"></i> {{item.zone}} - {{item.detail_loc | limitTo:20}}
-                        </div>
-                        <div class="card-detail" ng-if="item.remarks">
-                            {{item.remarks | limitTo:50}}...
-                        </div>
-                        <div class="card-sla" ng-if="item.sla">
-                            <div class="sla-bar-container">
-                                <div class="sla-bar" 
-                                     ng-style="{width: item.sla.percentage + '%', background: c.getSLABarColor(item.sla)}"></div>
-                            </div>
-                            <div class="sla-info" ng-class="c.getSLAClass(item.sla)">
-                                <span>{{item.sla.percentage}}%</span>
-                                <span class="sla-remaining">
-                                    <i class="fa" ng-class="{'fa-clock-o': !item.sla.is_breached, 'fa-exclamation-triangle': item.sla.is_breached}"></i> 
-                                    {{c.formatSLARemaining(item.sla.remaining)}}
-                                </span>
-                            </div>
-                        </div>
-                        <div class="metal-divider"></div>
-                        <div class="card-footer">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <span class="priority-badge" ng-class="'priority-' + item.urgency">
-                                    {{c.dict[item.urgency] || item.urgency}}
-                                </span>
-                                <span style="color:var(--text-tertiary); font-family:var(--font-mono); font-size:12px;">
-                                    {{item.time_24h || item.time_ago}}
-                                </span>
-                            </div>
-                            <div style="margin-top:12px; color:var(--text-secondary); font-size:14px;">
-                                <i class="fa fa-user"></i> {{item.assigned_to_name || 'UNASSIGNED'}}
-                            </div>
-                        </div>
+    <div class="card-section" ng-if="c.data.isVolunteer">
+        <div class="section-header">
+            <span class="section-tag">BROADCAST</span>
+            <span class="section-title">緊急放送 // EMERGENCY_BROADCAST</span>
+        </div>
+        
+        <div class="broadcast-composer">
+            <div class="broadcast-type-selector">
+                <button class="broadcast-type-btn" ng-class="{'active': c.broadcastType === 'emergency'}" ng-click="c.broadcastType = 'emergency'">
+                    <i class="fa fa-exclamation-triangle"></i> 緊急
+                </button>
+                <button class="broadcast-type-btn" ng-class="{'active': c.broadcastType === 'announcement'}" ng-click="c.broadcastType = 'announcement'">
+                    <i class="fa fa-bullhorn"></i> 告知
+                </button>
+                <button class="broadcast-type-btn" ng-class="{'active': c.broadcastType === 'internal'}" ng-click="c.broadcastType = 'internal'">
+                    <i class="fa fa-lock"></i> 内部
+                </button>
+            </div>
+            
+            <div class="broadcast-form">
+                <input type="text" class="broadcast-title-input" ng-model="c.broadcastTitle" placeholder="件名を入力 (Subject)..." maxlength="200">
+                <textarea class="broadcast-body-input" ng-model="c.broadcastBody" placeholder="本文を入力してください (Message body)..." rows="4" maxlength="4000"></textarea>
+                <div class="broadcast-actions">
+                    <div class="broadcast-meta">
+                        <span class="broadcast-sender"><i class="fa fa-user"></i> {{c.data.user_name}}</span>
+                        <span class="broadcast-type-label" ng-class="'type-' + c.broadcastType">
+                            {{c.broadcastType === 'emergency' ? '緊急放送' : c.broadcastType === 'announcement' ? '一般告知' : '内部連絡'}}
+                        </span>
                     </div>
-                </div>
-                <div class="empty-board" ng-if="!c.data.myRequests || c.data.myRequests.length === 0">
-                    <i class="fa fa-paper-plane"></i>
-                    <h4>NO REQUESTS</h4>
-                    <p>あなたが提出したリクエストはありません</p>
+                    <button class="broadcast-send-btn" ng-class="{'ready': c.broadcastTitle && c.broadcastBody && !c._broadcastSending}" ng-disabled="!c.broadcastTitle || !c.broadcastBody || c._broadcastSending" ng-click="c.sendBroadcast()">
+                        <i class="fa" ng-class="c._broadcastSending ? 'fa-spinner fa-spin' : 'fa-paper-plane'"></i>
+                        {{c._broadcastSending ? 'SENDING...' : 'TRANSMIT'}}
+                    </button>
                 </div>
             </div>
         </div>
-        <!-- END: view-requests -->
+    </div>
+
+    <div class="metal-divider-glow" ng-if="c.data.isVolunteer"></div>
+
+    <div class="card-section">
+        <div class="section-header">
+            <span class="section-tag">FEED</span>
+            <span class="section-title">通信ログ // COMM_LOG</span>
+            <div style="margin-left:auto; display:flex; gap:10px;">
+                <button class="btn-jira" style="margin:0; width:auto; padding:6px 12px; font-size:11px;" ng-class="{'active': !c.commsFilter}" ng-click="c.commsFilter = ''">ALL</button>
+                <button class="btn-jira" style="margin:0; width:auto; padding:6px 12px; font-size:11px;" ng-class="{'active': c.commsFilter === 'emergency'}" ng-click="c.commsFilter = 'emergency'"><i class="fa fa-exclamation-triangle"></i> 緊急</button>
+                <button class="btn-jira" style="margin:0; width:auto; padding:6px 12px; font-size:11px;" ng-class="{'active': c.commsFilter === 'announcement'}" ng-click="c.commsFilter = 'announcement'"><i class="fa fa-bullhorn"></i> 告知</button>
+                <button class="btn-jira" style="margin:0; width:auto; padding:6px 12px; font-size:11px;" ng-class="{'active': c.commsFilter === 'internal'}" ng-click="c.commsFilter = 'internal'" ng-if="c.data.isVolunteer"><i class="fa fa-lock"></i> 内部</button>
+            </div>
+        </div>
+
+        <div class="comms-timeline">
+            <div class="comm-item" ng-class="'comm-' + msg.type" ng-repeat="msg in c.getFilteredComms() track by msg.sys_id" ng-click="c.openCommDetail(msg)">
+                
+                <div class="comm-priority-bar" ng-class="'bar-' + msg.type"></div>
+                
+                <div class="comm-content">
+                    <div class="comm-header">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <div class="comm-type-badge" ng-class="'badge-' + msg.type">
+                                <i class="fa" ng-class="{'fa-exclamation-triangle': msg.type === 'emergency', 'fa-bullhorn': msg.type === 'announcement', 'fa-lock': msg.type === 'internal'}"></i>
+                                {{msg.type === 'emergency' ? '緊急' : msg.type === 'announcement' ? '告知' : '内部'}}
+                            </div>
+                            
+                            <button class="btn-delete-comm" 
+                                    ng-if="c.data.isAdmin" 
+                                    ng-click="c.deleteComm(msg, $event)"
+                                    title="削除 (Admin Only)">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </div>
+                        <span class="comm-time"><i class="fa fa-clock-o"></i> {{msg.time_ago}}</span>
+                    </div>
+                    
+                    <div class="comm-title">{{msg.title}}</div>
+                    <div class="comm-body-preview">{{msg.body | limitTo:120}}{{msg.body.length > 120 ? '...' : ''}}</div>
+                    
+                    <div class="comm-footer">
+                        <span class="comm-author"><i class="fa fa-user-circle"></i> {{msg.author}}</span>
+                        <span class="comm-read-count" ng-if="msg.read_count > 0"><i class="fa fa-eye"></i> {{msg.read_count}}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="empty-board" ng-if="c.getFilteredComms().length === 0">
+                <i class="fa fa-feed" style="font-size:48px; color:#ccc; margin-bottom:16px;"></i>
+                <h4>NO TRANSMISSIONS</h4>
+                <p>通信記録がありません</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="comm-detail-overlay" ng-if="c.showCommDetail && c.selectedComm" ng-click="c.closeCommDetail()">
+        <div class="comm-detail-panel" ng-click="$event.stopPropagation()">
+            <div class="comm-detail-header">
+                <div class="comm-type-badge" ng-class="'badge-' + c.selectedComm.type" style="font-size:13px; padding:4px 12px;">
+                    <i class="fa" ng-class="{'fa-exclamation-triangle': c.selectedComm.type === 'emergency', 'fa-bullhorn': c.selectedComm.type === 'announcement', 'fa-lock': c.selectedComm.type === 'internal'}"></i>
+                    {{c.selectedComm.type === 'emergency' ? '緊急放送' : c.selectedComm.type === 'announcement' ? '一般告知' : '内部連絡'}}
+                </div>
+                <button class="btn-normal" ng-click="c.closeCommDetail()" style="background:none; border:none; font-size:20px; cursor:pointer;">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <h2 style="margin:16px 0 8px; font-size:22px; font-weight:800;">{{c.selectedComm.title}}</h2>
+            <div style="display:flex; gap:16px; font-size:12px; color:#999; margin-bottom:20px;">
+                <span><i class="fa fa-user-circle"></i> {{c.selectedComm.author}}</span>
+                <span><i class="fa fa-clock-o"></i> {{c.selectedComm.time_ago}}</span>
+            </div>
+            <div class="comm-detail-body">{{c.selectedComm.body}}</div>
+        </div>
+    </div>
+
+    <div class="delete-confirm-overlay" ng-if="c.showDeleteConfirm" ng-click="c.cancelDelete()">
+        <div class="delete-confirm-panel" ng-click="$event.stopPropagation()">
+            <div class="delete-confirm-icon">
+                <i class="fa fa-exclamation-triangle"></i>
+            </div>
+            <h3 class="delete-confirm-title">メッセージを削除しますか？</h3>
+            <div class="delete-confirm-msg-info">
+                <span class="comm-type-badge" ng-class="'badge-' + c.deleteTarget.type" ng-if="c.deleteTarget">
+                    {{c.deleteTarget.type === 'emergency' ? '緊急' : c.deleteTarget.type === 'announcement' ? '告知' : '内部'}}
+                </span>
+                <strong ng-if="c.deleteTarget">{{c.deleteTarget.title}}</strong>
+            </div>
+            <p class="delete-confirm-warning">※この操作は取り消せません</p>
+            <div class="delete-confirm-actions">
+                <button class="delete-btn-cancel" ng-click="c.cancelDelete()">キャンセル</button>
+                <button class="delete-btn-confirm" ng-click="c.confirmDelete()"><i class="fa fa-trash"></i> 削除する</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+    
+<!-- END: view-comms -->
 
 <div class="zen-sidebar" ng-class="{'active': c.showSidebar}">
     <div class="sidebar-head">
@@ -7655,9 +8812,9 @@ body > div[style*="position:fixed"][style*="left"] {
         <li ng-click="c.view = 'mine'; c.toggleSidebar()">
             <span class="nav-num">03</span> MY OPERATIONS
         </li>
-        <li ng-click="c.view = 'requests'; c.toggleSidebar()">
-            <span class="nav-num">04</span> MY REQUESTS
-        </li>
+        <li ng-click="c.view = 'comms'; c.toggleSidebar()">
+    <span class="nav-num">04</span> COMMS CENTER
+</li>
         <li class="divider"></li>
         <li><span class="nav-num">05</span> SYSTEM SETTINGS</li>
         <li><span class="nav-num">06</span> LOGOUT</li>
@@ -7849,10 +9006,12 @@ body > div[style*="position:fixed"][style*="left"] {
           <div style="font-size:14px; color:var(--text-tertiary); margin-top:8px;">{{item.detail_loc}}</div>
       </div>
 
-      <div class="ai-card">
-         <div class="ai-head"><i class="fa fa-magic"></i> AI_ANALYSIS</div>
-         <div class="ai-text">Standard response required. ETA: 30 mins.</div>
-      </div>
+     <div class="ticket-card-body">
+    <div class="ai-card">
+         <div class="ai-head"><i class="fa fa-bolt ai-pulse"></i> TACTICAL_INSIGHT</div>
+         <div class="ai-text" ng-bind-html="item.trusted_ai"></div>
+    </div>
+</div>
 
       <div class="sidebar-block" ng-if="item.sla && item.state != 4 && item.state != 5">
         <div class="sb-label">SLA_TRACKING</div>
@@ -8133,17 +9292,17 @@ body > div[style*="position:fixed"][style*="left"] {
 
 <div class="dropdown-wrapper" ng-if="item.state != 4">
     <button class="btn-normal" ng-click="showDispatchMenu = !showDispatchMenu">
-        <i class="fa fa-paper-plane-o"></i> DISPATCH <i class="fa fa-chevron-down"></i>
-    </button>
+    <i class="fa fa-paper-plane-o"></i> DISPATCH <i class="fa fa-chevron-down"></i>
+</button>
     <div class="status-menu" ng-show="showDispatchMenu" style="max-height:300px; overflow-y:auto;">
         <div class="status-item" style="padding:5px 15px; color:#999; font-size:10px; cursor:default; border-bottom:1px solid #eee;">
             VOLUNTEERS
         </div>
         <div class="status-item" ng-repeat="vol in c.data.volunteers" 
-             ng-click="c.assignTask(item.sys_id, vol.sys_id); showDispatchMenu=false">
-            <span>{{vol.name}}</span>
-            <span style="float:right; font-size:10px; color:#999;">{{vol.load}}%</span>
-        </div>
+     ng-click="$event.stopPropagation(); c.assignTask(item.sys_id, vol.sys_id); showDispatchMenu=false; item.assigned_to_name=vol.name; item.assigned_to_id=vol.sys_id">
+    <span>{{vol.name}}</span>
+    <span style="float:right; font-size:10px; color:#999;">{{vol.load}}%</span>
+</div>
     </div>
 </div>
         
@@ -8268,10 +9427,12 @@ body > div[style*="position:fixed"][style*="left"] {
           <div style="font-size:14px; color:#999; margin-top:8px;">{{item.detail_loc}}</div>
       </div>
 
-      <div class="ai-card">
-         <div class="ai-head"><i class="fa fa-magic"></i> AI_ANALYSIS</div>
-         <div class="ai-text">Standard response required. ETA: 30 mins.</div>
-      </div>
+      <div class="ticket-card-body">
+    <div class="ai-card">
+         <div class="ai-head"><i class="fa fa-bolt ai-pulse"></i> TACTICAL_INSIGHT</div>
+         <div class="ai-text" ng-bind-html="item.trusted_ai"></div>
+    </div>
+</div>
 
       <div class="sidebar-block" ng-if="item.sla">
         <div class="sb-label">SLA TRACKING</div>
