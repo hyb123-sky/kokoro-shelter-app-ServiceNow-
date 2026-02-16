@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element attributes="all_tables.text_index_translations=true,kagami_csindex_enabled=true" audit="true" db_object_id="e3c1bb2e88922210559020d480f9d2f2" label="Asset" max_length="40" name="alm_asset" text_index="true" type="collection">
+        <element label="Expiry Date" max_length="40" name="x_1821654_kokoro_0_expiry_date" type="glide_date"/>
+        <element choice="1" label="EOC Category" max_length="40" name="x_1821654_kokoro_0_eoc_category" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="Fuel" sequence="900" value="fuel"/>
+                <element inactive_on_update="false" label="Vehicle" sequence="100" value="vehicle"/>
+                <element inactive_on_update="false" label="Food" sequence="300" value="food"/>
+                <element inactive_on_update="false" label="Personnel" sequence="500" value="personnel"/>
+                <element inactive_on_update="false" label="Communication Equipment" sequence="600" value="communication_equipment"/>
+                <element inactive_on_update="false" label="Medical Kit" sequence="200" value="medical_kit"/>
+                <element inactive_on_update="false" label="Water" sequence="800" value="water"/>
+                <element inactive_on_update="false" label="Generator" sequence="400" value="generator"/>
+                <element inactive_on_update="false" label="Shelter Supplies" sequence="700" value="shelter_supplies"/>
+            </choice>
+        </element>
+    </element>
+</database>

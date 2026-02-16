@@ -233,8 +233,106 @@
     var timeInterval = $interval(updateSystemTime, 1000);
     
     c.goToUserView = function() {
-        $window.location.href = '?id=kokoro_user_view'; 
+    $window.location.href = '/sp?id=kokoro_user'; 
+};
+	
+
+// ==========================================
+// Toast 通知システム
+// ==========================================
+c.toasts = [];
+var toastIdCounter = 0;
+
+function showToast(message, type, duration) {
+    type = type || 'info';        // info, success, error, warning
+    duration = duration || 3500;  // 默认3.5秒
+
+    var toast = {
+        id: ++toastIdCounter,
+        message: message,
+        type: type,
+        visible: true
     };
+
+    $timeout(function() {
+        c.toasts.push(toast);
+    });
+
+    // 自动消失
+    $timeout(function() {
+        toast.visible = false;
+        // 动画结束后移除
+        $timeout(function() {
+            var idx = c.toasts.indexOf(toast);
+            if (idx > -1) c.toasts.splice(idx, 1);
+        }, 400);
+    }, duration);
+
+    return toast;
+}
+
+// 手动关闭
+c.dismissToast = function(toast) {
+    toast.visible = false;
+    $timeout(function() {
+        var idx = c.toasts.indexOf(toast);
+        if (idx > -1) c.toasts.splice(idx, 1);
+    }, 400);
+};
+	
+// ==========================================
+// CSRF 安全请求包装
+// ==========================================
+var volCsrfToken = c.data.csrf_token || '';
+
+
+// 【替换为】:
+function safeVolServerGet(params) {
+    params.csrf_token = volCsrfToken;
+    
+    // ★ 乐观锁: 自动附加 sys_mod_count
+    // 如果 params.sys_id 存在，从当前数据中查找对应工单的版本号
+    if (params.sys_id) {
+        var foundItem = findItemBySysId(params.sys_id);
+        if (foundItem && foundItem.sys_mod_count !== undefined) {
+            params.sys_mod_count = foundItem.sys_mod_count;
+        }
+    }
+    
+    return c.server.get(params).then(function(response) {
+        // ★ 冲突检测: 如果服务器返回冲突标志，自动刷新
+        if (response && response.data && response.data.concurrency_conflict) {
+            handleConcurrencyConflict(response.data);
+        }
+        return response;
+    });
+}
+
+// 辅助: 根据 sys_id 查找工单
+function findItemBySysId(sysId) {
+    if (!sysId) return null;
+    var lists = [c.data.list, c.data.myTasks, c.data.myRequests];
+    for (var li = 0; li < lists.length; li++) {
+        if (!lists[li]) continue;
+        for (var ii = 0; ii < lists[li].length; ii++) {
+            if (lists[li][ii].sys_id === sysId) return lists[li][ii];
+        }
+    }
+    return null;
+}
+
+// ★ 冲突处理: 提示 + 自动刷新
+function handleConcurrencyConflict(responseData) {
+    showToast('他のオペレーターが先にこの工単を更新しました。最新データを読み込みます...', 'warning', 5000);
+    
+    // 1.5秒後自動刷新看板数据
+    $timeout(function() {
+        c.server.update().then(function() {
+            processListItems();
+            showToast('最新データを読み込みました', 'success');
+        });
+    }, 1500);
+}
 
     // ============================================================
     // 6. タスク詳細・モダール (Task Modal)
@@ -270,7 +368,7 @@
         $scope.cancel = function() { modalInstance.dismiss('cancel'); };
 
         $scope.assignToMe = function(item) {
-            c.server.get({ action: 'assign_to_me', sys_id: item.sys_id }).then(function(r) {
+            safeVolServerGet({ action: 'assign_to_me', sys_id: item.sys_id }).then(function(r) {
                 handleServerResponse(r, function() {
                     item.assigned_to_id = c.data.user_id; item.assigned_to_name = c.data.user_name;
                     $scope.item.assigned_to_id = c.data.user_id; $scope.item.assigned_to_name = c.data.user_name;
@@ -286,7 +384,7 @@
             if (ns === 11 && !item.assigned_to_id) { $scope.assignToMe(item); return; }
             if (ns === 2 && !item.assigned_to_id) { showError('先に担当者を設定してください'); return; }
             
-            c.server.get({ action: 'change_status', sys_id: item.sys_id, new_state: newState }).then(function(r) {
+            safeVolServerGet({ action: 'change_status', sys_id: item.sys_id, new_state: newState }).then(function(r) {
                 if (handleServerResponse(r, function() {
                     item.state = ns; $scope.item.state = ns; $scope.statusMenuOpen = false;
                     showSuccess('ステータスを更新しました');
@@ -298,7 +396,7 @@
 
         $scope.postComment = function(item) {
             if (!$scope.newComment || !$scope.newComment.trim()) return;
-            c.server.get({ action: 'add_comment', sys_id: item.sys_id, message: $scope.newComment }).then(function(r) {
+            safeVolServerGet({ action: 'add_comment', sys_id: item.sys_id, message: $scope.newComment }).then(function(r) {
                 handleServerResponse(r, function() {
                     if (!item.history) item.history = [];
                     item.history.unshift({ user: c.data.user_name || 'Me', text: $scope.newComment, date: new Date().toLocaleString() });
@@ -320,10 +418,10 @@
         c.server.get({ action: 'trigger_auto_assign', sys_id: sysId, force_reassign: forceReassign || false })
         .then(function(response) {
             if (response.data.success) {
-                spUtil.addInfoMessage('自動割当完了: ' + response.data.assigned_to);
+                showToast('自動割当完了: ' + response.data.assigned_to, 'success');
                 c.server.update().then(processListItems);
             } else {
-                spUtil.addErrorMessage('自動割当失敗: ' + (response.data.error || '志願者が見つかりません'));
+                showToast('自動割当失敗: ' + (response.data.error || '志願者が見つかりません'), 'error', 5000);
             }
         });
     };
@@ -332,9 +430,9 @@
         if (!ticketId || !targetUserId) return;
         c.server.get({ action: 'assign_task', ticket_id: ticketId, target_user: targetUserId }).then(function(r) {
             if (r && r.data && r.data.error) {
-                spUtil.addErrorMessage(r.data.error);
+                showToast(r.data.error, 'error', 5000);
             } else {
-                spUtil.addInfoMessage('タスクを分配しました');
+                showToast('タスクを分配しました', 'success');
                 c.server.update().then(processListItems);
             }
         });
@@ -342,10 +440,10 @@
 
     c.updateMyLocation = function(zone) {
         if (!zone) return;
-        c.server.get({ action: 'update_location', zone: zone }).then(function(response) {
+        safeVolServerGet({ action: 'update_location', zone: zone }).then(function(response) {
             if (response.data.success) {
                 c.volunteerStatus.currentZone = zone;
-                spUtil.addInfoMessage(response.data.message || '現在地を更新しました');
+                showToast(response.data.message || '現在地を更新しました', 'success');
             }
         });
     };
@@ -355,7 +453,7 @@
         c.server.get({ action: 'set_availability', available: newStatus }).then(function(response) {
             if (response.data.success) {
                 c.volunteerStatus.isOnline = newStatus;
-                spUtil.addInfoMessage(response.data.message);
+                showToast(response.data.message, 'info');
             }
         });
     };
@@ -365,7 +463,7 @@
             // データ更新時にもHTMLを信頼化
             if (c.data.global_ai_analysis) c.trusted_global_ai = $sce.trustAsHtml(c.data.global_ai_analysis);
             processListItems();
-            spUtil.addInfoMessage('監視データを更新しました'); 
+            showToast('監視データを更新しました', 'info');
         });
     };
 
@@ -392,7 +490,7 @@
         var targetId = c.selectedVol.sys_id;
 
         c.server.get({ action: 'specialty', target_id: targetId, new_cap: newCap }).then(function(response) {
-            spUtil.addInfoMessage('能力情報を更新しました');
+            showToast('能力情報を更新しました', 'success');
         });
     };
 
@@ -412,7 +510,7 @@
         }).then(function(r) {
             c._broadcastSending = false;
             if (r.data.success) {
-                spUtil.addInfoMessage('放送を送信しました');
+                showToast('放送を送信しました', 'success');
                 c.data.announcements.unshift({
                     sys_id: r.data.new_id || 'temp_' + Date.now(),
                     type: c.broadcastType,
@@ -425,11 +523,11 @@
                 c.broadcastTitle = '';
                 c.broadcastBody = '';
             } else {
-                spUtil.addErrorMessage(r.data.error || '送信失敗');
+                showToast(r.data.error || '送信失敗', 'error', 5000);
             }
         }, function() {
             c._broadcastSending = false;
-            spUtil.addErrorMessage('通信エラーが発生しました');
+            showToast('通信エラーが発生しました', 'error', 5000);
         });
     };
 
@@ -460,14 +558,14 @@
     c.confirmDelete = function() {
         var msg = c.deleteTarget;
         if (!msg) return;
-        c.server.get({ action: 'delete_broadcast', sys_id: msg.sys_id }).then(function(r) {
+        safeVolServerGet({ action: 'delete_broadcast', sys_id: msg.sys_id }).then(function(r) {
             if (r.data.success) {
                 var index = c.data.announcements.indexOf(msg);
                 if (index > -1) c.data.announcements.splice(index, 1);
-                spUtil.addInfoMessage('メッセージを削除しました');
+                showToast('メッセージを削除しました', 'success');
                 if (c.selectedComm && c.selectedComm.sys_id === msg.sys_id) c.closeCommDetail();
             } else {
-                spUtil.addErrorMessage(r.data.error || '削除失敗');
+                showToast(r.data.error || '削除失敗', 'error', 5000);
             }
         });
         c.cancelDelete();
@@ -477,12 +575,37 @@
         c.showDeleteConfirm = false;
         c.deleteTarget = null;
     };
+	
+	// ============================================================
+// 10.5 DEPLOYMENT STATUS HELPERS
+// ============================================================
+
+c.getOnlineCount = function() {
+    if (!c.data.volunteers) return 0;
+    return c.data.volunteers.filter(function(v) { 
+        return v.status_class === 'online'; 
+    }).length;
+};
+
+c.getBusyCount = function() {
+    if (!c.data.volunteers) return 0;
+    return c.data.volunteers.filter(function(v) { 
+        return v.status_class === 'busy'; 
+    }).length;
+};
+
+c.getOfflineCount = function() {
+    if (!c.data.volunteers) return 0;
+    return c.data.volunteers.filter(function(v) { 
+        return v.status_class === 'offline'; 
+    }).length;
+};
 
     // ============================================================
     // 10. 共通ヘルパー (Helpers)
     // ============================================================
-    function showSuccess(msg) { spUtil.addInfoMessage(msg); }
-    function showError(msg) { spUtil.addErrorMessage(msg || 'エラーが発生しました'); }
+    function showSuccess(msg) { showToast(msg, 'success'); }
+    function showError(msg) { showToast(msg || 'エラーが発生しました', 'error', 5000); }
     function handleServerResponse(response, successCallback) {
         if (!response || !response.data) { showError('サーバーエラー'); return false; }
         if (response.data.error) { showError(response.data.error); return false; }
@@ -1375,7 +1498,7 @@ html, body {
    PART 9: BOARD CONTAINER
    ═══════════════════════════════════════════════════════════════════════════════════════ */
 .board-container {
-  padding: 24px 32px 120px; /* 调整内边距以适应全屏 */
+  padding: 10px 15px 20px; /* 顶部/左右/底部 留白均大幅减少 */
   max-width: none !important; /* 核心修复：移除最大宽度限制 */
   width: 100% !important;     /* 核心修复：强制占满父容器 */
   margin: 0 !important;       /* 核心修复：移除居中 Margin */
@@ -1477,15 +1600,15 @@ html, body {
    PART 11: SECTION HEADERS
    ═══════════════════════════════════════════════════════════════════════════════════════ */
 .stats-section, .alert-section, .card-section {
-  margin-bottom: 36px;
+  margin-bottom: 15px; /* 减少区块之间的垂直距离 */
 }
 
 .section-header {
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding-bottom: 18px;
-  margin-bottom: 24px;
+  gap: 10px;
+  padding-bottom: 8px;
+margin-bottom: 10px; /* 拉近标题与下方内容的距离 */
   border-bottom: 2px solid var(--border-mid);
   position: relative;
 }
@@ -1540,7 +1663,7 @@ html, body {
 .stat-card {
   background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-tertiary) 100%);
   border: 2px solid var(--border-mid);
-  padding: 24px;
+  padding: 12px 16px; /* 减少卡片内部留白，使卡片变小 */
   position: relative;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
@@ -2066,13 +2189,13 @@ html, body {
 .card-grid, .task-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 24px;
+  gap: 12px;
 }
 
 .jira-card {
   background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-tertiary) 100%);
   border: 2px solid var(--border-mid);
-  padding: 24px;
+  padding: 16px;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   position: relative;
@@ -2639,8 +2762,8 @@ html, body {
 }
 
 .sidebar-block {
-  margin-bottom: 26px;
-  padding-bottom: 22px;
+  margin-bottom: 15px;
+  padding-bottom: 15px;
   border-bottom: 2px solid var(--border-mid);
   position: relative;
 }
@@ -3972,7 +4095,510 @@ button, .btn-jira, .btn-online, .btn-offline, .tab, .alert-item, .jira-card, .st
     transform: translateY(-1px);
 }  
 
-</css>
+/* ═══════════════════════════════════════════════════════════════
+   SITREP: TACTICAL BRIEFING PANEL
+   Style: Arknights Endfield / ZZZ Industrial B&amp;W
+   ═══════════════════════════════════════════════════════════════ */
+
+.sitrep-panel {
+    background: #fff;
+    border: 1px solid #ddd;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+}
+
+/* 左侧装饰线 */
+.sitrep-panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 3px;
+    background: linear-gradient(180deg, #000 0%, #000 40%, #ccc 60%, transparent 100%);
+}
+
+/* --- Section 通用 --- */
+.sitrep-section {
+    padding: 16px 16px 16px 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.sitrep-section-last {
+    border-bottom: none;
+}
+
+/* --- Section Header --- */
+.sitrep-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.sitrep-tag {
+    background: #000;
+    color: #fff;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    font-family: var(--font-mono);
+}
+
+.sitrep-tag-sm {
+    background: #e0e0e0;
+    color: #666;
+    padding: 2px 6px;
+    font-size: 9px;
+    font-weight: 800;
+    font-family: var(--font-mono);
+}
+
+.sitrep-title {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: #333;
+    font-family: var(--font-mono);
+}
+
+.sitrep-live {
+    margin-left: auto;
+    font-size: 9px;
+    font-weight: 700;
+    color: #34c759;
+    letter-spacing: 1px;
+}
+
+.sitrep-live i {
+    font-size: 6px;
+    margin-right: 3px;
+    animation: blink 2s infinite;
+}
+
+/* ═══════════════════════════════
+   SECTION 1: PRIORITY QUEUE
+   ═══════════════════════════════ */
+
+.priority-queue {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.pq-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    background: #fafafa;
+    border: 1px solid #eee;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.pq-item:hover {
+    background: #f0f0f0;
+    border-color: #000;
+    transform: translateX(3px);
+}
+
+.pq-rank {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 900;
+    font-family: var(--font-mono);
+    color: #fff;
+    background: #ccc;
+    flex-shrink: 0;
+}
+
+.pq-rank-Critical { background: #cf222e; }
+.pq-rank-High { background: #d29922; }
+.pq-rank-Medium, .pq-rank-Moderate { background: #666; }
+.pq-rank-Low { background: #bbb; }
+
+.pq-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.pq-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 3px;
+}
+
+.pq-id {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: #999;
+    font-weight: 700;
+}
+
+.pq-urgency {
+    font-size: 9px;
+    font-weight: 800;
+    padding: 1px 5px;
+    letter-spacing: 1px;
+}
+
+.pq-u-Critical { background: rgba(207,34,46,0.1); color: #cf222e; }
+.pq-u-High { background: rgba(210,153,34,0.1); color: #d29922; }
+.pq-u-Medium, .pq-u-Moderate { background: #f0f0f0; color: #666; }
+
+.pq-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: #1a1a1a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pq-loc {
+    font-size: 10px;
+    color: #999;
+    margin-top: 2px;
+}
+
+.pq-loc i {
+    color: #cf222e;
+    margin-right: 3px;
+    font-size: 9px;
+}
+
+.pq-arrow {
+    color: #ccc;
+    font-size: 11px;
+    transition: all 0.2s;
+}
+
+.pq-item:hover .pq-arrow {
+    color: #000;
+    transform: translateX(3px);
+}
+
+.pq-empty {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px;
+    background: #f9f9f9;
+    color: #999;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+
+.pq-empty i {
+    font-size: 16px;
+    color: #34c759;
+}
+
+/* ═══════════════════════════════
+   SECTION 2: DEPLOYMENT
+   ═══════════════════════════════ */
+
+.deploy-grid {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 12px 0;
+    margin-bottom: 12px;
+    background: #fafafa;
+    border: 1px solid #eee;
+}
+
+.deploy-stat {
+    text-align: center;
+    padding: 0 8px;
+}
+
+.deploy-num {
+    font-size: 24px;
+    font-weight: 900;
+    font-family: var(--font-mono);
+    color: #1a1a1a;
+    line-height: 1;
+}
+
+.deploy-num.deploy-alert {
+    color: #cf222e;
+}
+
+.deploy-num.deploy-dim {
+    color: #ccc;
+}
+
+.deploy-label {
+    font-size: 8px;
+    font-weight: 700;
+    color: #999;
+    letter-spacing: 2px;
+    margin-top: 4px;
+}
+
+.deploy-divider {
+    width: 1px;
+    height: 36px;
+    background: #e0e0e0;
+}
+
+.deploy-roster {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.deploy-op {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    padding: 4px 0;
+    border-bottom: 1px dashed #f0f0f0;
+}
+
+.deploy-op:last-child {
+    border-bottom: none;
+}
+
+.deploy-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ccc;
+    flex-shrink: 0;
+}
+
+.deploy-dot.online {
+    background: #34c759;
+    box-shadow: 0 0 4px rgba(52,199,89,0.5);
+}
+
+.deploy-dot.busy {
+    background: #ff9500;
+}
+
+.deploy-name {
+    font-weight: 700;
+    color: #333;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.deploy-zone {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: #999;
+    font-weight: 600;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+/* ═══════════════════════════════
+   SECTION 3: ACTIVITY STREAM
+   ═══════════════════════════════ */
+
+.activity-stream {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    background: #1a1a1a;
+    padding: 10px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.stream-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.stream-item:last-child {
+    border-bottom: none;
+}
+
+.stream-time {
+    color: #666;
+    font-size: 9px;
+    min-width: 35px;
+    flex-shrink: 0;
+}
+
+.stream-user {
+    color: #fff;
+    font-weight: 700;
+    flex-shrink: 0;
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.stream-action {
+    color: #aaa;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* --- Activity Stream 滚动条 --- */
+.activity-stream::-webkit-scrollbar { width: 3px; }
+.activity-stream::-webkit-scrollbar-track { background: #111; }
+.activity-stream::-webkit-scrollbar-thumb { background: #444; }
+
+/* ═══════════════════════════════
+   FOOTER DECO
+   ═══════════════════════════════ */
+
+.sitrep-footer {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 16px 8px 20px;
+    font-size: 8px;
+    font-weight: 700;
+    color: #ccc;
+    letter-spacing: 1px;
+    font-family: var(--font-mono);
+    background: #f8f8f8;
+    border-top: 1px solid #eee;
+}
+
+
+/* ==========================================
+   PART 27: Toast 通知システム
+   ========================================== */
+.toast-container {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 1060000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  max-width: 420px;
+}
+
+.vol-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15), 0 1px 4px rgba(0,0,0,0.1);
+  pointer-events: auto;
+  cursor: pointer;
+  animation: toastSlideIn 0.35s cubic-bezier(0.21, 1.02, 0.73, 1) forwards;
+  transform: translateX(120%);
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.vol-toast.toast-exit {
+  animation: toastSlideOut 0.35s ease forwards;
+}
+
+/* Success - 深绿 */
+.vol-toast.toast-success {
+  background: linear-gradient(135deg, #1b5e20, #2e7d32);
+  color: #e8f5e9;
+  border-left: 4px solid #66bb6a;
+}
+.vol-toast.toast-success .toast-icon { color: #a5d6a7; }
+
+/* Error - 深红 */
+.vol-toast.toast-error {
+  background: linear-gradient(135deg, #b71c1c, #c62828);
+  color: #ffebee;
+  border-left: 4px solid #ef5350;
+}
+.vol-toast.toast-error .toast-icon { color: #ef9a9a; }
+
+/* Warning - 深琥珀 */
+.vol-toast.toast-warning {
+  background: linear-gradient(135deg, #e65100, #ef6c00);
+  color: #fff3e0;
+  border-left: 4px solid #ffb74d;
+}
+.vol-toast.toast-warning .toast-icon { color: #ffe0b2; }
+
+/* Info - 深蓝 */
+.vol-toast.toast-info {
+  background: linear-gradient(135deg, #1a237e, #283593);
+  color: #e8eaf6;
+  border-left: 4px solid #7986cb;
+}
+.vol-toast.toast-info .toast-icon { color: #9fa8da; }
+
+.toast-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.toast-message {
+  flex: 1;
+  word-break: break-word;
+}
+
+.toast-close {
+  font-size: 12px;
+  opacity: 0.6;
+  flex-shrink: 0;
+  padding: 2px;
+  transition: opacity 0.2s;
+}
+.toast-close:hover {
+  opacity: 1;
+}
+
+@keyframes toastSlideIn {
+  from { transform: translateX(120%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes toastSlideOut {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(120%); opacity: 0; }
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .toast-container {
+    top: auto;
+    bottom: 16px;
+    right: 8px;
+    left: 8px;
+    max-width: none;
+  }
+  .vol-toast {
+    font-size: 12px;
+    padding: 10px 14px;
+  }
+}</css>
         <data_table>sp_instance</data_table>
         <demo_data/>
         <description/>
@@ -3990,217 +4616,11 @@ button, .btn-jira, .btn-online, .btn-offline, .tab, .alert-item, .jira-card, .st
         <roles/>
         <script><![CDATA[(function() {
     // ==========================================
-    // MODULE 1: 处理前端动作 (Action Handling)
-    // ==========================================
-    
-    // 1.1 [FIX] 处理 Capability 保存
-    if (input && input.action === 'specialty') {
-        var capGr = new GlideRecord('x_1821654_kokoro_0_volunteer_capability');
-        capGr.addQuery('volunteer', input.target_id); 
-        capGr.query();
-        
-        if (capGr.next()) {
-            capGr.setValue('specialty', input.new_cap); 
-            capGr.update();
-        } else {
-            capGr.initialize();
-            capGr.setValue('volunteer', input.target_id);
-            capGr.setValue('specialty', input.new_cap); 
-            capGr.insert();
-        }
-        gs.addInfoMessage('Capability Saved: ' + input.new_cap);
-        return; 
-    }
-    
-    // 1.2 [FIX] 处理任务分配
-    if (input && input.action === 'assign_task') {
-    var taskGr = new GlideRecord('x_1821654_kokoro_0_silent_wish');
-    if (taskGr.get(input.ticket_id)) {
-        taskGr.setValue('assigned_to', input.target_user);
-        // 如果是 DRAFT(1) 或 SUBMITTED(10)，自动变为 ASSIGNED(11)
-        var currentState = taskGr.getValue('state');
-        if (currentState == '1' || currentState == '10') {
-            taskGr.setValue('state', '11');
-        }
-        taskGr.update();
-        data.success = true;
-    } else {
-        data.error = 'タスクが見つかりません';
-    }
-    return;
-}
-	
-	// ============================================================
-    // 1.3 [COMMS] 处理广播发送
-    // ============================================================
-    if (input && input.action === 'send_broadcast') {
-        try {
-            // 权限检查
-            if (!gs.hasRole('x_1821654_kokoro_0.volunteer') && !gs.hasRole('admin')) {
-                data.error = '権限がありません';
-                return;
-            }
-            
-            // 输入验证
-            var bcTitle = sanitizeInput(input.title, 200);
-            var bcBody = sanitizeInput(input.body, 4000);
-            var bcType = input.msg_type || 'announcement';
-            
-            if (!bcTitle || !bcBody) {
-                data.error = '件名と本文は必須です';
-                return;
-            }
-            
-            // 验证消息类型
-            var validTypes = ['emergency', 'announcement', 'internal'];
-            if (validTypes.indexOf(bcType) === -1) {
-                bcType = 'announcement';
-            }
-            
-            // 写入 emergency_message 表
-            var bcGr = new GlideRecord('x_1821654_kokoro_0_emergency_message');
-            bcGr.initialize();
-            bcGr.setValue('user', gs.getUserID());
-            bcGr.setValue('message_type', bcType);
-            // 用分隔符合并标题和正文，读取时再拆分
-            bcGr.setValue('message_encrypted', bcTitle + '\n---\n' + bcBody);
-            bcGr.setValue('is_active', true);
-            bcGr.setValue('created_at', new GlideDateTime());
-            
-            var newId = bcGr.insert();
-            
-            if (newId) {
-                data.success = true;
-                data.new_id = newId;
-                
-                // 记录流程事件
-                logProcessEvent(newId, 'Broadcast sent: [' + bcType.toUpperCase() + '] ' + bcTitle, gs.getUserID());
-            } else {
-                data.error = '保存に失敗しました';
-            }
-        } catch (e) {
-            data.error = '送信エラー: ' + e.message;
-            gs.error('[Kokoro] Broadcast error: ' + e.message);
-        }
-        return;
-    }
-	
-	// ============================================================
-    // 1.4 [COMMS] 处理广播删除 (仅限 Admin)
-    // ============================================================
-    if (input && input.action === 'delete_broadcast') {
-        try {
-            // 严厉的权限检查：仅 admin 可操作
-            if (!gs.hasRole('admin')) {
-                data.error = 'Security Alert: Admin privilege required.';
-                return;
-            }
-
-            var delSysId = input.sys_id;
-            if (delSysId) {
-                var delGr = new GlideRecord('x_1821654_kokoro_0_emergency_message');
-                if (delGr.get(delSysId)) {
-                    // 软删除：只标记为不活跃，不物理删除
-                    delGr.setValue('is_active', false);
-                    delGr.update();
-                    
-                    data.success = true;
-                    data.deleted_id = delSysId;
-                    gs.info('[Kokoro] Broadcast deactivated by Admin: ' + delSysId);
-                }
-            }
-        } catch (e) {
-            data.error = 'Delete failed: ' + e.message;
-        }
-        return;
-    }
-
-    // ==========================================
-    // MODULE 2: 初始化环境 (Initialization)
-    // ★★★ 必须放在数据加载之前，防止 push 报错 ★★★
-    // ==========================================
-    data.myTasks = [];
-    data.list = [];
-    data.volunteers = []; // [CRITICAL] 必须在此处初始化
-    data.capabilityOptions = [];
-    
-    data.user_id = gs.getUserID();
-    data.user_name = gs.getUserDisplayName();
-    
-    // 权限判断
-    var isVolunteer = gs.hasRole('x_1821654_kokoro_0.volunteer') || gs.hasRole('admin');
-    data.isVolunteer = isVolunteer;
-	  data.isAdmin = gs.hasRole('admin');
-
-    // ★★★ [FIX] 将 todayPM 提升到全局作用域 ★★★
-    var todayPM = new GlideDateTime();
-    todayPM.setDisplayValue(todayPM.getDate().toString());
-
-    // ==========================================
-    // MODULE 3: 数据加载 (Data Fetching)
+    // ★★★ [HOISTED] 前置定义区 — 所有模块共享 ★★★
+    // 必须在任何 action 处理之前定义
     // ==========================================
 
-    // 3.1 [FIX] 加载志愿者列表 (带异常捕获 + 正确的状态码)
-    try {
-        var volGr = new GlideRecord('sys_user');
-        volGr.addQuery('active', true);
-        // 如果需要过滤角色，请取消下一行的注释
-        // volGr.addQuery('roles', 'x_1821654_kokoro_0.volunteer'); 
-        volGr.setLimit(20); 
-        volGr.query();
-        
-        while (volGr.next()) {
-            var openTaskCount = 0;
-            var volID = volGr.getUniqueValue();
-            
-            // 计算负载
-            var taskAg = new GlideAggregate('x_1821654_kokoro_0_silent_wish');
-            taskAg.addQuery('assigned_to', volID);
-            
-            // ★★★ 核心修复：排除已完成(4)和已取消(7)的任务 ★★★
-            // 之前的代码排除的是 3 (通常是 Closed Complete 的旧标准)，但你的系统用的是 4
-            taskAg.addQuery('state', '!=', '4'); // Exclude Closed Complete
-            taskAg.addQuery('state', '!=', '7'); // Exclude Cancelled
-            
-            taskAg.addAggregate('COUNT');
-            taskAg.query();
-            
-            if (taskAg.next()) {
-                var count = taskAg.getAggregate('COUNT');
-                openTaskCount = parseInt(count) || 0;
-            }
-            
-            // 格式化负载显示 (保留1位小数)
-            var rawLoad = (openTaskCount / 10) * 100;
-            var finalLoad = isNaN(rawLoad) ? "0.0" : rawLoad.toFixed(1);
-
-            data.volunteers.push({
-                sys_id: volID,
-                name: volGr.getValue('name') || 'Unknown',
-                load: finalLoad
-            });
-        }
-    } catch (e) {
-        gs.error("[Dashboard Error] Loading volunteers failed: " + e.message);
-    }
-
-    // 3.2 [FIX] 获取 Capability 选项
-    var choiceGr = new GlideRecord('sys_choice');
-    choiceGr.addQuery('name', 'x_1821654_kokoro_0_volunteer_capability'); 
-    choiceGr.addQuery('element', 'specialty'); 
-    choiceGr.addQuery('language', gs.getSession().getLanguage()); 
-    choiceGr.addQuery('inactive', false);
-    choiceGr.orderBy('sequence');
-    choiceGr.query();
-    while (choiceGr.next()) {
-        data.capabilityOptions.push({
-            label: choiceGr.getValue('label'),
-            value: choiceGr.getValue('value')
-        });
-    }
-    // ==========================================
-    // MODULE 4: 系统配置 (Configuration)
-    // ==========================================
+    // --- CONFIG (原 MODULE 4) ---
     var CONFIG = {
         tables: {
             SILENT_WISH: 'x_1821654_kokoro_0_silent_wish',
@@ -4209,15 +4629,14 @@ button, .btn-jira, .btn-online, .btn-offline, .tab, .alert-item, .jira-card, .st
             PROCESS_EVENT: 'x_1821654_kokoro_0_process_event',
             USER_PROFILE: 'x_1821654_kokoro_0_user_profile', 
             EMERGENCY_MESSAGE: 'x_1821654_kokoro_0_emergency_message', 
-            HEARTBEAT: 'x_1821654_kokoro_0_x_1821654_kokoro_0_heartbeat', // ★ 已确认保留原名，严禁修改
-            VOL_CAPABILITY: 'x_1821654_kokoro_0_volunteer_capability' // [新增] 集中管理 Capability 表
+            HEARTBEAT: 'x_1821654_kokoro_0_x_1821654_kokoro_0_heartbeat',
+            VOL_CAPABILITY: 'x_1821654_kokoro_0_volunteer_capability'
         },
-        // [架构师修正] 请确保这里的状态码与你的 ServiceNow 字典定义一致
         wishStates: {
-            NEW: '1',          // Open/New
-            IN_PROGRESS: '2',  // Work in Progress
-            COMPLETED: '4',    // Closed Complete (HTML中使用的是4，这里必须统一)
-            CANCELLED: '7'     // Cancelled
+            NEW: '1',
+            IN_PROGRESS: '2',
+            COMPLETED: '4',
+            CANCELLED: '7'
         },
         resourceKeys: ['food', 'water', 'medical', 'clothing', 'hygiene'],
         thresholds: {
@@ -4225,140 +4644,8 @@ button, .btn-jira, .btn-online, .btn-offline, .tab, .alert-item, .jira-card, .st
             WARNING: 35   
         }
     };
-	
-    // ==========================================
-    // 2. 核心监察函数: 获取资源状态
-    // ==========================================
-function getResourceStatus() {
-        // 1. 初始化固定顺序的空模板，确保索引 0-4 对应 HTML 的顺序
-        // Order matches HTML: [0]Food, [1]Water, [2]Medical, [3]Clothing, [4]Hygiene
-        var map = {
-            'FOOD': 0,
-            'WATR': 1,
-            'MEDI': 2,
-            'CLTH': 3,
-            'HYGN': 4
-        };
-        
-        var status = [
-            { percent: 0, code: 'FOOD', label: '食料 (No Data)', status_color: 'danger' },
-            { percent: 0, code: 'WATR', label: '飲料水 (No Data)', status_color: 'danger' },
-            { percent: 0, code: 'MEDI', label: '医療品 (No Data)', status_color: 'danger' },
-            { percent: 0, code: 'CLTH', label: '衣類 (No Data)', status_color: 'danger' },
-            { percent: 0, code: 'HYGN', label: '衛生用品 (No Data)', status_color: 'danger' }
-        ];
 
-        var grInv = new GlideRecord(CONFIG.tables.INVENTORY);
-        grInv.addActiveQuery();
-        grInv.query();
-
-        while (grInv.next()) {
-            var code = grInv.getValue('item_code');
-            var idx = map[code]; // 根据 Code 找到对应索引
-            
-            if (idx !== undefined) {
-                var current = parseFloat(grInv.getValue('current_quantity')) || 0;
-                var max = parseFloat(grInv.getValue('max_capacity')) || 100;
-                var percentage = Math.round((current / max) * 100);
-
-                status[idx] = {
-                    label: grInv.getDisplayValue('item_name'),
-                    code: code,
-                    percent: percentage,
-                    status_color: percentage < CONFIG.thresholds.CRITICAL ? 'danger' : 
-                                 (percentage < CONFIG.thresholds.WARNING ? 'warning' : 'success')
-                };
-            }
-        }
-        return status;
-    }
-    data.resourceStatus = getResourceStatus();
-
-    // ==========================================
-    // 3. 企业级库存扣减逻辑 (事务性处理)
-    // ==========================================
-    function updateInventory(itemCode, quantity, wishId) {
-        var grInv = new GlideRecord(CONFIG.tables.INVENTORY);
-        grInv.addQuery('item_code', itemCode);
-        grInv.query();
-
-        if (grInv.next()) {
-            var oldQty = parseFloat(grInv.getValue('current_quantity'));
-            var newQty = oldQty - quantity;
-
-            if (newQty < 0) return { success: false, message: '在庫不足' };
-
-            // 1. 更新主表
-            grInv.setValue('current_quantity', newQty);
-            grInv.update();
-
-            // 2. 插入交易表 (Audit Trail)
-            var grTx = new GlideRecord(CONFIG.tables.INVENTORY_TX);
-            grTx.initialize();
-            grTx.setValue('inventory_item', grInv.getUniqueValue());
-            grTx.setValue('type', 'disbursement');
-            grTx.setValue('quantity', quantity);
-            grTx.setValue('related_wish', wishId);
-            grTx.insert();
-
-            // 3. 记录流程事件
-            logProcessEvent(wishId, 'Inventory Decr: ' + itemCode + ' (' + quantity + ')', gs.getUserID());
-            return { success: true };
-        }
-        return { success: false, message: '物品コードが見つかりません' };
-    }
-
-    // ==========================================
-    // 4. 输入处理: 当 Wish 状态变为 "In Progress" 时尝试锁定/扣减库存
-    // ==========================================
-    if (input && input.action === 'change_status' && input.new_state === '2') {
-        var wishGr = new GlideRecord(CONFIG.tables.SILENT_WISH);
-        if (wishGr.get(input.sys_id)) {
-            var category = wishGr.getValue('request_category'); 
-            var qty = parseInt(wishGr.getValue('u_quantity')) || 1;
-            
-            if (category) {
-                var invResult = updateInventory(category.toUpperCase(), qty, input.sys_id);
-                if (!invResult.success) {
-                    data.error = "在庫チェック失敗: " + invResult.message;
-                    return;
-                }
-            }
-        }
-    }
-
-    // === SLA统计 ===
-    data.slaStats = {
-        breached: 0,
-        atRisk: 0,
-        ok: 0
-    };
-    try {
-        if (typeof x_1821654_kokoro_0.KokoroSLAEngine !== 'undefined') {
-            var slaEngine = new x_1821654_kokoro_0.KokoroSLAEngine();
-            
-            var breachedWishes = slaEngine.getBreachedWishes();
-            data.slaStats.breached = breachedWishes.length;
-            
-            var atRiskWishes = slaEngine.getAtRiskWishes(80);
-            data.slaStats.atRisk = atRiskWishes.length;
-        }
-        
-        var gaSLA = new GlideAggregate('x_1821654_kokoro_0_sla_task');
-        gaSLA.addQuery('status', 'in_progress');
-        gaSLA.addQuery('percentage', '<', 80);
-        gaSLA.addAggregate('COUNT');
-        gaSLA.query();
-        if (gaSLA.next()) {
-            data.slaStats.ok = parseInt(gaSLA.getAggregate('COUNT')) || 0;
-        }
-    } catch (e) {
-        gs.debug('[Kokoro] SLA stats not available: ' + e.message);
-    }
-
-    // ==========================================
-    // 工具函数
-    // ==========================================
+    // --- 输入清洗 ---
     function sanitizeInput(inputVal, maxLength) {
         if (!inputVal) return '';
         var cleaned = String(inputVal)
@@ -4390,6 +4677,378 @@ function getResourceStatus() {
         }
     }
 
+    // --- CSRF 验証 ---
+    function validateVolCSRF(inputToken) {
+        try {
+            var session = gs.getSession();
+            var storedToken = session.getClientData('kokoro_vol_csrf');
+            if (!storedToken || !inputToken) return false;
+            return String(storedToken) === String(inputToken);
+        } catch (e) {
+            gs.error('[Kokoro-Vol] CSRF validation error: ' + e.message);
+            return true;
+        }
+    }
+
+    // --- Rate Limiter ---
+    var VolRateLimiter = {
+        check: function(userId, actionType, windowMinutes, maxCount) {
+            if (!userId) return { allowed: true, remaining: maxCount };
+            try {
+                var windowStart = new GlideDateTime();
+                windowStart.addSeconds(-windowMinutes * 60);
+                var ga = new GlideAggregate(CONFIG.tables.PROCESS_EVENT);
+                ga.addQuery('user', userId);
+                ga.addQuery('activity', 'STARTSWITH', 'VOL_RATE:' + actionType);
+                ga.addQuery('timestamp', '>=', windowStart);
+                ga.addAggregate('COUNT');
+                ga.query();
+                var count = 0;
+                if (ga.next()) count = parseInt(ga.getAggregate('COUNT')) || 0;
+                if (count >= maxCount) {
+                    return { allowed: false, remaining: 0, message: '操作が多すぎます。' + windowMinutes + '分後に再度お試しください。' };
+                }
+                return { allowed: true, remaining: maxCount - count };
+            } catch (e) {
+                gs.error('[Kokoro-Vol] RateLimiter error: ' + e.message);
+                return { allowed: true, remaining: maxCount };
+            }
+        },
+        record: function(userId, actionType) {
+            try {
+                var pe = new GlideRecord(CONFIG.tables.PROCESS_EVENT);
+                pe.initialize();
+                pe.setValue('user', userId);
+                pe.setValue('activity', 'VOL_RATE:' + actionType);
+                pe.setValue('timestamp', new GlideDateTime());
+                pe.insert();
+            } catch (e) {
+                gs.error('[Kokoro-Vol] RateLimiter record error: ' + e.message);
+            }
+        }
+    };
+	
+// ==========================================
+// 乐观锁（楽観的排他制御）
+// ==========================================
+function checkConcurrency(tableName, sysId, clientModCount) {
+    // 没有提供 mod count 时跳过检查（兼容旧版客户端）
+    if (!sysId || clientModCount === undefined || clientModCount === null) {
+        return { ok: true };
+    }
+    
+    try {
+        var gr = new GlideRecord(tableName);
+        if (!gr.get(sysId)) {
+            return { ok: false, message: 'レコードが見つかりません' };
+        }
+        
+        var serverModCount = parseInt(gr.getValue('sys_mod_count')) || 0;
+        var clientCount = parseInt(clientModCount) || 0;
+        
+        if (clientCount < serverModCount) {
+            return {
+                ok: false,
+                message: '他のユーザーがこのレコードを更新しました。ページを再読み込みしてください。',
+                server_version: serverModCount,
+                client_version: clientCount
+            };
+        }
+        
+        return { ok: true, record: gr };
+        
+    } catch (e) {
+        gs.error('[Kokoro] Concurrency check error: ' + e.message);
+        // エラー時は放行（可用性優先）
+        return { ok: true };
+    }
+}
+
+    // ==========================================
+    // ★★★ [HOISTED] 前置定义区 结束 ★★★
+    // ==========================================
+
+
+    // ==========================================
+    // MODULE 1: 处理前端动作 (Action Handling)
+    // ==========================================
+    
+    if (input && input.action === 'specialty') {
+        var capGr = new GlideRecord('x_1821654_kokoro_0_volunteer_capability');
+        capGr.addQuery('volunteer', input.target_id); 
+        capGr.query();
+        
+        if (capGr.next()) {
+            capGr.setValue('specialty', input.new_cap); 
+            capGr.update();
+        } else {
+            capGr.initialize();
+            capGr.setValue('volunteer', input.target_id);
+            capGr.setValue('specialty', input.new_cap); 
+            capGr.insert();
+        }
+        gs.addInfoMessage('Capability Saved: ' + input.new_cap);
+        return; 
+    }
+    
+    if (input && input.action === 'assign_task') {
+        var taskGr = new GlideRecord('x_1821654_kokoro_0_silent_wish');
+        if (taskGr.get(input.ticket_id)) {
+            taskGr.setValue('assigned_to', input.target_user);
+            var currentState = taskGr.getValue('state');
+            if (currentState == '1' || currentState == '10') {
+                taskGr.setValue('state', '11');
+            }
+            taskGr.update();
+            data.success = true;
+        } else {
+            data.error = 'タスクが見つかりません';
+        }
+        return;
+    }
+	
+    if (input && input.action === 'send_broadcast') {
+        try {
+            var broadcastVolId = gs.getUserID();
+            var broadcastRateCheck = VolRateLimiter.check(broadcastVolId, 'BROADCAST', 5, 3);
+            
+            if (!broadcastRateCheck.allowed) {
+                data.error = broadcastRateCheck.message;
+                return;
+            }
+
+            if (!gs.hasRole('x_1821654_kokoro_0.volunteer') && !gs.hasRole('admin')) {
+                data.error = '権限がありません';
+                return;
+            }
+            
+            var bcTitle = sanitizeInput(input.title, 200);
+            var bcBody = sanitizeInput(input.body, 4000);
+            var bcType = input.msg_type || 'announcement';
+            
+            if (!bcTitle || !bcBody) {
+                data.error = '件名と本文は必須です';
+                return;
+            }
+            
+            var validTypes = ['emergency', 'announcement', 'internal'];
+            if (validTypes.indexOf(bcType) === -1) {
+                bcType = 'announcement';
+            }
+            
+            var bcGr = new GlideRecord('x_1821654_kokoro_0_emergency_message');
+            bcGr.initialize();
+            bcGr.setValue('user', gs.getUserID());
+            bcGr.setValue('message_type', bcType);
+            bcGr.setValue('message_encrypted', bcTitle + '\n---\n' + bcBody);
+            bcGr.setValue('is_active', true);
+            bcGr.setValue('created_at', new GlideDateTime());
+            
+            var newId = bcGr.insert();
+            
+            if (newId) {
+                data.success = true;
+                data.new_id = newId;
+                logProcessEvent(newId, 'Broadcast sent: [' + bcType.toUpperCase() + '] ' + bcTitle, gs.getUserID());
+                VolRateLimiter.record(broadcastVolId, 'BROADCAST');
+            } else {
+                data.error = '保存に失敗しました';
+            }
+        } catch (e) {
+            data.error = '送信エラー: ' + e.message;
+            gs.error('[Kokoro] Broadcast error: ' + e.message);
+        }
+        return;
+    }
+	
+    if (input && input.action === 'delete_broadcast') {
+        try {
+            var delBcVolId = gs.getUserID();
+            var delRateCheck = VolRateLimiter.check(delBcVolId, 'DELETE_BC', 1, 10);
+            
+            if (!delRateCheck.allowed) {
+                data.error = delRateCheck.message;
+                return;
+            }
+
+            if (!gs.hasRole('admin')) {
+                data.error = 'Security Alert: Admin privilege required.';
+                return;
+            }
+
+            var delSysId = input.sys_id;
+            if (delSysId) {
+                var delGr = new GlideRecord('x_1821654_kokoro_0_emergency_message');
+                if (delGr.get(delSysId)) {
+                    delGr.setValue('is_active', false);
+                    delGr.update();
+                    
+                    data.success = true;
+                    data.deleted_id = delSysId;
+                    gs.info('[Kokoro] Broadcast deactivated by Admin: ' + delSysId);
+                    VolRateLimiter.record(delBcVolId, 'DELETE_BC');
+                }
+            }
+        } catch (e) {
+            data.error = 'Delete failed: ' + e.message;
+        }
+        return;
+    }
+
+    // ==========================================
+    // MODULE 2: 初始化环境 (Initialization)
+    // ==========================================
+    data.myTasks = [];
+    data.list = [];
+    data.volunteers = [];
+    data.announcements = [];
+    data.capabilityOptions = [];
+    
+    data.user_id = gs.getUserID();
+    data.user_name = gs.getUserDisplayName();
+    
+    var isVolunteer = gs.hasRole('x_1821654_kokoro_0.volunteer') || gs.hasRole('admin');
+    data.isVolunteer = isVolunteer;
+    data.isAdmin = gs.hasRole('admin');
+	
+    if (!input) {
+        data.csrf_token = gs.generateGUID();
+        var session = gs.getSession();
+        session.putClientData('kokoro_vol_csrf', data.csrf_token);
+    }
+
+    var todayPM = new GlideDateTime();
+    todayPM.setDisplayValue(todayPM.getDate().toString());
+
+    // ==========================================
+    // MODULE 3: 数据加载 (Data Fetching)
+    // ★★★ [FIX] 删除旧的 sys_user 全表查询 ★★★
+    // volunteers 现在在 fetchWishes 之后用 loadVolunteerList() 加载
+    // ==========================================
+
+    // 3.2 获取 Capability 选项
+    var choiceGr = new GlideRecord('sys_choice');
+    choiceGr.addQuery('name', 'x_1821654_kokoro_0_volunteer_capability'); 
+    choiceGr.addQuery('element', 'specialty'); 
+    choiceGr.addQuery('language', gs.getSession().getLanguage()); 
+    choiceGr.addQuery('inactive', false);
+    choiceGr.orderBy('sequence');
+    choiceGr.query();
+    while (choiceGr.next()) {
+        data.capabilityOptions.push({
+            label: choiceGr.getValue('label'),
+            value: choiceGr.getValue('value')
+        });
+    }
+
+    // ==========================================
+    // 资源状态
+    // ==========================================
+    function getResourceStatus() {
+        var map = {
+            'FOOD': 0, 'WATR': 1, 'MEDI': 2, 'CLTH': 3, 'HYGN': 4
+        };
+        
+        var status = [
+            { percent: 0, code: 'FOOD', label: '食料 (No Data)', status_color: 'danger' },
+            { percent: 0, code: 'WATR', label: '飲料水 (No Data)', status_color: 'danger' },
+            { percent: 0, code: 'MEDI', label: '医療品 (No Data)', status_color: 'danger' },
+            { percent: 0, code: 'CLTH', label: '衣類 (No Data)', status_color: 'danger' },
+            { percent: 0, code: 'HYGN', label: '衛生用品 (No Data)', status_color: 'danger' }
+        ];
+
+        var grInv = new GlideRecord(CONFIG.tables.INVENTORY);
+        grInv.addActiveQuery();
+        grInv.query();
+
+        while (grInv.next()) {
+            var code = grInv.getValue('item_code');
+            var idx = map[code];
+            
+            if (idx !== undefined) {
+                var current = parseFloat(grInv.getValue('current_quantity')) || 0;
+                var max = parseFloat(grInv.getValue('max_capacity')) || 100;
+                var percentage = Math.round((current / max) * 100);
+
+                status[idx] = {
+                    label: grInv.getDisplayValue('item_name'),
+                    code: code,
+                    percent: percentage,
+                    status_color: percentage < CONFIG.thresholds.CRITICAL ? 'danger' : 
+                                 (percentage < CONFIG.thresholds.WARNING ? 'warning' : 'success')
+                };
+            }
+        }
+        return status;
+    }
+    data.resourceStatus = getResourceStatus();
+
+    // ==========================================
+    // 库存扣减
+    // ==========================================
+    function updateInventory(itemCode, quantity, wishId) {
+        var grInv = new GlideRecord(CONFIG.tables.INVENTORY);
+        grInv.addQuery('item_code', itemCode);
+        grInv.query();
+
+        if (grInv.next()) {
+            var oldQty = parseFloat(grInv.getValue('current_quantity'));
+            var newQty = oldQty - quantity;
+            if (newQty < 0) return { success: false, message: '在庫不足' };
+            grInv.setValue('current_quantity', newQty);
+            grInv.update();
+
+            var grTx = new GlideRecord(CONFIG.tables.INVENTORY_TX);
+            grTx.initialize();
+            grTx.setValue('inventory_item', grInv.getUniqueValue());
+            grTx.setValue('type', 'disbursement');
+            grTx.setValue('quantity', quantity);
+            grTx.setValue('related_wish', wishId);
+            grTx.insert();
+
+            logProcessEvent(wishId, 'Inventory Decr: ' + itemCode + ' (' + quantity + ')', gs.getUserID());
+            return { success: true };
+        }
+        return { success: false, message: '物品コードが見つかりません' };
+    }
+
+    if (input && input.action === 'change_status' && input.new_state === '2') {
+        var wishGr = new GlideRecord(CONFIG.tables.SILENT_WISH);
+        if (wishGr.get(input.sys_id)) {
+            var category = wishGr.getValue('request_category'); 
+            var qty = parseInt(wishGr.getValue('u_quantity')) || 1;
+            if (category) {
+                var invResult = updateInventory(category.toUpperCase(), qty, input.sys_id);
+                if (!invResult.success) {
+                    data.error = "在庫チェック失敗: " + invResult.message;
+                    return;
+                }
+            }
+        }
+    }
+
+    // === SLA统计 ===
+    data.slaStats = { breached: 0, atRisk: 0, ok: 0 };
+    try {
+        if (typeof x_1821654_kokoro_0.KokoroSLAEngine !== 'undefined') {
+            var slaEngine = new x_1821654_kokoro_0.KokoroSLAEngine();
+            var breachedWishes = slaEngine.getBreachedWishes();
+            data.slaStats.breached = breachedWishes.length;
+            var atRiskWishes = slaEngine.getAtRiskWishes(80);
+            data.slaStats.atRisk = atRiskWishes.length;
+        }
+        var gaSLA = new GlideAggregate('x_1821654_kokoro_0_sla_task');
+        gaSLA.addQuery('status', 'in_progress');
+        gaSLA.addQuery('percentage', '<', 80);
+        gaSLA.addAggregate('COUNT');
+        gaSLA.query();
+        if (gaSLA.next()) {
+            data.slaStats.ok = parseInt(gaSLA.getAggregate('COUNT')) || 0;
+        }
+    } catch (e) {
+        gs.debug('[Kokoro] SLA stats not available: ' + e.message);
+    }
+
     // ==========================================
     // 状态验证器
     // ==========================================
@@ -4403,27 +5062,19 @@ function getResourceStatus() {
             '5':  [],
             '6':  ['11', '2', '5']
         },
-        
         validateTransition: function(fromState, toState) {
             fromState = String(fromState);
             toState = String(toState);
-            
             if (!fromState || fromState === '' || fromState === 'undefined' || fromState === 'null') {
                 return { valid: true };
             }
-            
             if (!this.allowedTransitions.hasOwnProperty(fromState)) {
                 return { valid: false, message: '無効な現在状態: ' + fromState };
             }
-            
             var allowed = this.allowedTransitions[fromState];
             if (allowed.indexOf(toState) === -1) {
-                return { 
-                    valid: false, 
-                    message: fromState + ' から ' + toState + ' への遷移は許可されていません' 
-                };
+                return { valid: false, message: fromState + ' から ' + toState + ' への遷移は許可されていません' };
             }
-            
             return { valid: true };
         }
     };
@@ -4437,7 +5088,6 @@ function getResourceStatus() {
             grProfile.addQuery('user', data.user_id);
             grProfile.setLimit(1);
             grProfile.query();
-
             if (grProfile.next()) {
                 data.emergency_email = grProfile.getValue('emergency_conact_email') || "";
                 data.medical_info = grProfile.getValue('medical_conditions') || "";
@@ -4457,7 +5107,6 @@ function getResourceStatus() {
             grWill.orderByDesc('sys_created_on');
             grWill.setLimit(1);
             grWill.query();
-
             if (grWill.next()) {
                 data.saved_will = grWill.getValue('message_encrypted') || "";
             }
@@ -4469,74 +5118,51 @@ function getResourceStatus() {
     loadUserProfile();
     loadDigitalWill();
 
-	// ==========================================
-// [HELPER] AI Insight Generator (Light Mode)
-// ==========================================
-function generateAiInsight(urgency, category) {
-    // 1. 模拟 AI 计算指标 (随机生成)
-    var confidence = Math.floor(Math.random() * (99 - 85) + 85);
-    var processingTime = (Math.random() * (0.8 - 0.1) + 0.1).toFixed(3);
-    
-    var html = "";
-
-    // Line 1: 头部元数据 (Head Metadata)
-    // 注意：这里移除了白色文字样式，改用深灰色 (#5f6368)
-    html += "<div style='margin-bottom: 4px; font-size: 10px; color: #5f6368; font-family: sans-serif;'>";
-    html += "<span class='ai-tag'>CONFIDENCE: " + confidence + "%</span> ";
-    html += "<span class='ai-tag'>TIME: " + processingTime + "s</span>";
-    html += "</div>";
-    
-    // Line 2: 核心分析 (Core Analysis)
-    // 容器使用深色字体 (#202124)，行高稍微增加以提高可读性
-    html += "<div style='margin-top:2px; font-family: \"Roboto Mono\", \"Courier New\", monospace; font-size: 11px; line-height: 1.5;'>";
-    
-    if (urgency == 'Critical' || urgency == '1') {
-        // [CRITICAL] 使用深红色 (#d93025) 适配白底
-        html += "<span style='color:#d93025; font-weight:800;'>[CRITICAL PATTERN]</span> ";
-        html += "<span style='color:#202124;'>High-priority keyword cluster detected. </span>";
-        html += "<span style='color:#d93025; font-weight:500;'>Action: Immediate escalation to Tier 2 required.</span>";
-        
-    } else if (category && category.toLowerCase().indexOf('food') > -1) {
-        // [LOGISTICS] 使用深绿色 (#188038) 适配白底
-        html += "<span style='color:#188038; font-weight:800;'>[LOGISTICS]</span> ";
-        html += "<span style='color:#202124;'>Supply request identified. Inventory: Auto-verified. </span>";
-        html += "<span style='color:#137333; font-weight:500;'>Optimization: Combine with Route #42 to save fuel.</span>";
-        
-    } else {
-        // [STANDARD] 使用深科技蓝 (#1a73e8) 适配白底
-        html += "<span style='color:#1a73e8; font-weight:800;'>[STANDARD]</span> ";
-        html += "<span style='color:#202124;'>Routine request signature. NLP Sentiment: Neutral. </span>";
-        html += "<span style='color:#5f6368;'>Rec: Standard fulfillment procedure (SOP-01).</span>";
+    // ==========================================
+    // AI Insight Generator
+    // ==========================================
+    function generateAiInsight(urgency, category) {
+        var confidence = Math.floor(Math.random() * (99 - 85) + 85);
+        var processingTime = (Math.random() * (0.8 - 0.1) + 0.1).toFixed(3);
+        var html = "";
+        html += "<div style='margin-bottom: 4px; font-size: 10px; color: #5f6368; font-family: sans-serif;'>";
+        html += "<span class='ai-tag'>CONFIDENCE: " + confidence + "%</span> ";
+        html += "<span class='ai-tag'>TIME: " + processingTime + "s</span>";
+        html += "</div>";
+        html += "<div style='margin-top:2px; font-family: \"Roboto Mono\", \"Courier New\", monospace; font-size: 11px; line-height: 1.5;'>";
+        if (urgency == 'Critical' || urgency == '1') {
+            html += "<span style='color:#d93025; font-weight:800;'>[CRITICAL PATTERN]</span> ";
+            html += "<span style='color:#202124;'>High-priority keyword cluster detected. </span>";
+            html += "<span style='color:#d93025; font-weight:500;'>Action: Immediate escalation to Tier 2 required.</span>";
+        } else if (category && category.toLowerCase().indexOf('food') > -1) {
+            html += "<span style='color:#188038; font-weight:800;'>[LOGISTICS]</span> ";
+            html += "<span style='color:#202124;'>Supply request identified. Inventory: Auto-verified. </span>";
+            html += "<span style='color:#137333; font-weight:500;'>Optimization: Combine with Route #42 to save fuel.</span>";
+        } else {
+            html += "<span style='color:#1a73e8; font-weight:800;'>[STANDARD]</span> ";
+            html += "<span style='color:#202124;'>Routine request signature. NLP Sentiment: Neutral. </span>";
+            html += "<span style='color:#5f6368;'>Rec: Standard fulfillment procedure (SOP-01).</span>";
+        }
+        html += "</div>";
+        return html;
     }
-    
-    html += "</div>";
-
-    return html;
-}
 	
     // ==========================================
     // 构建任务项 (Integrated SLA & AI)
     // ==========================================
     function buildTaskItem(gr) {
-        // [优化] 提前提取变量，供后续逻辑复用
         var urgencyVal = gr.getValue('urgency') || 'Medium'; 
         var categoryVal = gr.getValue('request_category') || '';
         
         var taskItem = {
             sys_id: gr.getUniqueValue(),
             number: gr.getValue('number') || '',
-            
-            // 使用提取的变量
             category: categoryVal, 
             category_display: gr.getDisplayValue('request_category') || '未分類',
-            
             zone: gr.getDisplayValue('shelter_zone') || '',
             detail_loc: gr.getValue('precise_location') || gr.getValue('wish_content') || '',
             desc: gr.getValue('wish_content') || '',
-            
-            // 使用提取的变量
             urgency: urgencyVal, 
-            
             contact: gr.getValue('u_contact_info') || '',
             reporter_name: gr.getDisplayValue('sys_created_by') || '一般ユーザー',
             assigned_to_name: gr.getDisplayValue('assigned_to') || '',
@@ -4549,101 +5175,58 @@ function generateAiInsight(urgency, category) {
             history: [],
             attachments: [],
             sla: null,
-            
-            // === [新增] AI_INSIGHT 注入 ===
-            // 这里调用上面的 helper 函数动态生成内容
-            ai_analysis: generateAiInsight(
-                urgencyVal, 
-                categoryVal, 
-                gr.getValue('state'), 
-                gr.getValue('wish_content')
-            )
-            // ============================
+            sys_mod_count: parseInt(gr.getValue('sys_mod_count')) || 0,
+					  ai_analysis: generateAiInsight(urgencyVal, categoryVal)
         };
 			
-			// 时间计算
         var created = new GlideDateTime(gr.sys_created_on);
-        var endTime = new GlideDateTime(); // 默认为当前时间
-        var isCompleted = (taskItem.state == 4 || taskItem.state == 5); // 4:Completed, 5:Cancelled
-
-        // 如果已完成，使用完成时间；如果没有完成时间字段，则回退到更新时间
+        var endTime = new GlideDateTime();
+        var isCompleted = (taskItem.state == 4 || taskItem.state == 5);
         if (isCompleted) {
             var completedAtStr = gr.getValue('u_completed_at');
-            if (completedAtStr) {
-                endTime = new GlideDateTime(completedAtStr);
-            } else {
-                endTime = new GlideDateTime(gr.sys_updated_on);
-            }
+            if (completedAtStr) { endTime = new GlideDateTime(completedAtStr); }
+            else { endTime = new GlideDateTime(gr.sys_updated_on); }
         }
 
         var diffMs = GlideDateTime.subtract(created, endTime).getNumericValue(); 
         var minutes = Math.floor(diffMs / 1000 / 60);
-        
-        // 显示用的"xx前"逻辑保持根据当前时间计算
         var nowForDisplay = new GlideDateTime();
         var diffDisplay = GlideDateTime.subtract(created, nowForDisplay).getNumericValue();
         var minutesDisplay = Math.floor(diffDisplay / 1000 / 60);
 
-        if (minutesDisplay < 60) {
-            taskItem.time_ago = minutesDisplay + "分前";
-        } else if (minutesDisplay < 1440) {
-            taskItem.time_ago = Math.floor(minutesDisplay / 60) + "時間前";
-        } else {
-            taskItem.time_ago = Math.floor(minutesDisplay / 1440) + "日前";
-        }
+        if (minutesDisplay < 60) { taskItem.time_ago = minutesDisplay + "分前"; }
+        else if (minutesDisplay < 1440) { taskItem.time_ago = Math.floor(minutesDisplay / 60) + "時間前"; }
+        else { taskItem.time_ago = Math.floor(minutesDisplay / 1440) + "日前"; }
 
         taskItem.created_on = gr.getDisplayValue('sys_created_on');
 
-        // 默认 SLA 计算 (Fallback)
         if (!taskItem.sla) {
-            var defaultTargets = {
-                'Critical': 30, 'High': 60, 'Medium': 120, 'Low': 240
-            };
+            var defaultTargets = { 'Critical': 30, 'High': 60, 'Medium': 120, 'Low': 240 };
             var target = defaultTargets[taskItem.urgency] || 120;
-            
-            // 如果已完成，状态强制修正
             var slaStatus = 'ok';
             var isBreached = minutes > target;
-            
-            if (isCompleted) {
-                // 已完成的任务，即使超时，UI上也显示为特定的完成状态，或者保留超时记录但不再变色
-                slaStatus = isBreached ? 'critical' : 'success'; 
-            } else {
-                slaStatus = minutes > target ? 'critical' : (minutes > target * 0.8 ? 'warning' : 'ok');
-            }
-
+            if (isCompleted) { slaStatus = isBreached ? 'critical' : 'success'; }
+            else { slaStatus = minutes > target ? 'critical' : (minutes > target * 0.8 ? 'warning' : 'ok'); }
             taskItem.sla = {
-                elapsed: minutes,
-                target: target,
+                elapsed: minutes, target: target,
                 remaining: Math.max(0, target - minutes),
                 percentage: Math.min(100, Math.round((minutes / target) * 100)),
-                status: slaStatus,
-                is_breached: isBreached,
-                is_stopped: isCompleted // 标记为停止计时
+                status: slaStatus, is_breached: isBreached, is_stopped: isCompleted
             };
         }
 
-
-        // 附件
         try {
             var att = new GlideRecord('sys_attachment');
             att.addQuery('table_sys_id', taskItem.sys_id);
-            att.setLimit(1);
-            att.orderByDesc('sys_created_on');
-            att.query();
-            if (att.next()) {
-                taskItem.image_url = '/' + att.sys_id + '.iix';
-            }
+            att.setLimit(1); att.orderByDesc('sys_created_on'); att.query();
+            if (att.next()) { taskItem.image_url = '/' + att.sys_id + '.iix'; }
         } catch (e) {}
 
-        // 活动历史
         try {
             var journal = new GlideRecord('sys_journal_field');
             journal.addQuery('element_id', taskItem.sys_id);
             journal.addQuery('element', 'work_notes');
-            journal.orderByDesc('sys_created_on');
-            journal.setLimit(10);
-            journal.query();
+            journal.orderByDesc('sys_created_on'); journal.setLimit(10); journal.query();
             while (journal.next()) {
                 taskItem.history.push({
                     user: journal.getDisplayValue('sys_created_by') || 'System',
@@ -4656,168 +5239,156 @@ function generateAiInsight(urgency, category) {
         return taskItem;
     }
 	
-	// ==========================================
-// V3.1 FINAL: 加载干员 (已根据 Volunteer Capability 表结构修复)
-// ==========================================
-function loadVolunteerList() {
-    var volunteerList = [];
-    var userIds = [];
+    // ==========================================
+    // 加载干员 (Volunteer Capability 表)
+    // ==========================================
+    function loadVolunteerList() {
+        var volunteerList = [];
+        var userIds = [];
 
-    // 1. 【严谨筛选】只查询明确拥有 'volunteer' 角色的用户
-    var roleGr = new GlideRecord('sys_user_has_role');
-    roleGr.addQuery('role.name', 'x_1821654_kokoro_0.volunter'); // 请确保此处 role name 与系统设置完全一致
-    roleGr.query();
-    while (roleGr.next()) {
-        var u = roleGr.getValue('user');
-        if (userIds.indexOf(u) === -1) userIds.push(u);
-    }
-
-    // 防呆：如果列表为空，添加当前用户进行测试
-    if (userIds.length === 0 || userIds.indexOf(gs.getUserID()) === -1) {
-        userIds.push(gs.getUserID());
-    }
-
-    // 2. 查询用户基础信息
-    var userGr = new GlideRecord('sys_user');
-    userGr.addQuery('sys_id', 'IN', userIds);
-    userGr.addQuery('active', true);
-    userGr.query();
-
-    while (userGr.next()) {
-        var uid = userGr.getUniqueValue();
-        
-        // 3. 【精准查询】查询 Volunteer Capability 扩展表
-        // 根据 image_2ef521.png，关联字段名为 'volunteer'
-        var capStr = "General Support";
-        var currentLoad = 0;
-        var maxLoad = 5;
-        var isAvailable = false;
-        
-        var capGr = new GlideRecord('x_1821654_kokoro_0_volunteer_capability');
-        capGr.addQuery('volunteer', uid); 
-        capGr.query();
-        
-        if (capGr.next()) {
-            // 获取技能与专长 
-            var specialty = capGr.getDisplayValue('specialty');
-            var skills = capGr.getValue('skills');
-            capStr = specialty || skills || "General Support";
-            
-            // 获取任务负载数据 
-            currentLoad = parseInt(capGr.getValue('current_task_count')) || 0;
-            maxLoad = parseInt(capGr.getValue('max_concurrent_tasks')) || 5;
-            
-            // 获取实时状态
-            isAvailable = (capGr.getValue('is_available') === '1' || capGr.getValue('is_available') === 'true');
+        var roleGr = new GlideRecord('sys_user_has_role');
+        roleGr.addQuery('role.name', 'x_1821654_kokoro_0.volunter');
+        roleGr.query();
+        while (roleGr.next()) {
+            var u = roleGr.getValue('user');
+            if (userIds.indexOf(u) === -1) userIds.push(u);
         }
 
-        // 4. 状态逻辑判定
-        var status = 'OFFLINE';
-        var statusClass = 'offline';
+        if (userIds.length === 0 || userIds.indexOf(gs.getUserID()) === -1) {
+            userIds.push(gs.getUserID());
+        }
 
-        if (isAvailable) {
-            if (currentLoad >= maxLoad) {
-                status = 'OVERLOADED'; 
-                statusClass = 'busy';
-            } else if (currentLoad > 0) {
-                status = 'ENGAGED'; 
-                statusClass = 'busy';
-            } else {
-                status = 'STANDBY'; 
-                statusClass = 'online';
+        var userGr = new GlideRecord('sys_user');
+        userGr.addQuery('sys_id', 'IN', userIds);
+        userGr.addQuery('active', true);
+        userGr.query();
+
+        while (userGr.next()) {
+            var uid = userGr.getUniqueValue();
+            var capStr = "General Support";
+            var currentLoad = 0;
+            var maxLoad = 5;
+            var isAvailable = false;
+            
+            var capGr2 = new GlideRecord('x_1821654_kokoro_0_volunteer_capability');
+            capGr2.addQuery('volunteer', uid); 
+            capGr2.query();
+            if (capGr2.next()) {
+                var specialty = capGr2.getDisplayValue('specialty');
+                var skills = capGr2.getValue('skills');
+                capStr = specialty || skills || "General Support";
+                currentLoad = parseInt(capGr2.getValue('current_task_count')) || 0;
+                maxLoad = parseInt(capGr2.getValue('max_concurrent_tasks')) || 5;
+                isAvailable = (capGr2.getValue('is_available') === '1' || capGr2.getValue('is_available') === 'true');
             }
-        }
 
-        // 5. 头像处理
-        var photoUrl = "";
-        if (userGr.photo.getDisplayValue()) {
-            photoUrl = userGr.photo.getDisplayValue();
-        }
+            var volStatus = 'OFFLINE';
+            var statusClass = 'offline';
+            if (isAvailable) {
+                if (currentLoad >= maxLoad) { volStatus = 'OVERLOADED'; statusClass = 'busy'; }
+                else if (currentLoad > 0) { volStatus = 'ENGAGED'; statusClass = 'busy'; }
+                else { volStatus = 'STANDBY'; statusClass = 'online'; }
+            }
 
-        // 6. 数据封装
-        volunteerList.push({
-            sys_id: uid,
-            name: userGr.getDisplayValue('name'),
-            initial: (userGr.getDisplayValue('name') || '?').charAt(0).toUpperCase(),
-            photo: photoUrl,
-            title: userGr.getValue('title') || 'Operator',
-            status: status,
-            status_class: statusClass,
-            current_load: currentLoad,
-            max_load: maxLoad,
-            load_percent: Math.round((currentLoad / maxLoad) * 100),
-            capability: capStr
-        });
+            var photoUrl = "";
+            if (userGr.photo.getDisplayValue()) { photoUrl = userGr.photo.getDisplayValue(); }
+
+            volunteerList.push({
+                sys_id: uid,
+                name: userGr.getDisplayValue('name'),
+                initial: (userGr.getDisplayValue('name') || '?').charAt(0).toUpperCase(),
+                photo: photoUrl,
+                title: userGr.getValue('title') || 'Operator',
+                status: volStatus,
+                status_class: statusClass,
+                current_load: currentLoad,
+                max_load: maxLoad,
+                load_percent: Math.round((currentLoad / maxLoad) * 100),
+                capability: capStr
+            });
+        }
+        return volunteerList;
     }
-    
-    return volunteerList;
-}
-	
 	
     // ==========================================
     // 处理输入
     // ==========================================
     if (input) {
+        // CSRF Gateway
+        var volWriteActions = [
+            'change_status', 'assign_to_me', 'add_comment',
+            'toggle_availability', 'update_location', 'update_capacity',
+            'send_broadcast', 'delete_broadcast'
+        ];
+        if (input.action && volWriteActions.indexOf(input.action) !== -1) {
+            if (!validateVolCSRF(input.csrf_token)) {
+                data.error = 'セッションが無効です。ページを再読み込みしてください。';
+                data.csrf_failed = true;
+                return;
+            }
+        }
 
-        // === 位置更新 ===
         if (input.action === 'update_location' && input.zone) {
             try {
+                var locVolId = gs.getUserID();
+                var locRateCheck = VolRateLimiter.check(locVolId, 'VOL_STATE', 1, 3);
+                if (!locRateCheck.allowed) { data.error = locRateCheck.message; return; }
                 var assignEngine = new x_1821654_kokoro_0.KokoroAutoAssignment();
                 assignEngine.updateVolunteerLocation(data.user_id, input.zone);
                 data.success = true;
                 data.message = '位置を更新しました';
-            } catch (e) {
-                data.error = '位置更新に失敗しました: ' + e.message;
-            }
+                VolRateLimiter.record(locVolId, 'VOL_STATE');
+            } catch (e) { data.error = '位置更新に失敗しました: ' + e.message; }
             return;
         }
 
-        // === 可用性更新 ===
         if (input.action === 'set_availability') {
             try {
+                var availVolId = gs.getUserID();
+                var availRateCheck = VolRateLimiter.check(availVolId, 'VOL_STATE', 1, 3);
+                if (!availRateCheck.allowed) { data.error = availRateCheck.message; return; }
                 var assignEngine2 = new x_1821654_kokoro_0.KokoroAutoAssignment();
                 assignEngine2.setVolunteerAvailability(data.user_id, input.available);
                 data.success = true;
                 data.message = input.available ? 'オンラインになりました' : 'オフラインになりました';
-            } catch (e) {
-                data.error = '状態更新に失敗しました: ' + e.message;
-            }
+                VolRateLimiter.record(availVolId, 'VOL_STATE');
+            } catch (e) { data.error = '状態更新に失敗しました: ' + e.message; }
             return;
         }
 
-        // === 手动触发自动分配 ===
+        if (input.action === 'update_capacity' && input.capacity) {
+            try {
+                var capVolId = gs.getUserID();
+                var capRateCheck = VolRateLimiter.check(capVolId, 'VOL_STATE', 1, 3);
+                if (!capRateCheck.allowed) { data.error = capRateCheck.message; return; }
+                var assignEngineCap = new x_1821654_kokoro_0.KokoroAutoAssignment();
+                if (typeof assignEngineCap.updateVolunteerCapacity === 'function') {
+                    assignEngineCap.updateVolunteerCapacity(data.user_id, input.capacity);
+                }
+                data.success = true;
+                data.message = '対応可能数を更新しました';
+                VolRateLimiter.record(capVolId, 'VOL_STATE');
+            } catch (e) { data.error = '容量更新に失敗しました: ' + e.message; }
+            return;
+        }
+
         if (input.action === 'trigger_auto_assign' && input.sys_id) {
-            if (!isVolunteer) {
-                data.error = '権限がありません';
-                return;
-            }
-            
+            if (!isVolunteer) { data.error = '権限がありません'; return; }
             try {
                 var assignEngine3 = new x_1821654_kokoro_0.KokoroAutoAssignment();
                 var result = assignEngine3.autoAssign(input.sys_id, { forceReassign: input.force_reassign });
-                
-                if (result.success) {
-                    data.success = true;
-                    data.assigned_to = result.volunteer_name;
-                    data.score = result.score;
-                } else {
-                    data.error = result.reason;
-                }
-            } catch (e) {
-                data.error = '自動分配に失敗しました: ' + e.message;
-            }
+                if (result.success) { data.success = true; data.assigned_to = result.volunteer_name; data.score = result.score; }
+                else { data.error = result.reason; }
+            } catch (e) { data.error = '自動分配に失敗しました: ' + e.message; }
             return;
         }
 
-        // === 获取SLA详情 ===
         if (input.action === 'get_sla_info' && input.sys_id) {
             try {
                 var slaEngine2 = new x_1821654_kokoro_0.KokoroSLAEngine();
                 data.sla_info = slaEngine2.getSLAInfo(input.sys_id);
                 data.success = true;
-            } catch (e) {
-                data.error = 'SLA情報の取得に失敗しました';
-            }
+            } catch (e) { data.error = 'SLA情報の取得に失敗しました'; }
             return;
         }
 
@@ -4831,11 +5402,8 @@ function loadVolunteerList() {
             try {
                 var successProfile = false;
                 var successWill = true;
-
                 var grUp = new GlideRecord(CONFIG.tables.USER_PROFILE);
-                grUp.addQuery('user', data.user_id);
-                grUp.query();
-
+                grUp.addQuery('user', data.user_id); grUp.query();
                 if (grUp.next()) {
                     grUp.setValue('emergency_conact_email', sanitizeInput(input.email, 100));
                     grUp.setValue('medical_conditions', sanitizeInput(input.medical_info, 1000));
@@ -4849,18 +5417,11 @@ function loadVolunteerList() {
                     grUp.setValue('blood_type', sanitizeInput(input.blood_type, 20));
                     successProfile = (grUp.insert() != null);
                 }
-
                 if (input.will && String(input.will).trim() !== '') {
                     var oldMsg = new GlideRecord(CONFIG.tables.EMERGENCY_MESSAGE);
-                    oldMsg.addQuery('user', data.user_id);
-                    oldMsg.addQuery('is_active', true);
-                    oldMsg.addQuery('message_type', 'Last_Will');
-                    oldMsg.query();
-                    while (oldMsg.next()) {
-                        oldMsg.setValue('is_active', false);
-                        oldMsg.update();
-                    }
-
+                    oldMsg.addQuery('user', data.user_id); oldMsg.addQuery('is_active', true);
+                    oldMsg.addQuery('message_type', 'Last_Will'); oldMsg.query();
+                    while (oldMsg.next()) { oldMsg.setValue('is_active', false); oldMsg.update(); }
                     var emsg = new GlideRecord(CONFIG.tables.EMERGENCY_MESSAGE);
                     emsg.initialize();
                     emsg.setValue('user', data.user_id);
@@ -4870,44 +5431,25 @@ function loadVolunteerList() {
                     emsg.setValue('created_at', new GlideDateTime());
                     successWill = (emsg.insert() != null);
                 }
-
                 if (successProfile && successWill) {
                     data.success = true;
                     logProcessEvent(data.user_id, 'User settings updated', data.user_id);
-                } else {
-                    data.error = "保存失敗";
-                }
-
-            } catch (e) {
-                gs.error("[Kokoro] Save error: " + e.message);
-                data.error = "保存エラー";
-            }
+                } else { data.error = "保存失敗"; }
+            } catch (e) { gs.error("[Kokoro] Save error: " + e.message); data.error = "保存エラー"; }
             return;
         }
 
         if (input.action === 'submit_record' || input.action === 'update_record') {
-            if (!input.location || !input.category || !input.urgency) {
-                data.error = "必須項目が不足";
-                return;
-            }
-
+            if (!input.location || !input.category || !input.urgency) { data.error = "必須項目が不足"; return; }
             try {
                 var gr = new GlideRecord(CONFIG.tables.SILENT_WISH);
-
                 if (input.action === 'update_record' && input.sys_id) {
-                    if (!validateSysId(input.sys_id)) {
-                        data.error = "無効なID";
-                        return;
-                    }
-                    if (!gr.get(input.sys_id)) {
-                        data.error = "レコードが見つかりません";
-                        return;
-                    }
+                    if (!validateSysId(input.sys_id)) { data.error = "無効なID"; return; }
+                    if (!gr.get(input.sys_id)) { data.error = "レコードが見つかりません"; return; }
                 } else {
                     gr.initialize();
                     gr.setValue('state', CONFIG.wishStates.SUBMITTED);
                 }
-
                 gr.setValue('shelter_zone', sanitizeInput(input.location, 100));
                 gr.setValue('request_category', sanitizeInput(input.category, 50));
                 gr.setValue('qty', parseInt(input.quantity) || 1);
@@ -4916,63 +5458,34 @@ function loadVolunteerList() {
                 gr.setValue('wish_content', sanitizeInput(input.remarks, 1000));
                 gr.setValue('u_contact_info', sanitizeInput(input.contact, 200));
                 gr.setValue('precise_location', sanitizeInput(input.detail_loc, 200));
-
-                var fullDescription =
-                    "【詳細場所】: " + sanitizeInput(input.detail_loc, 200) + "\n" +
+                var fullDescription = "【詳細場所】: " + sanitizeInput(input.detail_loc, 200) + "\n" +
                     "【支援種別】: " + input.category + " x " + (input.quantity || 1) + "\n" +
                     "【緊急度】: " + input.urgency + "\n" +
                     "【対象人数】: " + (input.affected_count || '1') + "\n" +
                     "【備考】: " + (input.remarks || 'なし');
-
                 gr.setValue('wish_content', fullDescription);
-
                 if (input.action === 'submit_record') {
                     var sysId = gr.insert();
-                    if (sysId) {
-                        data.ticketNumber = gr.getValue('number');
-                        data.newRecordID = sysId;
-                        data.success = true;
-                        logProcessEvent(sysId, 'Wish submitted: ' + input.category, data.user_id);
-                    } else {
-                        data.error = "作成失敗";
-                    }
+                    if (sysId) { data.ticketNumber = gr.getValue('number'); data.newRecordID = sysId; data.success = true; logProcessEvent(sysId, 'Wish submitted: ' + input.category, data.user_id); }
+                    else { data.error = "作成失敗"; }
                 } else {
-                    if (gr.update()) {
-                        data.ticketNumber = gr.getValue('number');
-                        data.success = true;
-                        logProcessEvent(input.sys_id, 'Wish updated', data.user_id);
-                    } else {
-                        data.error = "更新失敗";
-                    }
+                    if (gr.update()) { data.ticketNumber = gr.getValue('number'); data.success = true; logProcessEvent(input.sys_id, 'Wish updated', data.user_id); }
+                    else { data.error = "更新失敗"; }
                 }
-            } catch (e) {
-                gs.error("[Kokoro] Submit error: " + e.message);
-                data.error = "エラーが発生しました: " + e.message;
-            }
+            } catch (e) { gs.error("[Kokoro] Submit error: " + e.message); data.error = "エラーが発生しました: " + e.message; }
             return;
         }
 
         if (input.action === 'upload_attachment' && input.sys_id) {
             try {
-                if (!validateSysId(input.sys_id)) {
-                    data.error = "無効なID";
-                    return;
-                }
+                if (!validateSysId(input.sys_id)) { data.error = "無効なID"; return; }
                 var attachment = new GlideSysAttachment();
                 if (input.file_data) {
                     var cleanBase64 = input.file_data.split(',')[1] || input.file_data;
-                    attachment.writeBase64(
-                        input.table || CONFIG.tables.SILENT_WISH,
-                        input.sys_id,
-                        sanitizeInput(input.file_name, 100),
-                        input.content_type,
-                        cleanBase64
-                    );
+                    attachment.writeBase64(input.table || CONFIG.tables.SILENT_WISH, input.sys_id, sanitizeInput(input.file_name, 100), input.content_type, cleanBase64);
                     data.success = true;
                 }
-            } catch (e) {
-                gs.error("[Kokoro] Attachment error: " + e.message);
-            }
+            } catch (e) { gs.error("[Kokoro] Attachment error: " + e.message); }
             return;
         }
 
@@ -4983,15 +5496,10 @@ function loadVolunteerList() {
                 hb.setValue('u_user', data.user_id);
                 hb.setValue('u_timestamp', new GlideDateTime());
                 hb.setValue('u_status', 'Safe');
-
                 var hbId = hb.insert();
-                data.heartbeat_id = hbId;
-                data.success = true;
+                data.heartbeat_id = hbId; data.success = true;
                 logProcessEvent(hbId, 'Heartbeat registered', data.user_id);
-            } catch (e) {
-                gs.error("[Kokoro] Heartbeat error: " + e.message);
-                data.error = "心跳注册失败";
-            }
+            } catch (e) { gs.error("[Kokoro] Heartbeat error: " + e.message); data.error = "心跳注册失败"; }
             return;
         }
 
@@ -4999,15 +5507,9 @@ function loadVolunteerList() {
             try {
                 if (input.message) {
                     var oldQuick = new GlideRecord(CONFIG.tables.EMERGENCY_MESSAGE);
-                    oldQuick.addQuery('user', data.user_id);
-                    oldQuick.addQuery('is_active', true);
-                    oldQuick.addQuery('message_type', 'Quick_Will');
-                    oldQuick.query();
-                    while (oldQuick.next()) {
-                        oldQuick.setValue('is_active', false);
-                        oldQuick.update();
-                    }
-
+                    oldQuick.addQuery('user', data.user_id); oldQuick.addQuery('is_active', true);
+                    oldQuick.addQuery('message_type', 'Quick_Will'); oldQuick.query();
+                    while (oldQuick.next()) { oldQuick.setValue('is_active', false); oldQuick.update(); }
                     var emsgQuick = new GlideRecord(CONFIG.tables.EMERGENCY_MESSAGE);
                     emsgQuick.initialize();
                     emsgQuick.setValue('user', data.user_id);
@@ -5015,472 +5517,337 @@ function loadVolunteerList() {
                     emsgQuick.setValue('message_type', 'Quick_Will');
                     emsgQuick.setValue('is_active', true);
                     emsgQuick.setValue('created_at', new GlideDateTime());
-
-                    if (emsgQuick.insert()) {
-                        data.success = true;
-                    }
+                    if (emsgQuick.insert()) { data.success = true; }
                 }
-            } catch (e) {
-                gs.error("[Kokoro] Quick will error: " + e.message);
-            }
+            } catch (e) { gs.error("[Kokoro] Quick will error: " + e.message); }
             return;
         }
 
-        // ★★★ [FIX] 志愿者操作 - 重命名变量避免冲突 ★★★
+        // ★★★ 志愿者操作 ★★★
         if (input.sys_id) {
-            if (!validateSysId(input.sys_id)) {
-                data.error = "無効なID";
-                return;
-            }
-
-            var volTaskGr = new GlideRecord(CONFIG.tables.SILENT_WISH);  // 改名为 volTaskGr
-            if (!volTaskGr.get(input.sys_id)) {
-                data.error = "タスクが見つかりません";
-                return;
-            }
-
-            var currentState = String(volTaskGr.getValue('state') || '10');
+            if (!validateSysId(input.sys_id)) { data.error = "無効なID"; return; }
+            var volTaskGr = new GlideRecord(CONFIG.tables.SILENT_WISH); 
+            if (!volTaskGr.get(input.sys_id)) { data.error = "タスクが見つかりません"; return; }
+            var volState = String(volTaskGr.getValue('state') || '10');
 
             if (input.action === 'assign_to_me') {
-                if (!isVolunteer) {
-                    data.error = "ボランティア権限が必要です";
-                    return;
-                }
-
-                volTaskGr.setValue('assigned_to', data.user_id);
-                
-                if (currentState === '1' || currentState === '10') {
-                    var validationAssign = StateValidator.validateTransition(currentState, '11');
-                    if (validationAssign.valid) {
-                        volTaskGr.setValue('state', '11');
+                if (!isVolunteer) { data.error = "ボランティア権限が必要です"; return; }
+							// 乐观锁检查
+                if (input.sys_mod_count !== undefined) {
+                    var assignConcur = checkConcurrency(
+                        CONFIG.tables.SILENT_WISH, input.sys_id, input.sys_mod_count
+                    );
+                    if (!assignConcur.ok) {
+                        data.error = assignConcur.message;
+                        data.concurrency_conflict = true;
+                        return;
                     }
                 }
-                
+                var assignVolId = gs.getUserID();
+                var assignRateCheck = VolRateLimiter.check(assignVolId, 'ASSIGN', 1, 5);
+                if (!assignRateCheck.allowed) { data.error = assignRateCheck.message; return; }
+                volTaskGr.setValue('assigned_to', data.user_id);
+                if (volState === '1' || volState === '10') {
+                    var validationAssign = StateValidator.validateTransition(volState, '11');
+                    if (validationAssign.valid) { volTaskGr.setValue('state', '11'); }
+                }
                 if (volTaskGr.update()) {
                     data.success = true;
                     logProcessEvent(input.sys_id, 'Task assigned to ' + data.user_name, data.user_id);
-                } else {
-                    data.error = "更新失敗";
-                }
+                    VolRateLimiter.record(assignVolId, 'ASSIGN');
+                } else { data.error = "更新失敗"; }
                 return;
             }
 
             if (input.action === 'assign_to' && input.assignee_id) {
-                if (!isVolunteer) {
-                    data.error = "ボランティア権限が必要です";
-                    return;
-                }
-
+                if (!isVolunteer) { data.error = "ボランティア権限が必要です"; return; }
                 volTaskGr.setValue('assigned_to', input.assignee_id);
-                
-                if (currentState === '1' || currentState === '10') {
-                    var validationAssignTo = StateValidator.validateTransition(currentState, '11');
-                    if (validationAssignTo.valid) {
-                        volTaskGr.setValue('state', '11');
-                    }
+                if (volState === '1' || volState === '10') {
+                    var validationAssignTo = StateValidator.validateTransition(volState, '11');
+                    if (validationAssignTo.valid) { volTaskGr.setValue('state', '11'); }
                 }
-                
-                if (volTaskGr.update()) {
-                    data.success = true;
-                    logProcessEvent(input.sys_id, 'Task assigned to ' + input.assignee_id, data.user_id);
-                } else {
-                    data.error = "更新失敗";
-                }
+                if (volTaskGr.update()) { data.success = true; logProcessEvent(input.sys_id, 'Task assigned to ' + input.assignee_id, data.user_id); }
+                else { data.error = "更新失敗"; }
                 return;
             }
 
             if (input.action === 'change_status' && input.new_state) {
+							// 乐观锁检查
+                if (input.sys_mod_count !== undefined) {
+                    var csConcur = checkConcurrency(
+                        CONFIG.tables.SILENT_WISH, input.sys_id, input.sys_mod_count
+                    );
+                    if (!csConcur.ok) {
+                        data.error = csConcur.message;
+                        data.concurrency_conflict = true;
+                        return;
+                    }
+                }
+                var csVolId = gs.getUserID();
+                var csRateCheck = VolRateLimiter.check(csVolId, 'STATUS_CHANGE', 1, 10);
+                if (!csRateCheck.allowed) { data.error = csRateCheck.message; return; }
                 var newState = String(input.new_state);
-                var validationChange = StateValidator.validateTransition(currentState, newState);
-                
-                if (!validationChange.valid) {
-                    data.error = validationChange.message;
-                    return;
-                }
-
-                if ((newState === '2' || newState === '4') && volTaskGr.assigned_to.nil()) {
-                    data.error = "先に担当者を設定してください";
-                    return;
-                }
-
+                var validationChange = StateValidator.validateTransition(volState, newState);
+                if (!validationChange.valid) { data.error = validationChange.message; return; }
+                if ((newState === '2' || newState === '4') && volTaskGr.assigned_to.nil()) { data.error = "先に担当者を設定してください"; return; }
                 volTaskGr.setValue('state', newState);
-                
-                if (newState === '4') {
-                    volTaskGr.setValue('u_completed_at', new GlideDateTime());
-                }
-                
-                if (volTaskGr.update()) {
-                    data.success = true;
-                    logProcessEvent(input.sys_id, 'Status changed to ' + newState, data.user_id);
-                } else {
-                    data.error = "更新失敗";
-                }
+                if (newState === '4') { volTaskGr.setValue('u_completed_at', new GlideDateTime()); }
+                if (volTaskGr.update()) { data.success = true; logProcessEvent(input.sys_id, 'Status changed to ' + newState, data.user_id); }
+                else { data.error = "更新失敗"; }
                 return;
             }
 
             if (input.action === 'start') {
-                var validationStart = StateValidator.validateTransition(currentState, '2');
-                if (!validationStart.valid) {
-                    data.error = validationStart.message;
-                    return;
+							// 乐观锁检查
+                if (input.sys_mod_count !== undefined) {
+                    var startConcur = checkConcurrency(
+                        CONFIG.tables.SILENT_WISH, input.sys_id, input.sys_mod_count
+                    );
+                    if (!startConcur.ok) {
+                        data.error = startConcur.message;
+                        data.concurrency_conflict = true;
+                        return;
+                    }
                 }
-
-                if (volTaskGr.getValue('assigned_to') != data.user_id && !gs.hasRole('admin')) {
-                    data.error = "自分に担当されたタスクのみ開始できます";
-                    return;
-                }
-
+                var validationStart = StateValidator.validateTransition(volState, '2');
+                if (!validationStart.valid) { data.error = validationStart.message; return; }
+                if (volTaskGr.getValue('assigned_to') != data.user_id && !gs.hasRole('admin')) { data.error = "自分に担当されたタスクのみ開始できます"; return; }
                 volTaskGr.setValue('state', '2');
-                
-                if (volTaskGr.update()) {
-                    data.success = true;
-                    logProcessEvent(input.sys_id, 'Task started', data.user_id);
-                } else {
-                    data.error = "更新失敗";
-                }
+                if (volTaskGr.update()) { data.success = true; logProcessEvent(input.sys_id, 'Task started', data.user_id); }
+                else { data.error = "更新失敗"; }
                 return;
             }
 
             if (input.action === 'complete') {
-                var validationComplete = StateValidator.validateTransition(currentState, '4');
-                if (!validationComplete.valid) {
-                    data.error = validationComplete.message;
-                    return;
+							// 乐观锁检查
+                if (input.sys_mod_count !== undefined) {
+                    var completeConcur = checkConcurrency(
+                        CONFIG.tables.SILENT_WISH, input.sys_id, input.sys_mod_count
+                    );
+                    if (!completeConcur.ok) {
+                        data.error = completeConcur.message;
+                        data.concurrency_conflict = true;
+                        return;
+                    }
                 }
-
+                var validationComplete = StateValidator.validateTransition(volState, '4');
+                if (!validationComplete.valid) { data.error = validationComplete.message; return; }
                 volTaskGr.setValue('state', '4');
                 volTaskGr.setValue('u_completed_at', new GlideDateTime());
-                
-                if (volTaskGr.update()) {
-                    data.success = true;
-                    logProcessEvent(input.sys_id, 'Task completed', data.user_id);
-                } else {
-                    data.error = "更新失敗";
-                }
+                if (volTaskGr.update()) { data.success = true; logProcessEvent(input.sys_id, 'Task completed', data.user_id); }
+                else { data.error = "更新失敗"; }
                 return;
             }
 
             if (input.action === 'add_comment' && input.message) {
                 try {
+									// 乐观锁检查
+                    if (input.sys_mod_count !== undefined) {
+                        var commentConcur = checkConcurrency(
+                            CONFIG.tables.SILENT_WISH, input.sys_id, input.sys_mod_count
+                        );
+                        if (!commentConcur.ok) {
+                            data.error = commentConcur.message;
+                            data.concurrency_conflict = true;
+                            return;
+                        }
+                    }
+                    var commentVolId = gs.getUserID();
+                    var commentRateCheck = VolRateLimiter.check(commentVolId, 'COMMENT', 2, 5);
+                    if (!commentRateCheck.allowed) { data.error = commentRateCheck.message; return; }
                     volTaskGr.work_notes = sanitizeInput(input.message, 1000);
                     volTaskGr.update();
                     data.success = true;
                     logProcessEvent(input.sys_id, 'Comment added', data.user_id);
-                } catch (e) {
-                    data.error = "コメント追加失敗";
-                }
+                    VolRateLimiter.record(commentVolId, 'COMMENT');
+                } catch (e) { data.error = "コメント追加失敗"; }
                 return;
             }
         }
-    }
+    } // end if(input)
+	
 
     // ==========================================
-    // 5. 加载数据列表 (修复版: 增加 myRequests)
+    // ★★★ [FIX] 数据加载 — 全部5个缺失项 ★★★
     // ==========================================
     
-    // helper: 构建查询
-    function fetchWishes(queryType) {
+    var fetchWishes = function(queryType) {
         var results = [];
-        var gr = new GlideRecord(CONFIG.tables.SILENT_WISH);
-        
+        var grFetch = new GlideRecord(CONFIG.tables.SILENT_WISH);
         if (queryType === 'mine_assigned') {
-            gr.addQuery('assigned_to', data.user_id);
+            grFetch.addQuery('assigned_to', data.user_id);
         } else if (queryType === 'mine_created') {
-            gr.addQuery('sys_created_by', gs.getUserName());
-        } else if (queryType === 'all') {
-            // No filter
+            grFetch.addQuery('sys_created_by', gs.getUserName());
         }
-        
-        gr.orderByDesc('sys_created_on');
-        gr.setLimit(queryType === 'all' ? 100 : 50);
-        gr.query();
-        
-        while (gr.next()) {
-            results.push(buildTaskItem(gr));
+        grFetch.orderByDesc('sys_created_on');
+        grFetch.setLimit(queryType === 'all' ? 100 : 50);
+        grFetch.query();
+        while (grFetch.next()) {
+            results.push(buildTaskItem(grFetch));
         }
         return results;
+    };
+
+    // ★ [FIX-1] 加载全部工单列表（看板用）
+    data.list = fetchWishes('all');
+    
+    // ★ [FIX-2] 加载分配给我的任务
+    data.myTasks = fetchWishes('mine_assigned');
+    
+    // 加载我创建的（原有）
+    data.myRequests = fetchWishes('mine_created');
+
+    // ★ [FIX-3] 计算 SOS 和 未分配 计数
+    data.sosCount = 0;
+    data.openCount = 0;
+    for (var ci = 0; ci < data.list.length; ci++) {
+        var countItem = data.list[ci];
+        if (countItem.urgency === 'Critical' && countItem.state != 4 && countItem.state != 5) {
+            data.sosCount++;
+        }
+        if (!countItem.assigned_to_id && countItem.state != 4 && countItem.state != 5) {
+            data.openCount++;
+        }
     }
 
-    // 无论身份如何，都加载"我提交的"工单
-    data.myRequests = fetchWishes('mine_created');
-	
-	// ============================================================
-    // [COMMS] 加载通信记录
-    // ============================================================
+    // ★ [FIX-4] 使用正确的角色筛选加载志愿者
+    data.volunteers = loadVolunteerList();
+
+    // ★ [FIX-5] 加载 Comms / Announcements
     data.announcements = [];
     try {
-        var commGr = new GlideRecord('x_1821654_kokoro_0_emergency_message');
-        commGr.addQuery('is_active', true);
-        commGr.addQuery('message_type', 'IN', 'emergency,announcement,internal');
-        commGr.orderByDesc('created_at');
-        commGr.setLimit(50);
-        commGr.query();
+        var annGr = new GlideRecord(CONFIG.tables.EMERGENCY_MESSAGE);
+        annGr.addQuery('is_active', true);
+        annGr.addQuery('message_type', '!=', 'Last_Will');
+        annGr.addQuery('message_type', '!=', 'Quick_Will');
+        annGr.orderByDesc('created_at');
+        annGr.setLimit(50);
+        annGr.query();
         
-        while (commGr.next()) {
-            // 拆分标题和正文
-            var rawMsg = commGr.getValue('message_encrypted') || '';
-            var parts = rawMsg.split('\n---\n');
-            var msgTitle = parts[0] || '(無題)';
-            var msgBody = parts.length > 1 ? parts.slice(1).join('\n---\n') : rawMsg;
+        while (annGr.next()) {
+            var rawMsg = annGr.getValue('message_encrypted') || '';
+            var annTitle = rawMsg;
+            var annBody = '';
+            var sepIdx = rawMsg.indexOf('\n---\n');
+            if (sepIdx > -1) {
+                annTitle = rawMsg.substring(0, sepIdx);
+                annBody = rawMsg.substring(sepIdx + 5);
+            }
             
-            // 计算相对时间
-            var createdAt = new GlideDateTime(
-                commGr.getValue('created_at') || commGr.getValue('sys_created_on')
-            );
-            var nowComm = new GlideDateTime();
-            var diffComm = GlideDateTime.subtract(createdAt, nowComm).getNumericValue();
-            var minsComm = Math.floor(diffComm / 1000 / 60);
-            
-            var timeAgo = '';
-            if (minsComm < 1) timeAgo = '今';
-            else if (minsComm < 60) timeAgo = minsComm + '分前';
-            else if (minsComm < 1440) timeAgo = Math.floor(minsComm / 60) + '時間前';
-            else timeAgo = Math.floor(minsComm / 1440) + '日前';
+            var annCreated = new GlideDateTime(annGr.getValue('created_at'));
+            var annNow = new GlideDateTime();
+            var annDiffMs = GlideDateTime.subtract(annCreated, annNow).getNumericValue();
+            var annMinutes = Math.floor(annDiffMs / 1000 / 60);
+            var annTimeAgo = '';
+            if (annMinutes < 1) annTimeAgo = '今';
+            else if (annMinutes < 60) annTimeAgo = annMinutes + '分前';
+            else if (annMinutes < 1440) annTimeAgo = Math.floor(annMinutes / 60) + '時間前';
+            else annTimeAgo = Math.floor(annMinutes / 1440) + '日前';
             
             data.announcements.push({
-                sys_id: commGr.getUniqueValue(),
-                type: commGr.getValue('message_type') || 'announcement',
-                title: msgTitle,
-                body: msgBody,
-                author: commGr.getDisplayValue('user') || 'System',
-                time_ago: timeAgo,
-                read_count: 0
+                sys_id: annGr.getUniqueValue(),
+                type: annGr.getValue('message_type') || 'announcement',
+                title: annTitle,
+                body: annBody,
+                author: annGr.getDisplayValue('user') || 'System',
+                time_ago: annTimeAgo,
+                created_at: annGr.getDisplayValue('created_at')
             });
         }
     } catch (e) {
-        gs.debug('[Kokoro] Comms load error: ' + e.message);
-    }
-
-    if (isVolunteer) {
-        // 志愿者额外加载: 分配给我的 + 所有工单
-        data.myTasks = fetchWishes('mine_assigned');
-        data.list = fetchWishes('all');
-        
-        // 加载统计
-        try {
-            var gaOpen = new GlideAggregate(CONFIG.tables.SILENT_WISH);
-            gaOpen.addNullQuery('assigned_to');
-            gaOpen.addQuery('state', 'NOT IN', [CONFIG.wishStates.COMPLETED, CONFIG.wishStates.CANCELLED]);
-            gaOpen.addAggregate('COUNT');
-            gaOpen.query();
-            if (gaOpen.next()) data.openCount = parseInt(gaOpen.getAggregate('COUNT')) || 0;
-
-            var gaSOS = new GlideAggregate(CONFIG.tables.SILENT_WISH);
-            gaSOS.addQuery('u_urgency', 'Critical');
-            gaSOS.addQuery('state', 'NOT IN', [CONFIG.wishStates.COMPLETED, CONFIG.wishStates.CANCELLED]);
-            gaSOS.addAggregate('COUNT');
-            gaSOS.query();
-            if (gaSOS.next()) data.sosCount = parseInt(gaSOS.getAggregate('COUNT')) || 0;
-        } catch (e) {}
-        
-        data.volunteers = loadVolunteerList();
-    } else {
-        // 普通用户: 主列表就是我提交的
-        data.list = data.myRequests; 
+        gs.error('[Kokoro] Announcements load error: ' + e.message);
     }
 
     // ==========================================
-    // [DAY 5 INTEGRATION] Process Mining & Monitoring Data
-    // 插入位置: Server Script 最后部分, })(); 之前
+    // Process Mining & Monitoring Data
     // ==========================================
-
-    // === 1. 获取Process Mining统计 ===
-    data.processMiningStats = {
-        totalEvents: 0,
-        todayEvents: 0,
-        uniqueCases: 0,
-        topActivities: []
-    };
-
+    data.processMiningStats = { totalEvents: 0, todayEvents: 0, uniqueCases: 0, topActivities: [] };
     try {
-        // 总事件数
         var gaEvents = new GlideAggregate('x_1821654_kokoro_0_process_event');
-        gaEvents.addAggregate('COUNT');
-        gaEvents.query();
-        if (gaEvents.next()) {
-            data.processMiningStats.totalEvents = parseInt(gaEvents.getAggregate('COUNT')) || 0;
-        }
+        gaEvents.addAggregate('COUNT'); gaEvents.query();
+        if (gaEvents.next()) { data.processMiningStats.totalEvents = parseInt(gaEvents.getAggregate('COUNT')) || 0; }
         
-        // ★★★ [FIX] todayPM 已在全局定义，此处直接使用 ★★★
         var gaTodayEvents = new GlideAggregate('x_1821654_kokoro_0_process_event');
         gaTodayEvents.addQuery('timestamp', '>=', todayPM);
-        gaTodayEvents.addAggregate('COUNT');
-        gaTodayEvents.query();
-        if (gaTodayEvents.next()) {
-            data.processMiningStats.todayEvents = parseInt(gaTodayEvents.getAggregate('COUNT')) || 0;
-        }
+        gaTodayEvents.addAggregate('COUNT'); gaTodayEvents.query();
+        if (gaTodayEvents.next()) { data.processMiningStats.todayEvents = parseInt(gaTodayEvents.getAggregate('COUNT')) || 0; }
         
-        // 唯一案例数
         var gaCases = new GlideAggregate('x_1821654_kokoro_0_process_event');
-        gaCases.addAggregate('COUNT', 'DISTINCT', 'case_id');
-        gaCases.query();
-        if (gaCases.next()) {
-            data.processMiningStats.uniqueCases = parseInt(gaCases.getAggregate('COUNT', 'DISTINCT', 'case_id')) || 0;
-        }
+        gaCases.addAggregate('COUNT', 'DISTINCT', 'case_id'); gaCases.query();
+        if (gaCases.next()) { data.processMiningStats.uniqueCases = parseInt(gaCases.getAggregate('COUNT', 'DISTINCT', 'case_id')) || 0; }
         
-        // 活动分布 (Top 5)
         var gaAct = new GlideAggregate('x_1821654_kokoro_0_process_event');
-        gaAct.addAggregate('COUNT');
-        gaAct.groupBy('activity');
-        gaAct.orderByAggregate('COUNT', 'DESC');
-        gaAct.setLimit(5);
-        gaAct.query();
-        
+        gaAct.addAggregate('COUNT'); gaAct.groupBy('activity');
+        gaAct.orderByAggregate('COUNT', 'DESC'); gaAct.setLimit(5); gaAct.query();
         while (gaAct.next()) {
-            data.processMiningStats.topActivities.push({
-                name: gaAct.getValue('activity') || 'Unknown',
-                count: parseInt(gaAct.getAggregate('COUNT')) || 0
-            });
+            data.processMiningStats.topActivities.push({ name: gaAct.getValue('activity') || 'Unknown', count: parseInt(gaAct.getAggregate('COUNT')) || 0 });
         }
-    } catch (e) {
-        gs.debug('[Kokoro] Process Mining stats not available: ' + e.message);
-    }
+    } catch (e) { gs.debug('[Kokoro] Process Mining stats not available: ' + e.message); }
 
-    // === 2. 获取系统监控指标 ===
-    data.systemMetrics = {
-        healthScore: 100,
-        lastCollected: '',
-        alerts: {
-            critical: 0,
-            warning: 0
-        }
-    };
-
+    data.systemMetrics = { healthScore: 100, lastCollected: '', alerts: { critical: 0, warning: 0 } };
     try {
         var grMetrics = new GlideRecord('x_1821654_kokoro_0_metrics');
         grMetrics.addQuery('metric_type', 'system_health');
-        grMetrics.orderByDesc('timestamp');
-        grMetrics.setLimit(1);
-        grMetrics.query();
-        
+        grMetrics.orderByDesc('timestamp'); grMetrics.setLimit(1); grMetrics.query();
         if (grMetrics.next()) {
             data.systemMetrics.healthScore = parseInt(grMetrics.getValue('health_score')) || 100;
             data.systemMetrics.lastCollected = grMetrics.getDisplayValue('timestamp');
-            
             var metricData = grMetrics.getValue('metric_data');
-            if (metricData) {
-                try {
-                    var parsed = JSON.parse(metricData);
-                    if (parsed.alerts) {
-                        data.systemMetrics.alerts = parsed.alerts;
-                    }
-                } catch (parseErr) {}
-            }
+            if (metricData) { try { var parsed = JSON.parse(metricData); if (parsed.alerts) { data.systemMetrics.alerts = parsed.alerts; } } catch (parseErr) {} }
         }
-        
-        // ★★★ [FIX] todayPM 已在全局定义，此处直接使用 ★★★
         var gaAlertsCrit = new GlideAggregate('x_1821654_kokoro_0_metrics');
-        gaAlertsCrit.addQuery('metric_type', 'alert');
-        gaAlertsCrit.addQuery('health_score', '<', 50);
+        gaAlertsCrit.addQuery('metric_type', 'alert'); gaAlertsCrit.addQuery('health_score', '<', 50);
         gaAlertsCrit.addQuery('timestamp', '>=', todayPM);
-        gaAlertsCrit.addAggregate('COUNT');
-        gaAlertsCrit.query();
-        if (gaAlertsCrit.next()) {
-            data.systemMetrics.alerts.critical = parseInt(gaAlertsCrit.getAggregate('COUNT')) || 0;
-        }
-        
-    } catch (e) {
-        gs.debug('[Kokoro] System metrics not available: ' + e.message);
-    }
+        gaAlertsCrit.addAggregate('COUNT'); gaAlertsCrit.query();
+        if (gaAlertsCrit.next()) { data.systemMetrics.alerts.critical = parseInt(gaAlertsCrit.getAggregate('COUNT')) || 0; }
+    } catch (e) { gs.debug('[Kokoro] System metrics not available: ' + e.message); }
 
-    // === 3. 获取审计日志统计 ===
-    data.auditStats = {
-        todayLogs: 0,
-        recentActions: []
-    };
-
+    data.auditStats = { todayLogs: 0, recentActions: [] };
     try {
-        // ★★★ [FIX] todayPM 已在全局定义，此处直接使用 ★★★
         var gaAudit = new GlideAggregate('x_1821654_kokoro_0_audit_log');
         gaAudit.addQuery('timestamp', '>=', todayPM);
-        gaAudit.addAggregate('COUNT');
-        gaAudit.query();
-        if (gaAudit.next()) {
-            data.auditStats.todayLogs = parseInt(gaAudit.getAggregate('COUNT')) || 0;
-        }
-        
-        // 最近5个操作
+        gaAudit.addAggregate('COUNT'); gaAudit.query();
+        if (gaAudit.next()) { data.auditStats.todayLogs = parseInt(gaAudit.getAggregate('COUNT')) || 0; }
         var grAudit = new GlideRecord('x_1821654_kokoro_0_audit_log');
-        grAudit.orderByDesc('timestamp');
-        grAudit.setLimit(5);
-        grAudit.query();
-        
+        grAudit.orderByDesc('timestamp'); grAudit.setLimit(5); grAudit.query();
         while (grAudit.next()) {
-            data.auditStats.recentActions.push({
-                action: grAudit.getValue('action') || 'Unknown',
-                user: grAudit.getDisplayValue('user') || 'System',
-                time: grAudit.getDisplayValue('timestamp')
-            });
+            data.auditStats.recentActions.push({ action: grAudit.getValue('action') || 'Unknown', user: grAudit.getDisplayValue('user') || 'System', time: grAudit.getDisplayValue('timestamp') });
         }
-    } catch (e) {
-        gs.debug('[Kokoro] Audit stats not available: ' + e.message);
-    }
+    } catch (e) { gs.debug('[Kokoro] Audit stats not available: ' + e.message); }
 
-    // === 4. 计算综合健康评分 ===
-    data.overallHealth = {
-        score: 100,
-        status: 'nominal',
-        components: []
-    };
-
+    data.overallHealth = { score: 100, status: 'nominal', components: [] };
     try {
         var healthScores = [];
-        
-        // SLA健康度
         var slaHealthScore = 100;
-        if (data.slaStats && data.slaStats.breached > 0) {
-            slaHealthScore = Math.max(0, 100 - (data.slaStats.breached * 10));
-        }
+        if (data.slaStats && data.slaStats.breached > 0) { slaHealthScore = Math.max(0, 100 - (data.slaStats.breached * 10)); }
         healthScores.push({ name: 'SLA', score: slaHealthScore });
-        
-        // 任务处理健康度
         var taskHealthScore = 100;
-        if (data.openCount > 10) {
-            taskHealthScore = Math.max(50, 100 - (data.openCount * 2));
-        }
+        if (data.openCount > 10) { taskHealthScore = Math.max(50, 100 - (data.openCount * 2)); }
         healthScores.push({ name: 'Tasks', score: taskHealthScore });
-        
-        // 系统健康度
         healthScores.push({ name: 'System', score: data.systemMetrics.healthScore });
-        
-        // 计算平均分
         var totalHealthScore = 0;
-        for (var hi = 0; hi < healthScores.length; hi++) {
-            totalHealthScore += healthScores[hi].score;
-        }
+        for (var hi = 0; hi < healthScores.length; hi++) { totalHealthScore += healthScores[hi].score; }
         data.overallHealth.score = Math.round(totalHealthScore / healthScores.length);
         data.overallHealth.components = healthScores;
-        
-        // 确定状态
-        if (data.overallHealth.score >= 90) {
-            data.overallHealth.status = 'nominal';
-        } else if (data.overallHealth.score >= 70) {
-            data.overallHealth.status = 'warning';
-        } else {
-            data.overallHealth.status = 'critical';
-        }
-        
-    } catch (e) {
-        gs.debug('[Kokoro] Health calculation error: ' + e.message);
-    }
+        if (data.overallHealth.score >= 90) { data.overallHealth.status = 'nominal'; }
+        else if (data.overallHealth.score >= 70) { data.overallHealth.status = 'warning'; }
+        else { data.overallHealth.status = 'critical'; }
+    } catch (e) { gs.debug('[Kokoro] Health calculation error: ' + e.message); }
 
-    // ==========================================
-    // [END OF DAY 5 INTEGRATION]
-    // ==========================================
 })();]]></script>
         <servicenow>false</servicenow>
         <sys_class_name>sp_widget</sys_class_name>
         <sys_created_by>admin</sys_created_by>
         <sys_created_on>2026-01-26 11:41:20</sys_created_on>
         <sys_id>f95e8ba383227210f6b1fb96feaad375</sys_id>
-        <sys_mod_count>403</sys_mod_count>
+        <sys_mod_count>466</sys_mod_count>
         <sys_name>Kokoro Volunteer Dashboard</sys_name>
         <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
         <sys_policy/>
         <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
         <sys_update_name>sp_widget_f95e8ba383227210f6b1fb96feaad375</sys_update_name>
         <sys_updated_by>admin</sys_updated_by>
-        <sys_updated_on>2026-02-10 07:53:47</sys_updated_on>
+        <sys_updated_on>2026-02-16 07:02:34</sys_updated_on>
         <template><![CDATA[<style>
 /* ============================================================
    KOKORO DASHBOARD CSS v9.6 (ULTIMATE FUSED EDITION)
@@ -8133,11 +8500,30 @@ body > div[style*="position:fixed"][style*="left"] {
     transform: translateY(-1px);
 }
 </style>
-
 <!-- ============================================================
      主容器 — 单一顶层包裹 (FIX 1: 移除重复嵌套容器)
      ============================================================ -->
 <div class="kokoro-volunteer-container">
+  
+  
+<!-- Toast 通知コンテナ -->
+<div class="toast-container" aria-live="polite" aria-atomic="true">
+  <div ng-repeat="toast in c.toasts track by toast.id" 
+       class="vol-toast" 
+       ng-class="{'toast-success': toast.type==='success', 'toast-error': toast.type==='error', 'toast-warning': toast.type==='warning', 'toast-info': toast.type==='info', 'toast-exit': !toast.visible}"
+       ng-click="c.dismissToast(toast)"
+       role="alert">
+    <span class="toast-icon">
+      <i ng-if="toast.type==='success'" class="fa fa-check-circle"></i>
+      <i ng-if="toast.type==='error'" class="fa fa-exclamation-circle"></i>
+      <i ng-if="toast.type==='warning'" class="fa fa-exclamation-triangle"></i>
+      <i ng-if="toast.type==='info'" class="fa fa-info-circle"></i>
+    </span>
+    <span class="toast-message">{{toast.message}}</span>
+    <span class="toast-close"><i class="fa fa-times"></i></span>
+  </div>
+</div>
+
 
     <!-- 安全横幅 (FIX 2: 合并为一个，使用 ng-if 条件 + 默认消息) -->
 <div class="sys-alert-strip" ng-if="true"> <div class="alert-deco">/// SYSTEM_OVERRIDE ///</div>
@@ -8334,8 +8720,112 @@ body > div[style*="position:fixed"][style*="left"] {
                         </div>
                     </div>
                    <div class="ticket-card-body" style="flex-grow:1;"></div>
+                 <!-- ╔══════════════════════════════════════════════╗
+     ║  SITREP: TACTICAL BRIEFING PANEL             ║
+     ╚══════════════════════════════════════════════╝ -->
+<div class="sitrep-panel">
+
+    <!-- === SECTION 1: PRIORITY QUEUE === -->
+    <div class="sitrep-section">
+        <div class="sitrep-header">
+            <div class="sitrep-tag">SITREP</div>
+            <span class="sitrep-title">PRIORITY_QUEUE</span>
+            <span class="sitrep-live"><i class="fa fa-circle"></i> LIVE</span>
+        </div>
+
+        <div class="priority-queue">
+            <!-- 有紧急任务时显示 -->
+            <div class="pq-item" 
+                 ng-repeat="item in c.data.list | orderBy:'-urgency' | limitTo:3"
+                 ng-if="item.state != 4 && item.state != 5"
+                 ng-click="c.openModal(item)">
+                <div class="pq-rank" ng-class="'pq-rank-' + item.urgency">
+                    {{$index + 1}}
+                </div>
+                <div class="pq-body">
+                    <div class="pq-meta">
+                        <span class="pq-id">{{item.number}}</span>
+                        <span class="pq-urgency" ng-class="'pq-u-' + item.urgency">
+                            {{item.urgency === 'Critical' ? 'SOS' : item.urgency === 'High' ? 'HIGH' : 'STD'}}
+                        </span>
+                    </div>
+                    <div class="pq-title">{{c.dict[item.category] || item.category}}</div>
+                    <div class="pq-loc"><i class="fa fa-map-marker"></i> {{item.zone}}</div>
+                </div>
+                <div class="pq-arrow"><i class="fa fa-chevron-right"></i></div>
+            </div>
+
+            <!-- 没有任务时显示 -->
+            <div class="pq-empty" ng-if="!c.data.list || c.data.list.length === 0">
+                <i class="fa fa-shield"></i>
+                <span>ALL_CLEAR — 未処理タスクなし</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- === SECTION 2: OPERATOR DEPLOYMENT === -->
+    <div class="sitrep-section">
+        <div class="sitrep-header">
+            <div class="sitrep-tag-sm">02</div>
+            <span class="sitrep-title">DEPLOYMENT</span>
+        </div>
+
+        <div class="deploy-grid">
+            <div class="deploy-stat">
+                <div class="deploy-num" ng-class="{'deploy-alert': c.getOnlineCount() === 0}">
+                    {{c.getOnlineCount()}}
+                </div>
+                <div class="deploy-label">ONLINE</div>
+            </div>
+            <div class="deploy-divider"></div>
+            <div class="deploy-stat">
+                <div class="deploy-num">{{c.getBusyCount()}}</div>
+                <div class="deploy-label">ENGAGED</div>
+            </div>
+            <div class="deploy-divider"></div>
+            <div class="deploy-stat">
+                <div class="deploy-num deploy-dim">{{c.getOfflineCount()}}</div>
+                <div class="deploy-label">OFFLINE</div>
+            </div>
+        </div>
+
+        <div class="deploy-roster">
+            <div class="deploy-op" ng-repeat="vol in c.data.volunteers | limitTo:5">
+                <div class="deploy-dot" ng-class="vol.status_class"></div>
+                <span class="deploy-name">{{vol.name}}</span>
+                <span class="deploy-zone">{{vol.capability || '—'}}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- === SECTION 3: ACTIVITY STREAM === -->
+    <div class="sitrep-section sitrep-section-last">
+        <div class="sitrep-header">
+            <div class="sitrep-tag-sm">03</div>
+            <span class="sitrep-title">ACTIVITY_STREAM</span>
+        </div>
+
+        <div class="activity-stream">
+            <div class="stream-item" ng-repeat="audit in c.data.auditStats.recentActions | limitTo:4">
+                <span class="stream-time">{{audit.time.split(' ')[1] || '--:--'}}</span>
+                <span class="stream-user">{{audit.user}}</span>
+                <span class="stream-action">{{audit.action}}</span>
+            </div>
+            <div class="stream-item stream-empty" ng-if="!c.data.auditStats.recentActions.length">
+                <span class="stream-time">--:--</span>
+                <span class="stream-action" style="color:#999;">Waiting for activity...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- === BOTTOM DECO === -->
+    <div class="sitrep-footer">
+        <span>KOKORO // TACTICAL_BRIEFING</span>
+        <span>{{c.currentTime}}</span>
+    </div>
+</div> 
     </div> 
-</div>
+</div>          
 </div>
 
         <div class="view-tactical" ng-if="c.view === 'tactical'" style="height:100%; display:flex; flex-direction:column;">
@@ -8803,27 +9293,31 @@ body > div[style*="position:fixed"][style*="left"] {
     </div>
 
     <ul class="sb-nav-list">
-        <li ng-click="c.view = 'dashboard'; c.toggleSidebar()">
-            <span class="nav-num">01</span> OVERVIEW
-        </li>
-        <li ng-click="c.view = 'tactical'; c.toggleSidebar()">
-            <span class="nav-num">02</span> TACTICAL GRID
-        </li>
-        <li ng-click="c.view = 'mine'; c.toggleSidebar()">
-            <span class="nav-num">03</span> MY OPERATIONS
-        </li>
-        <li ng-click="c.view = 'comms'; c.toggleSidebar()">
-    <span class="nav-num">04</span> COMMS CENTER
-</li>
-        <li class="divider"></li>
-        <li><span class="nav-num">05</span> SYSTEM SETTINGS</li>
-        <li><span class="nav-num">06</span> LOGOUT</li>
-    </ul>
-
-    <div class="sb-footer">
-        KOKORO OS v4.1 <br> AUTHORIZED ACCESS ONLY
+            <li ng-click="c.view = 'dashboard'; c.toggleSidebar();">
+                <span class="nav-num">01</span> OVERVIEW
+            </li>
+            <li ng-click="c.view = 'tactical'; c.toggleSidebar();">
+                <span class="nav-num">02</span> TACTICAL BOARD
+            </li>
+            <li ng-click="c.view = 'mine'; c.toggleSidebar();">
+                <span class="nav-num">03</span> OPERATORS
+            </li>
+            <li ng-click="c.view = 'comms'; c.toggleSidebar();">
+                <span class="nav-num">04</span> COMMS CENTER
+            </li>
+            <li class="divider"></li>
+            <li ng-click="c.refreshMonitoringData(); c.toggleSidebar();">
+                <span class="nav-num">05</span> REFRESH DATA
+            </li>
+            <li ng-click="c.goToUserView()">
+                <span class="nav-num">06</span> USER VIEW 
+            </li>
+        </ul>
+        <div class="sb-footer">
+            KOKORO SHELTER v5.0<br>
+            VOLUNTEER COMMAND INTERFACE
+        </div>
     </div>
-</div>
 
 <div class="zen-backdrop" ng-class="{'active': c.showSidebar}" ng-click="c.toggleSidebar()"></div>
 

@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update>
+    <sys_choice action="INSERT_OR_UPDATE" field="x_1821654_kokoro_0_eoc_category" table="alm_asset" version="3">
+        <sys_choice_set action="INSERT_OR_UPDATE">
+            <element>x_1821654_kokoro_0_eoc_category</element>
+            <name>alm_asset</name>
+            <sys_class_name>sys_choice_set</sys_class_name>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-02-14 11:52:45</sys_created_on>
+            <sys_mod_count>0</sys_mod_count>
+            <sys_name>x_1821654_kokoro_0_eoc_category</sys_name>
+            <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+            <sys_policy/>
+            <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+            <sys_update_name>sys_choice_alm_asset_x_1821654_kokoro_0_eoc_category</sys_update_name>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-02-14 11:52:45</sys_updated_on>
+        </sys_choice_set>
+        <sys_choice action="INSERT_OR_UPDATE">
+            <dependent_value/>
+            <element>x_1821654_kokoro_0_eoc_category</element>
+            <hint/>
+            <inactive>false</inactive>
+            <label>Vehicle</label>
+            <language>en</language>
+            <name>alm_asset</name>
+            <sequence>100</sequence>
+            <synonyms/>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-02-14 11:52:45</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_mod_count>2</sys_mod_count>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-02-14 11:55:44</sys_updated_on>
+            <value>vehicle</value>
+        </sys_choice>
+        <sys_choice action="INSERT_OR_UPDATE">
+            <dependent_value/>
+            <element>x_1821654_kokoro_0_eoc_category</element>
+            <hint/>
+            <inactive>false</inactive>
+            <label>Medical Kit</label>
+            <language>en</language>
+            <name>alm_asset</name>
+            <sequence>200</sequence>
+            <synonyms/>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-02-14 11:52:57</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_mod_count>2</sys_mod_count>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-02-14 11:55:47</sys_updated_on>
+            <value>medical_kit</value>
+        </sys_choice>
+        <sys_choice action="INSERT_OR_UPDATE">
+            <dependent_value/>
+            <element>x_1821654_kokoro_0_eoc_category</element>
+            <hint/>
+            <inactive>false</inactive>
+            <label>Food</label>
+            <language>en</language>
+            <name>alm_asset</name>
+            <sequence>300</sequence>
+            <synonyms/>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-02-14 11:53:08</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_mod_count>2</sys_mod_count>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-02-14 11:55:50</sys_updated_on>
+            <value>food</value>
+        </sys_choice>
+        <sys_choice action="INSERT_OR_UPDATE">
+            <dependent_value/>
+            <element>x_1821654_kokoro_0_eoc_category</element>
+            <hint/>
+            <inactive>false</inactive>
+            <label>Generator</label>
+            <language>en</language>
+            <name>alm_asset</name>
+            <sequence>400</sequence>
+            <synonyms/>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-02-14 11:53:18</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_mod_count>2</sys_mod_count>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-02-14 11:55:52</sys_updated_on>
+            <value>generator</value>
+        </sys_choice>
+        <sys_choice action="INSERT_OR_UPDATE">
+            <dependent_value/>
+            <element>x_1821654_kokoro_0_eoc_category</element>
+            <hint/>
+            <inactive>false</inactive>
+            <label>Personnel</label>
+            <language>en</language>
+            <name>alm_asset</name>
+            <sequence>500</sequence>
+            <synonyms/>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-02-14 11:53:28</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_mod_count>2</sys_mod_count>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-02-14 11:55:55</sys_updated_on>
+            <value>personnel</value>
+        </sys_choice>
+        <sys_choice action="INSERT_OR_UPDATE">
+            <dependent_value/>
+            <element>x_1821654_kokoro_0_eoc_category</element>
+            <hint/>
+            <inactive>false</inactive>
+            <label>Communication Equipment</label>
+            <language>en</language>
+            <name>alm_asset</name>
+            <sequence>600</sequence>
+            <synonyms/>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-02-14 11:54:42</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_mod_count>2</sys_mod_count>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-02-14 11:55:59</sys_updated_on>
+            <value>communication_equipment</value>
+        </sys_choice>
+        <sys_choice action="INSERT_OR_UPDATE">
+            <dependent_value/>
+            <element>x_1821654_kokoro_0_eoc_category</element>
+            <hint/>
+            <inactive>false</inactive>
+            <label>Shelter Supplies</label>
+            <language>en</language>
+            <name>alm_asset</name>
+            <sequence>700</sequence>
+            <synonyms/>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-02-14 11:54:54</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_mod_count>2</sys_mod_count>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-02-14 11:56:03</sys_updated_on>
+            <value>shelter_supplies</value>
+        </sys_choice>
+        <sys_choice action="INSERT_OR_UPDATE">
+            <dependent_value/>
+            <element>x_1821654_kokoro_0_eoc_category</element>
+            <hint/>
+            <inactive>false</inactive>
+            <label>Water</label>
+            <language>en</language>
+            <name>alm_asset</name>
+            <sequence>800</sequence>
+            <synonyms/>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-02-14 11:55:18</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_mod_count>2</sys_mod_count>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-02-14 11:56:08</sys_updated_on>
+            <value>water</value>
+        </sys_choice>
+        <sys_choice action="INSERT_OR_UPDATE">
+            <dependent_value/>
+            <element>x_1821654_kokoro_0_eoc_category</element>
+            <hint/>
+            <inactive>false</inactive>
+            <label>Fuel</label>
+            <language>en</language>
+            <name>alm_asset</name>
+            <sequence>900</sequence>
+            <synonyms/>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-02-14 11:55:31</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_mod_count>2</sys_mod_count>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-02-14 11:56:16</sys_updated_on>
+            <value>fuel</value>
+        </sys_choice>
+    </sys_choice>
+</record_update>

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="oauth_entity_auth_scope_mapping">
+    <oauth_entity_auth_scope_mapping action="DELETE">
+        <auth_scope display_value="useraccount">d67787c4c321011089a7dd5c2840dd6e</auth_scope>
+        <oauth_entity display_value="KOKORO EOC Gateway">fb322cb9834fb210f6b1fb96feaad314</oauth_entity>
+        <sys_class_name>oauth_entity_auth_scope_mapping</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-02-14 12:24:16</sys_created_on>
+        <sys_id>45fe09f18383f210f6b1fb96feaad3b0</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>oauth_entity_auth_scope_mapping_45fe09f18383f210f6b1fb96feaad3b0</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-02-14 12:24:16</sys_updated_on>
+    </oauth_entity_auth_scope_mapping>
+    <sys_update_version action="INSERT_OR_UPDATE">
+        <action>DELETE</action>
+        <application display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</application>
+        <file_path/>
+        <instance_id>26f701431b4a8650168f4089bd4bcbef</instance_id>
+        <instance_name>dev269536</instance_name>
+        <name>oauth_entity_auth_scope_mapping_45fe09f18383f210f6b1fb96feaad3b0</name>
+        <payload><![CDATA[<?xml version="1.0" encoding="UTF-8"?><record_update table="oauth_entity_auth_scope_mapping"><oauth_entity_auth_scope_mapping action="INSERT_OR_UPDATE"><auth_scope display_value="useraccount">d67787c4c321011089a7dd5c2840dd6e</auth_scope><oauth_entity display_value="KOKORO EOC Gateway">fb322cb9834fb210f6b1fb96feaad314</oauth_entity><sys_class_name>oauth_entity_auth_scope_mapping</sys_class_name><sys_created_by>admin</sys_created_by><sys_created_on>2026-02-14 12:24:16</sys_created_on><sys_id>45fe09f18383f210f6b1fb96feaad3b0</sys_id><sys_mod_count>0</sys_mod_count><sys_name/><sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package><sys_policy/><sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope><sys_update_name>oauth_entity_auth_scope_mapping_45fe09f18383f210f6b1fb96feaad3b0</sys_update_name><sys_updated_by>admin</sys_updated_by><sys_updated_on>2026-02-14 12:24:16</sys_updated_on></oauth_entity_auth_scope_mapping></record_update>]]></payload>
+        <payload_hash>-968405211</payload_hash>
+        <record_name/>
+        <reverted_from/>
+        <source>2b1072f0837a3210f6b1fb96feaad3db</source>
+        <source_table>sys_update_set</source_table>
+        <state>previous</state>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-02-14 12:24:16</sys_created_on>
+        <sys_id>e30fc9f18383f210f6b1fb96feaad33b</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_recorded_at>19c5c1bde460000001</sys_recorded_at>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-02-14 12:24:16</sys_updated_on>
+        <type>Auth Scopes</type>
+        <update_guid>6b0fc9f1da83f210d032b10a5ccf143a</update_guid>
+        <update_guid_history>6b0fc9f1da83f210d032b10a5ccf143a:-968405211</update_guid_history>
+    </sys_update_version>
+    <sys_metadata_delete action="INSERT_OR_UPDATE">
+        <sys_audit_delete display_value="">af4f41358383f210f6b1fb96feaad34f</sys_audit_delete>
+        <sys_class_name>sys_metadata_delete</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-02-14 12:25:21</sys_created_on>
+        <sys_db_object display_value="" name="oauth_entity_auth_scope_mapping">oauth_entity_auth_scope_mapping</sys_db_object>
+        <sys_id>00b6f600da8b42ce85082974ad2fe029</sys_id>
+        <sys_metadata>45fe09f18383f210f6b1fb96feaad3b0</sys_metadata>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name/>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_parent/>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_scope_delete display_value="">b5b651695bd14f99aee30f38068ac3c1</sys_scope_delete>
+        <sys_update_name>oauth_entity_auth_scope_mapping_45fe09f18383f210f6b1fb96feaad3b0</sys_update_name>
+        <sys_update_version display_value="oauth_entity_auth_scope_mapping_45fe09f18383f210f6b1fb96feaad3b0">e30fc9f18383f210f6b1fb96feaad33b</sys_update_version>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-02-14 12:25:21</sys_updated_on>
+    </sys_metadata_delete>
+</record_update>

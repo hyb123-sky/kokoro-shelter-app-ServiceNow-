@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element attributes="all_tables.text_index_translations=true,kagami_csindex_enabled=true" db_object_id="4f7deb2288122210559020d480f9d234" label="Location" max_length="40" name="cmn_location" text_index="true" type="collection">
+        <element label="Current Occupancy" max_length="40" name="x_1821654_kokoro_0_current_occupancy" type="integer"/>
+        <element choice="1" label="Site Status" max_length="40" name="x_1821654_kokoro_0_site_status" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="Active" sequence="100" value="active"/>
+                <element inactive_on_update="false" label="Closed" sequence="200" value="closed"/>
+                <element inactive_on_update="false" label="Full" sequence="300" value="full"/>
+            </choice>
+        </element>
+        <element choice="1" label="EOC Site Type" max_length="40" name="x_1821654_kokoro_0_eoc_site_type" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="Shelter" sequence="100" value="shelter"/>
+                <element inactive_on_update="false" label="Warehouse" sequence="200" value="warehouse"/>
+                <element inactive_on_update="false" label="Command Post" sequence="400" value="command_post"/>
+                <element inactive_on_update="false" label="Hospital" sequence="300" value="hospital"/>
+                <element inactive_on_update="false" label="Distribution Point" sequence="500" value="distribution_point"/>
+                <element inactive_on_update="false" label="Evacuation Point" sequence="600" value="evacuation_point"/>
+            </choice>
+        </element>
+        <element label="Capacity" max_length="40" name="x_1821654_kokoro_0_capacity" type="integer"/>
+    </element>
+</database>
