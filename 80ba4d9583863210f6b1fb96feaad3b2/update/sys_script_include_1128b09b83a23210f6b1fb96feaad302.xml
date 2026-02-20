@@ -13,20 +13,54 @@
 StateTransitionValidator.prototype = {
 
     initialize: function() {
-        // 状态转换矩阵 - 修正版
-        // 1=Draft, 10=Submitted, 11=Assigned, 2=In Progress, 4=Completed, 5=Cancelled, 6=On Hold
-        // ✅ 关键修改：在 '1' (Draft) 的允许列表中加入了 '11' (Assigned)
+        /**
+         * ============================================================
+         * 状态定义 (State Definition)
+         * 1  = Draft (下書き)
+         * 10 = Submitted (未受付/申請済み)
+         * 11 = Assigned (受付済み)      -> [看板列 1]
+         * 2  = In Progress (対応中)    -> [看板列 2]
+         * 6  = On Hold (保留)          -> [看板列 3]
+         * 4  = Completed (完了)        -> [看板列 4]
+         * 5  = Cancelled (取消)
+         * ============================================================
+         */
+        
         this.allowedTransitions = {
+            // --- 前置流程 (Pre-Game) ---
+            // 保留规则：Draft (1) ↔ Submitted (10) ↔ Assigned (11) (双向/循环允许)
             '1':  ['10', '11', '5'],    // Draft -> Submitted, Assigned, Cancelled
             '10': ['1', '11', '5'],     // Submitted -> Draft, Assigned, Cancelled
-            '11': ['10', '2', '5', '6'],// Assigned -> Submitted, In Progress, Cancelled, On Hold
-            '2':  ['4', '5', '6'],      // In Progress -> Completed, Cancelled, On Hold
-            '4':  [],                   // Completed (终态)
-            '5':  [],                   // Cancelled (终态)
-            '6':  ['11', '2', '5']      // On Hold -> Assigned, In Progress, Cancelled
+            
+            // --- 看板列 1: ASSIGNED (受付済み) ---
+            // 允许规则: 
+            // 1. 进入下一列: -> IN_PROGRESS (2)
+            // 2. 进入保留列: -> ON_HOLD (6)
+            // 3. 回退前置流: -> Submitted (10) (因保留了10<->11规则)
+            // 4. 全局取消:   -> Cancelled (5)
+            '11': ['2', '6', '10', '5'],
+            
+            // --- 看板列 2: IN_PROGRESS (対応中) ---
+            // 允许规则:
+            // 1. 完成任务:   -> COMPLETED (4)
+            // 2. 进入保留:   -> ON_HOLD (6)
+            // 3. 全局取消:   -> Cancelled (5)
+            '2':  ['4', '6', '5'],
+            
+            // --- 看板列 3: ON_HOLD (保留) ---
+            // 允许规则:
+            // 1. 恢复作业:   -> IN_PROGRESS (2)
+            // 2. 退回队列:   -> ASSIGNED (11)
+            // 3. 全局取消:   -> Cancelled (5)
+            '6':  ['2', '11', '5'],
+            
+            // --- 终态 (Terminal States) ---
+            '4':  [], // Completed
+            '5':  []  // Cancelled
         };
 
-        // 角色权限
+        // 角色权限配置 (Role Requirements)
+        // 只有具备相应角色的人才能将状态变更 *至* 该状态
         this.roleRequirements = {
             '11': ['x_1821654_kokoro_0.volunteer', 'admin'], 
             '2':  ['x_1821654_kokoro_0.volunteer', 'admin'], 
@@ -36,18 +70,19 @@ StateTransitionValidator.prototype = {
     },
 
     validateTransition: function(fromState, toState, current) {
-        // 转为字符串比较，防止类型不匹配
+        // 强制类型转换为字符串，防止整数/字符串比较错误
         fromState = fromState.toString();
         toState = toState.toString();
 
+        // 1. 检查起始状态是否存在
         if (!this.allowedTransitions.hasOwnProperty(fromState)) {
-            // 如果是新记录(空状态)，允许转为 Draft(1)
+            // 允许新记录(空状态)初始化为 Draft(1)
             if (fromState === '' || fromState === 'undefined') return {valid: true};
             return {valid: false, message: 'Invalid current state: ' + fromState};
         }
         
+        // 2. 检查路径是否在白名单中
         var allowed = this.allowedTransitions[fromState];
-        // 检查目标状态是否在允许列表中
         if (allowed.indexOf(toState) === -1) {
             return {
                 valid: false, 
@@ -55,16 +90,19 @@ StateTransitionValidator.prototype = {
             };
         }
         
-        // 权限检查
+        // 3. 检查目标状态的角色权限
         if (this.roleRequirements.hasOwnProperty(toState)) {
             var requiredRoles = this.roleRequirements[toState];
             var hasRole = false;
+            
+            // 只要拥有数组中任一角色即可 (OR逻辑)
             for (var i = 0; i < requiredRoles.length; i++) {
                 if (gs.hasRole(requiredRoles[i])) {
                     hasRole = true;
                     break;
                 }
             }
+            
             if (!hasRole) {
                 return {valid: false, message: 'Insufficient permissions'};
             }
@@ -79,13 +117,13 @@ StateTransitionValidator.prototype = {
         <sys_created_by>admin</sys_created_by>
         <sys_created_on>2026-01-25 06:05:26</sys_created_on>
         <sys_id>1128b09b83a23210f6b1fb96feaad302</sys_id>
-        <sys_mod_count>2</sys_mod_count>
+        <sys_mod_count>3</sys_mod_count>
         <sys_name>StateTransitionValidator </sys_name>
         <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
         <sys_policy>read</sys_policy>
         <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
         <sys_update_name>sys_script_include_1128b09b83a23210f6b1fb96feaad302</sys_update_name>
         <sys_updated_by>admin</sys_updated_by>
-        <sys_updated_on>2026-01-25 08:05:57</sys_updated_on>
+        <sys_updated_on>2026-02-18 07:27:13</sys_updated_on>
     </sys_script_include>
 </record_update>

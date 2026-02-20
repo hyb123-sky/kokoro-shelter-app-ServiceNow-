@@ -10,9 +10,12 @@
         <element label="到着予定じ時刻" max_length="255" name="u_eta" type="glide_date_time"/>
         <element choice="3" label="Shelter Zone" max_length="40" name="shelter_zone" type="choice">
             <choice>
-                <element inactive_on_update="false" label="医療・ケアエリア" sequence="2" value="c"/>
-                <element inactive_on_update="false" label="ファミリーエリア（家族）" sequence="0" value="a"/>
-                <element inactive_on_update="false" label="単身エリア" sequence="1" value="b"/>
+                <element inactive_on_update="false" label="スタッフ待機室" sequence="40" value="STAFF_ROOM"/>
+                <element inactive_on_update="false" label="医療・ケアエリア" sequence="30" value="MEDICAL_AREA"/>
+                <element inactive_on_update="false" label="フィールド(現場)" sequence="50" value="FIELD"/>
+                <element inactive_on_update="false" label="本部(HQ)" sequence="60" value="HQ"/>
+                <element inactive_on_update="false" label="ファミリーエリア（家族）" sequence="10" value="FAMILY_AREA"/>
+                <element inactive_on_update="false" label="単身エリア" sequence="20" value="SINGLE_AREA"/>
             </choice>
         </element>
         <element choice="3" label="Request  Category" max_length="40" name="request_category" type="choice">
@@ -39,6 +42,7 @@
         <element label="Estimated Arrival" max_length="40" name="u_estimated_arrival" type="glide_date_time"/>
         <element active="false" attributes="edge_encryption_enabled=true" default="javascript:global.getNextObjNumberPadded();" label="Number" max_length="40" name="number" type="string"/>
         <element label="AI Sentiment" max_length="500" name="ai_sentiment" type="string"/>
+        <element label="Current Zone" max_length="40" name="current_zone" type="string"/>
         <element choice="3" label="Count" max_length="40" name="count" type="choice">
             <choice>
                 <element inactive_on_update="false" label="2~4" sequence="1" value="2-4"/>

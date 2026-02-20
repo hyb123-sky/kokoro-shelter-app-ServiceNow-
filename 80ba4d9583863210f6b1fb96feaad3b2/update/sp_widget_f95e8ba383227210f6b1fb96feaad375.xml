@@ -83,31 +83,498 @@
     // 3. カンバン・リストロジック (Kanban Logic)
     // ============================================================
     c.showCancelledCol = false;
-    c.kanbanData = { todo: [], active: [], done: [], cancelled: [] };
+	// ==========================================
+    // 状態定数辞書（マジックナンバー排除）
+    // ==========================================
+    var STATES = {
+        NEW:          1,
+        SUBMITTED:    10,
+        ASSIGNED:     11,
+        IN_PROGRESS:  2,
+        COMPLETED:    4,
+        CANCELLED:    5,
+        ON_HOLD:      6
+    };
+
+    // 列名 → 代表状態
+    var COLUMN_STATE = {
+        assigned:    STATES.ASSIGNED,
+        inprogress:  STATES.IN_PROGRESS,
+        onhold:      STATES.ON_HOLD,
+        done:        STATES.COMPLETED
+    };
+
+    // 状態 → 列名（逆引き）
+    var STATE_COLUMN = {};
+    STATE_COLUMN[STATES.NEW]         = 'assigned';   // 新規も ASSIGNED 列に表示
+    STATE_COLUMN[STATES.SUBMITTED]   = 'assigned';   // 提出済みも ASSIGNED 列に表示
+    STATE_COLUMN[STATES.ASSIGNED]    = 'assigned';
+    STATE_COLUMN[STATES.IN_PROGRESS] = 'inprogress';
+    STATE_COLUMN[STATES.ON_HOLD]     = 'onhold';
+    STATE_COLUMN[STATES.COMPLETED]   = 'done';
+
+    // 許可遷移マップ（StateValidator 準拠）
+    var DRAG_TRANSITIONS = {};
+    // NEW(1) から
+    DRAG_TRANSITIONS[STATES.NEW + '_' + STATES.ASSIGNED]    = true;
+    DRAG_TRANSITIONS[STATES.NEW + '_' + STATES.IN_PROGRESS] = true;
+    DRAG_TRANSITIONS[STATES.NEW + '_' + STATES.ON_HOLD]     = true;
+    // SUBMITTED(10) から
+    DRAG_TRANSITIONS[STATES.SUBMITTED + '_' + STATES.ASSIGNED]    = true;
+    DRAG_TRANSITIONS[STATES.SUBMITTED + '_' + STATES.IN_PROGRESS] = true;
+    DRAG_TRANSITIONS[STATES.SUBMITTED + '_' + STATES.ON_HOLD]     = true;
+    // ASSIGNED(11) から
+    DRAG_TRANSITIONS[STATES.ASSIGNED + '_' + STATES.IN_PROGRESS] = true;
+    DRAG_TRANSITIONS[STATES.ASSIGNED + '_' + STATES.ON_HOLD]     = true;
+    // IN_PROGRESS(2) から
+    DRAG_TRANSITIONS[STATES.IN_PROGRESS + '_' + STATES.COMPLETED] = true;
+    DRAG_TRANSITIONS[STATES.IN_PROGRESS + '_' + STATES.ON_HOLD]   = true;
+    // ON_HOLD(6) から
+    DRAG_TRANSITIONS[STATES.ON_HOLD + '_' + STATES.IN_PROGRESS] = true;
+    DRAG_TRANSITIONS[STATES.ON_HOLD + '_' + STATES.ASSIGNED]    = true;
+
+    // 遷移成功メッセージ
+    var TRANSITION_MESSAGES = {};
+    TRANSITION_MESSAGES[STATES.NEW       + '_' + STATES.ASSIGNED]    = '受付済みにしました';
+    TRANSITION_MESSAGES[STATES.NEW       + '_' + STATES.IN_PROGRESS] = '対応を開始しました';
+    TRANSITION_MESSAGES[STATES.NEW       + '_' + STATES.ON_HOLD]     = '保留にしました';
+    TRANSITION_MESSAGES[STATES.SUBMITTED + '_' + STATES.ASSIGNED]    = '受付済みにしました';
+    TRANSITION_MESSAGES[STATES.SUBMITTED + '_' + STATES.IN_PROGRESS] = '対応を開始しました';
+    TRANSITION_MESSAGES[STATES.SUBMITTED + '_' + STATES.ON_HOLD]     = '保留にしました';
+    TRANSITION_MESSAGES[STATES.ASSIGNED  + '_' + STATES.IN_PROGRESS] = '対応を開始しました';
+    TRANSITION_MESSAGES[STATES.ASSIGNED  + '_' + STATES.ON_HOLD]     = '保留にしました';
+    TRANSITION_MESSAGES[STATES.IN_PROGRESS + '_' + STATES.COMPLETED] = '完了しました';
+    TRANSITION_MESSAGES[STATES.IN_PROGRESS + '_' + STATES.ON_HOLD]   = '保留にしました';
+    TRANSITION_MESSAGES[STATES.ON_HOLD   + '_' + STATES.IN_PROGRESS] = '対応を再開しました';
+    TRANSITION_MESSAGES[STATES.ON_HOLD   + '_' + STATES.ASSIGNED]    = '受付済みに戻しました';
+
+    // 禁止遷移時の案内メッセージ
+    var DENIAL_MESSAGES = {};
+    DENIAL_MESSAGES[STATES.NEW       + '_' + STATES.COMPLETED] = '先に「対応中」へ移動してから完了してください';
+    DENIAL_MESSAGES[STATES.SUBMITTED + '_' + STATES.COMPLETED] = '先に「対応中」へ移動してから完了してください';
+    DENIAL_MESSAGES[STATES.ASSIGNED  + '_' + STATES.COMPLETED] = '先に「対応中」へ移動してから完了してください';
+
+
+    // ==========================================
+    // 4列看板データ
+    // ==========================================
+    c.kanbanData = {
+        assigned: [],      // state 1, 10, 11
+        inprogress: [],    // state 2
+        onhold: [],        // state 6
+        done: []           // state 4
+    };
     c.tacticalSearchText = '';
     c.tacticalFilterPriority = '';
 
-    c.organizeKanban = function() {
-        c.kanbanData = { todo: [], active: [], done: [], cancelled: [] };
-        var sourceList = c.filteredList || c.data.list || [];
-        var searchKey = c.tacticalSearchText ? c.tacticalSearchText.toLowerCase() : null;
+    // ==========================================
+    // [V9] 現在地 (Zone) 管理
+    // ==========================================
+    c.currentZone = c.data.current_zone || localStorage.getItem(OFFLINE_ZONE_KEY) || '';
 
-        sourceList.forEach(function(item) {
-            if (searchKey) {
-                var itemText = (item.number + ' ' + item.category + ' ' + (item.assigned_to_name || '') + ' ' + item.zone).toLowerCase();
-                if (itemText.indexOf(searchKey) === -1) return;
+    c.onZoneChange = function() {
+        if (!c.currentZone || c.currentZone === '') return;
+
+        // localStorage に即保存（オフライン対応）
+        localStorage.setItem(OFFLINE_ZONE_KEY, c.currentZone);
+
+        // Server に同期
+        safeVolServerGet({
+            action: 'update_zone',
+            zone: c.currentZone
+        }).then(function(r) {
+            if (r && r.data && !r.data.error) {
+                showToast('現在地: ' + c.currentZone, 'success');
             }
-            if (c.tacticalFilterPriority && item.urgency !== c.tacticalFilterPriority) return;
-
-            var s = parseInt(item.state);
-            if (s === 1 || s === 10) c.kanbanData.todo.push(item);
-            else if (s === 11 || s === 2 || s === 6) c.kanbanData.active.push(item);
-            else if (s === 4) c.kanbanData.done.push(item);
-            else if (s === 5) c.kanbanData.cancelled.push(item);
         });
     };
 
+    c.organizeKanban = function() {
+        c.kanbanData = { assigned: [], inprogress: [], onhold: [], done: [] };
+        var sourceList = c.filteredList || c.data.list || [];
+        var searchKey = c.tacticalSearchText ? c.tacticalSearchText.toLowerCase() : null;
+
+        for (var ki = 0; ki < sourceList.length; ki++) {
+            var item = sourceList[ki];
+
+            // 検索フィルタ
+            if (searchKey) {
+                var txt = (item.number + ' ' + item.category + ' ' + (item.assigned_to_name || '') + ' ' + item.zone).toLowerCase();
+                if (txt.indexOf(searchKey) === -1) continue;
+            }
+            // 優先度フィルタ
+            if (c.tacticalFilterPriority && item.urgency !== c.tacticalFilterPriority) continue;
+
+            var col = STATE_COLUMN[parseInt(item.state)];
+            if (col && c.kanbanData[col]) {
+                c.kanbanData[col].push(item);
+            }
+        }
+    };
+
+
+    // ==========================================
+    // ドラッグ＆ドロップ（DOM操作ゼロ）
+    // ==========================================
+    c.draggedItemId = null;    // 現在ドラッグ中の sys_id
+    c.hoveredColumn = null;    // 現在ホバー中の列名
+
+    // ドラッグ開始
+    c.onDragStart = function(item) {
+        c.draggedItemId = item.sys_id;
+    };
+
+    // ドラッグ終了
+    c.onDragEnd = function() {
+        c.draggedItemId = null;
+        c.hoveredColumn = null;
+    };
+
+    // 列ホバー
+    c.onDragOver = function(event, columnName) {
+        event.preventDefault();
+        c.hoveredColumn = columnName;
+    };
+
+    // 列離脱
+    c.onDragLeave = function(columnName) {
+        if (c.hoveredColumn === columnName) {
+            c.hoveredColumn = null;
+        }
+    };
+
+    // ng-class ヘルパー
+    c.isDropTarget = function(columnName) {
+        return c.hoveredColumn === columnName && c.draggedItemId;
+    };
+    c.isDragging = function(item) {
+        return c.draggedItemId === item.sys_id;
+    };
+
+    // ★ ドロップ — 楽観更新 + 二段階遷移対応
+    c.onDrop = function(event, targetColumn) {
+        event.preventDefault();
+        c.hoveredColumn = null;
+
+        var item = findItemBySysId(c.draggedItemId);
+        c.draggedItemId = null;
+        if (!item) return;
+
+        var currentState = parseInt(item.state);
+        var targetState = COLUMN_STATE[targetColumn];
+        if (!targetState) return;
+
+        // 同じ状態 → 何もしない
+        if (currentState === targetState) return;
+
+        // 遷移チェック
+        var transitionKey = currentState + '_' + targetState;
+        if (!DRAG_TRANSITIONS[transitionKey]) {
+            var denialMsg = DENIAL_MESSAGES[transitionKey] || 'この遷移は許可されていません';
+            showToast(denialMsg, 'warning', 4000);
+            return;
+        }
+
+        // ─── 楽観更新 ───
+        var previousState = item.state;
+        item.state = targetState;
+        c.organizeKanban();
+
+        var msg = TRANSITION_MESSAGES[transitionKey] || 'ステータスを更新しました';
+        showToast(msg, 'success');
+
+        // NEW/SUBMITTED → IN_PROGRESS/ON_HOLD は二段階遷移
+        // (StateValidator: 1→2 不可、1→11→2 で経由)
+        var needsTwoStep = (currentState === STATES.NEW || currentState === STATES.SUBMITTED) &&
+                           (targetState === STATES.IN_PROGRESS || targetState === STATES.ON_HOLD);
+
+        if (needsTwoStep) {
+            // Step 1: → ASSIGNED(11)
+            safeVolServerGet({
+                action: 'change_status',
+                sys_id: item.sys_id,
+                new_state: String(STATES.ASSIGNED)
+            }).then(function(r1) {
+                if (r1 && r1.data && r1.data.error) {
+                    item.state = previousState;
+                    c.organizeKanban();
+                    showToast(r1.data.error, 'error', 5000);
+                    return;
+                }
+                // Step 2: ASSIGNED → 目標状態
+                safeVolServerGet({
+                    action: 'change_status',
+                    sys_id: item.sys_id,
+                    new_state: String(targetState)
+                }).then(function(r2) {
+                    if (r2 && r2.data && r2.data.error) {
+                        item.state = STATES.ASSIGNED;
+                        c.organizeKanban();
+                        showToast(r2.data.error, 'error', 5000);
+                    }
+                }, function() {
+                    item.state = STATES.ASSIGNED;
+                    c.organizeKanban();
+                    showToast('通信エラー', 'error', 5000);
+                });
+            }, function() {
+                item.state = previousState;
+                c.organizeKanban();
+                showToast('通信エラー — 元に戻しました', 'error', 5000);
+            });
+        } else {
+            // 通常: 一段階遷移
+            safeVolServerGet({
+                action: 'change_status',
+                sys_id: item.sys_id,
+                new_state: String(targetState)
+            }).then(function(r) {
+                if (r && r.data && r.data.error) {
+                    item.state = previousState;
+                    c.organizeKanban();
+                    showToast(r.data.error, 'error', 5000);
+                }
+            }, function() {
+                item.state = previousState;
+                c.organizeKanban();
+                showToast('通信エラー — 元に戻しました', 'error', 5000);
+            });
+        }
+    };
+    
+
     c.toggleCancelledColumn = function() { c.showCancelledCol = !c.showCancelledCol; };
+
+	
+// ==========================================
+// バッチ操作（一括処理）
+// ==========================================
+c.selectedItems = {};   // { sys_id: true/false }
+c.batchMode = false;    // バッチモード ON/OFF
+c.batchProcessing = false;
+
+// バッチモード切替
+c.toggleBatchMode = function() {
+    c.batchMode = !c.batchMode;
+    if (!c.batchMode) {
+        c.selectedItems = {};  // モード終了時に選択クリア
+    }
+};
+
+// 個別選択トグル
+c.toggleSelect = function(item, $event) {
+    if ($event) $event.stopPropagation();
+    if (!c.batchMode) return;
+    c.selectedItems[item.sys_id] = !c.selectedItems[item.sys_id];
+    if (!c.selectedItems[item.sys_id]) delete c.selectedItems[item.sys_id];
+};
+
+// 全選択/全解除
+c.selectAll = function() {
+    var source = c.filteredList || c.data.list || [];
+    var allSelected = c.getSelectedCount() === source.length;
+    
+    c.selectedItems = {};
+    if (!allSelected) {
+        source.forEach(function(item) {
+            // 完了・キャンセル済みは除外
+            if (item.state != 4 && item.state != 5) {
+                c.selectedItems[item.sys_id] = true;
+            }
+        });
+    }
+};
+
+// 選択数取得
+c.getSelectedCount = function() {
+    return Object.keys(c.selectedItems).length;
+};
+
+// 選択済みsys_idリスト取得
+c.getSelectedIds = function() {
+    return Object.keys(c.selectedItems).filter(function(id) {
+        return c.selectedItems[id];
+    });
+};
+
+// ★ バッチ実行: 自分に割当
+c.batchAssignToMe = function() {
+    var ids = c.getSelectedIds();
+    if (ids.length === 0) return;
+    if (c.batchProcessing) return;
+    c.batchProcessing = true;
+    
+    safeVolServerGet({
+        action: 'batch_action',
+        batch_type: 'assign_to_me',
+        sys_ids: ids.join(',')
+    }).then(function(r) {
+        c.batchProcessing = false;
+        handleBatchResponse(r, '割当');
+    }, function() {
+        c.batchProcessing = false;
+        showToast('通信エラーが発生しました', 'error', 5000);
+    });
+};
+
+// ★ バッチ実行: ステータス変更
+c.batchChangeStatus = function(newState) {
+    var ids = c.getSelectedIds();
+    if (ids.length === 0) return;
+    if (c.batchProcessing) return;
+    c.batchProcessing = true;
+    
+    safeVolServerGet({
+        action: 'batch_action',
+        batch_type: 'change_status',
+        new_state: newState,
+        sys_ids: ids.join(',')
+    }).then(function(r) {
+        c.batchProcessing = false;
+        handleBatchResponse(r, 'ステータス変更');
+    }, function() {
+        c.batchProcessing = false;
+        showToast('通信エラーが発生しました', 'error', 5000);
+    });
+};
+
+// ★ バッチ実行: 一括キャンセル
+c.batchCancel = function() {
+    var ids = c.getSelectedIds();
+    if (ids.length === 0) return;
+    if (c.batchProcessing) return;
+    c.batchProcessing = true;
+    
+    safeVolServerGet({
+        action: 'batch_action',
+        batch_type: 'cancel',
+        sys_ids: ids.join(',')
+    }).then(function(r) {
+        c.batchProcessing = false;
+        handleBatchResponse(r, 'キャンセル');
+    }, function() {
+        c.batchProcessing = false;
+        showToast('通信エラーが発生しました', 'error', 5000);
+    });
+};
+
+// バッチ結果処理
+function handleBatchResponse(response, actionName) {
+    if (!response || !response.data) {
+        showToast('サーバーエラー', 'error', 5000);
+        return;
+    }
+    if (response.data.error) {
+        showToast(response.data.error, 'error', 5000);
+        return;
+    }
+    
+    var results = response.data.batch_results;
+    if (results) {
+        if (results.success > 0 && results.failed === 0) {
+            showToast(results.success + '件の' + actionName + 'が完了しました', 'success');
+        } else if (results.success > 0 && results.failed > 0) {
+            showToast(results.success + '件成功、' + results.failed + '件失敗', 'warning', 5000);
+        } else {
+            showToast(actionName + 'に失敗しました', 'error', 5000);
+        }
+    }
+    
+    // 選択クリア + データ再読込
+    c.selectedItems = {};
+    c.server.update().then(processListItems);
+}
+	
+// ==========================================
+// バッチ操作バー — 純粋DOM注入版
+// ==========================================
+var batchBarEl = null;
+
+function buildBatchBar() {
+    // 既に存在する場合は一旦削除
+    if (batchBarEl && batchBarEl.parentNode) {
+        batchBarEl.parentNode.removeChild(batchBarEl);
+    }
+    
+    var bar = document.createElement('div');
+    bar.className = 'batch-action-bar';
+    bar.id = 'kokoro-batch-bar';
+    
+    bar.innerHTML = 
+        '<div class="batch-bar-info">' +
+            '<i class="fa fa-check-square"></i> ' +
+            '<strong id="batch-bar-count">0</strong> 件選択中' +
+        '</div>' +
+        '<div class="batch-bar-actions">' +
+            '<button class="batch-btn batch-btn-assign" id="batch-btn-assign">' +
+                '<i class="fa fa-user-plus"></i> 自分に割当</button>' +
+            '<button class="batch-btn batch-btn-progress" id="batch-btn-progress">' +
+                '<i class="fa fa-play"></i> 進行中へ</button>' +
+            '<button class="batch-btn batch-btn-complete" id="batch-btn-complete">' +
+                '<i class="fa fa-check"></i> 完了</button>' +
+            '<button class="batch-btn batch-btn-cancel" id="batch-btn-cancel">' +
+                '<i class="fa fa-times"></i> キャンセル</button>' +
+        '</div>' +
+        '<button class="batch-bar-close" id="batch-btn-close">' +
+            '<i class="fa fa-times"></i></button>';
+    
+    // body に直接挿入
+    document.body.appendChild(bar);
+    batchBarEl = bar;
+    
+    // イベントバインド（$scope.$apply で Angular の digest cycle に入る）
+    document.getElementById('batch-btn-assign').addEventListener('click', function() {
+        $scope.$apply(function() { c.batchAssignToMe(); });
+    });
+    document.getElementById('batch-btn-progress').addEventListener('click', function() {
+        $scope.$apply(function() { c.batchChangeStatus('2'); });
+    });
+    document.getElementById('batch-btn-complete').addEventListener('click', function() {
+        $scope.$apply(function() { c.batchChangeStatus('4'); });
+    });
+    document.getElementById('batch-btn-cancel').addEventListener('click', function() {
+        $scope.$apply(function() { c.batchCancel(); });
+    });
+    document.getElementById('batch-btn-close').addEventListener('click', function() {
+        $scope.$apply(function() { c.toggleBatchMode(); });
+    });
+}
+
+function updateBatchBar() {
+    var count = c.getSelectedCount();
+    var shouldShow = c.batchMode && count > 0;
+    
+    if (shouldShow && !batchBarEl) {
+        buildBatchBar();
+    }
+    
+    if (batchBarEl) {
+        batchBarEl.style.display = shouldShow ? 'flex' : 'none';
+        var countEl = document.getElementById('batch-bar-count');
+        if (countEl) countEl.textContent = count;
+        
+        // processing 中はボタン無効化
+        var btns = batchBarEl.querySelectorAll('.batch-btn');
+        for (var i = 0; i < btns.length; i++) {
+            btns[i].disabled = c.batchProcessing;
+        }
+    }
+}
+
+// バッチ状態が変わるたびに更新
+$scope.$watch(function() {
+    return c.batchMode + '_' + c.getSelectedCount() + '_' + c.batchProcessing;
+}, function() {
+    updateBatchBar();
+});
+
+// 画面破棄時にクリーンアップ
+$scope.$on('$destroy', function() {
+    if (batchBarEl && batchBarEl.parentNode) {
+        batchBarEl.parentNode.removeChild(batchBarEl);
+        batchBarEl = null;
+    }
+});
 
     // 時間フォーマット
     c.formatTime24h = function(createdOn) {
@@ -222,6 +689,47 @@
     // ============================================================
     c.view = 'dashboard';
     c.showSidebar = false;
+	c.view = 'dashboard';
+    c.showSidebar = false;
+
+    // ==========================================
+    // [V8] タブ矢印キーナビゲーション (Adapted for c.view)
+    // ==========================================
+    var TAB_ORDER = ['dashboard', 'tactical', 'mine', 'comms'];
+    c.onTabKeydown = function($event) {
+        var key = $event.key;
+        if (key !== 'ArrowLeft' && key !== 'ArrowRight' && key !== 'Home' && key !== 'End') return;
+        $event.preventDefault();
+        
+        var currentIdx = TAB_ORDER.indexOf(c.view);
+        var newIdx = currentIdx;
+        
+        if (key === 'ArrowRight') { newIdx = (currentIdx + 1) % TAB_ORDER.length; }
+        else if (key === 'ArrowLeft') { newIdx = (currentIdx - 1 + TAB_ORDER.length) % TAB_ORDER.length; }
+        else if (key === 'Home') { newIdx = 0; }
+        else if (key === 'End') { newIdx = TAB_ORDER.length - 1; }
+        
+        c.view = TAB_ORDER[newIdx];
+
+        $timeout(function() {
+            var el = document.getElementById('tab-' + TAB_ORDER[newIdx]);
+            if (el) el.focus();
+        }, 50);
+    };
+
+    // ==========================================
+    // [V8] カードキーボードハンドラー
+    // ==========================================
+    c.onCardKeydown = function($event, item) {
+        if ($event.key === 'Enter' || $event.key === ' ') {
+            $event.preventDefault();
+            if (c.batchMode) {
+                c.toggleSelect(item, $event);
+            } else {
+                c.openModal(item);
+            }
+        }
+    };
     c.toggleSidebar = function() { c.showSidebar = !c.showSidebar; };
     c.currentTime = '';
 
@@ -268,6 +776,12 @@ function showToast(message, type, duration) {
         }, 400);
     }, duration);
 
+    // [V8] スクリーンリーダーに通知
+    var liveRegion = document.getElementById('sr-live-region');
+    if (liveRegion) {
+        liveRegion.textContent = message;
+    }
+
     return toast;
 }
 
@@ -281,21 +795,242 @@ c.dismissToast = function(toast) {
 };
 	
 // ==========================================
-// CSRF 安全请求包装
+// [V3] Client 側プリバリデーション
+// ==========================================
+var CLIENT_RULES = {
+    'add_comment': {
+        validate: function(params) {
+            if (!params.message || !params.message.trim()) {
+                return 'コメントを入力してください';
+            }
+            if (params.message.length > 4000) {
+                return 'コメントは4000文字以内です';
+            }
+            return null;
+        }
+    },
+    'send_broadcast': {
+        validate: function(params) {
+            if (!params.title || !params.title.trim()) {
+                return 'タイトルを入力してください';
+            }
+            if (params.title.length > 200) {
+                return 'タイトルは200文字以内です';
+            }
+            if (params.body && params.body.length > 4000) {
+                return '本文は4000文字以内です';
+            }
+            return null;
+        }
+    },
+    'batch_action': {
+        validate: function(params) {
+            if (!params.sys_ids) {
+                return '操作対象を選択してください';
+            }
+            var ids = params.sys_ids.split(',').filter(function(id) { return id.trim(); });
+            if (ids.length === 0) {
+                return '操作対象を選択してください';
+            }
+            if (ids.length > 20) {
+                return '一括操作は最大20件です';
+            }
+            return null;
+        }
+    }
+};
+
+function validateBeforeSend(action, params) {
+    var rule = CLIENT_RULES[action];
+    if (!rule) return null;
+    return rule.validate(params);
+}
+
+// ==========================================
+// CSRF 安全请求包装 + 乐观锁 + 预验证 (V3)
 // ==========================================
 var volCsrfToken = c.data.csrf_token || '';
 
+    // ==========================================
+    // [V9] Offline Queue
+    // ==========================================
+    var OFFLINE_QUEUE_KEY = 'kokoro_vol_offline_queue';
+    var OFFLINE_ZONE_KEY = 'kokoro_vol_zone';
 
-// 【替换为】:
+    c.isOnline = navigator.onLine;
+    c.offlineQueueCount = 0;
+
+    // --- キュー操作 ---
+    function getOfflineQueue() {
+        try {
+            var raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+            return raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveOfflineQueue(queue) {
+        try {
+            localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+            c.offlineQueueCount = queue.length;
+        } catch (e) {
+            // localStorage 容量超過時 → 古い項目を削除
+            if (queue.length > 1) {
+                queue.shift();
+                saveOfflineQueue(queue);
+            }
+        }
+    }
+
+    function enqueueOfflineAction(params) {
+        var queue = getOfflineQueue();
+        queue.push({
+            params: params,
+            timestamp: Date.now(),
+            id: Date.now() + '_' + Math.random().toString(36).substr(2, 6)
+        });
+        saveOfflineQueue(queue);
+        showToast('オフラインキューに追加 (' + queue.length + '件待ち)', 'info');
+    }
+
+    // --- リプレイ ---
+    var isReplaying = false;
+
+    function replayOfflineQueue() {
+        var queue = getOfflineQueue();
+        if (queue.length === 0 || isReplaying) return;
+
+        isReplaying = true;
+        showToast('キュー再送中... (' + queue.length + '件)', 'info');
+
+        function processNext() {
+            var queue = getOfflineQueue();
+            if (queue.length === 0) {
+                isReplaying = false;
+                showToast('キュー再送完了', 'success');
+                c.offlineQueueCount = 0;
+                return;
+            }
+
+            var item = queue[0];
+
+            // 古すぎるエントリは破棄（1時間以上前）
+            if (Date.now() - item.timestamp > 3600000) {
+                queue.shift();
+                saveOfflineQueue(queue);
+                processNext();
+                return;
+            }
+
+            safeVolServerGet(item.params).then(function(r) {
+                // 成功 → キューから除去
+                var q = getOfflineQueue();
+                q.shift();
+                saveOfflineQueue(q);
+                $timeout(processNext, 300); // 次を処理（レート制限配慮）
+            }, function() {
+                // 失敗 → 再びオフラインかも → 中断
+                isReplaying = false;
+                showToast('再送中断 — 接続を確認', 'warning');
+            });
+        }
+
+        processNext();
+    }
+
+    // --- Online/Offline イベント ---
+    function onOnlineStatusChange() {
+        $scope.$apply(function() {
+            c.isOnline = navigator.onLine;
+            if (c.isOnline) {
+                showToast('接続回復', 'success');
+                $timeout(function() {
+                    replayOfflineQueue();
+                }, 1000);
+            } else {
+                showToast('オフライン — 操作はキューに保存されます', 'warning', 5000);
+            }
+        });
+    }
+
+    $window.addEventListener('online', onOnlineStatusChange);
+    $window.addEventListener('offline', onOnlineStatusChange);
+
+    // クリーンアップ
+    $scope.$on('$destroy', function() {
+        $window.removeEventListener('online', onOnlineStatusChange);
+        $window.removeEventListener('offline', onOnlineStatusChange);
+    });
+
+    // 初期化: キュー残量チェック
+    c.offlineQueueCount = getOfflineQueue().length;
+    if (c.isOnline && c.offlineQueueCount > 0) {
+        $timeout(function() { replayOfflineQueue(); }, 2000);
+    }
+
+    // ==========================================
+    // [V9] 手動キュー操作
+    // ==========================================
+    c.clearOfflineQueue = function() {
+        localStorage.removeItem(OFFLINE_QUEUE_KEY);
+        c.offlineQueueCount = 0;
+        showToast('キューをクリアしました', 'info');
+    };
+
+    c.retryOfflineQueue = function() {
+        if (c.isOnline) {
+            replayOfflineQueue();
+        } else {
+            showToast('オフラインのため再送できません', 'warning');
+        }
+    };
+
+
 function safeVolServerGet(params) {
+    // [V3] Client 側プリバリデーション
+    var clientError = validateBeforeSend(params.action, params);
+    if (clientError) {
+        showToast(clientError, 'warning');
+        // 安全拦截：返回一个模拟的 Promise 触发 error callback，防止后续报错
+        return {
+            then: function(onSuccess, onError) { if (onError) onError(clientError); return this; },
+            catch: function(onError) { if (onError) onError(clientError); return this; },
+            finally: function(cb) { if (cb) cb(); return this; }
+        };
+    }
+
     params.csrf_token = volCsrfToken;
     
     // ★ 乐观锁: 自动附加 sys_mod_count
-    // 如果 params.sys_id 存在，从当前数据中查找对应工单的版本号
     if (params.sys_id) {
         var foundItem = findItemBySysId(params.sys_id);
         if (foundItem && foundItem.sys_mod_count !== undefined) {
             params.sys_mod_count = foundItem.sys_mod_count;
+        }
+    }
+
+    // ==========================================
+    // [V9] オフライン時はキューに入れる
+    // ==========================================
+    if (!navigator.onLine) {
+        // 読み取り専用操作はキューしない
+        var readOnlyActions = ['get_volunteers', 'get_details', 'inventory_check'];
+        if (readOnlyActions.indexOf(params.action) === -1) {
+            enqueueOfflineAction(params);
+            // 楽観更新のため解決済み Promise(モック) を返す ($q 未定義エラー回避)
+            return {
+                then: function(onSuccess) { if (onSuccess) onSuccess({ data: { queued: true, success: true } }); return this; },
+                catch: function() { return this; },
+                finally: function(cb) { if (cb) cb(); return this; }
+            };
+        } else {
+            showToast('オフラインのため取得できません', 'warning');
+            return {
+                then: function(onSuccess, onError) { if (onError) onError('offline'); return this; },
+                catch: function(onError) { if (onError) onError('offline'); return this; },
+                finally: function(cb) { if (cb) cb(); return this; }
+            };
         }
     }
     
@@ -337,7 +1072,38 @@ function handleConcurrencyConflict(responseData) {
     // ============================================================
     // 6. タスク詳細・モダール (Task Modal)
     // ============================================================
+    // ============================================================
+    // 6. タスク詳細・モダール (Task Modal)
+    // ============================================================
+    var previousFocusElement = null;
+
+    c.onModalKeydown = function($event) {
+        if ($event.key === 'Escape') {
+            var closeBtn = document.querySelector('.header-close');
+            if (closeBtn) closeBtn.click();
+            return;
+        }
+        if ($event.key === 'Tab') {
+            var modal = $event.currentTarget;
+            var focusable = modal.querySelectorAll('button, [tabindex="0"], input, textarea, select, a[href]');
+            if (focusable.length === 0) return;
+
+            var first = focusable[0];
+            var last = focusable[focusable.length - 1];
+
+            if ($event.shiftKey && document.activeElement === first) {
+                $event.preventDefault();
+                last.focus();
+            } else if (!$event.shiftKey && document.activeElement === last) {
+                $event.preventDefault();
+                first.focus();
+            }
+        }
+    };
+
     c.openModal = function(item) {
+        previousFocusElement = document.activeElement;
+
         if (!c.data.volunteers || c.data.volunteers.length === 0) {
             c.server.get({ action: 'get_volunteers' }).then(function(r) {
                 if (r && r.data && r.data.volunteers) {
@@ -357,6 +1123,15 @@ function handleConcurrencyConflict(responseData) {
             backdrop: 'static',
             windowClass: 'kokoro-modal-window'
         });
+
+        // [V8] モーダル内へのフォーカス移動
+        $timeout(function() {
+            var modal = document.querySelector('[role="dialog"]');
+            if (modal) {
+                var firstFocusable = modal.querySelector('button, [tabindex="0"], input, textarea, select, a[href]');
+                if (firstFocusable) firstFocusable.focus();
+            }
+        }, 100);
 
         $scope.item = angular.copy(item);
         $scope.c = c;
@@ -407,8 +1182,17 @@ function handleConcurrencyConflict(responseData) {
         };
         
         $scope.triggerAutoAssign = function(item) { c.triggerAutoAssign(item.sys_id, true); };
-        modalInstance.result.finally(function() { c.server.update().then(processListItems); });
+        
+        modalInstance.result.finally(function() { 
+            c.server.update().then(processListItems); 
+            // [V8] フォーカス復元
+            if (previousFocusElement) {
+                $timeout(function() { previousFocusElement.focus(); }, 50);
+                previousFocusElement = null;
+            }
+        });
     };
+        
 
     // ============================================================
     // 7. アクションロジック (Assign, Location, etc.)
@@ -484,13 +1268,28 @@ function handleConcurrencyConflict(responseData) {
         c.selectedVol = {}; 
     };
 
+    // ==========================================
+    // 修复：前端提交专长变更
+    // ==========================================
     c.updateCapability = function() {
-        if (!c.data.isAdmin) return;
-        var newCap = c.selectedVol.capability;
-        var targetId = c.selectedVol.sys_id;
-
-        c.server.get({ action: 'specialty', target_id: targetId, new_cap: newCap }).then(function(response) {
-            showToast('能力情報を更新しました', 'success');
+        if (!c.selectedVol) return;
+        
+        // 发送更新请求给后端 (走 V3 安全验证通道)
+        safeVolServerGet({
+            action: 'specialty',
+            sys_id: c.selectedVol.sys_id, 
+            new_cap: c.selectedVol.capability
+        }).then(function(response) {
+            if (response.data && response.data.error) {
+                showToast("保存失敗: " + response.data.error, 'error');
+            } else {
+                showToast('Operator capability updated.', 'success');
+                // 同步更新本地列表视图，避免需刷新页面才显示
+                var targetVol = c.data.volunteers.find(function(v) { return v.sys_id === c.selectedVol.sys_id; });
+                if (targetVol) {
+                    targetVol.capability = c.selectedVol.capability;
+                }
+            }
         });
     };
 
@@ -502,7 +1301,7 @@ function handleConcurrencyConflict(responseData) {
         if (c._broadcastSending) return;
         c._broadcastSending = true;
         
-        c.server.get({ 
+       safeVolServerGet({ 
             action: 'send_broadcast', 
             msg_type: c.broadcastType || 'announcement', 
             title: c.broadcastTitle, 
@@ -4598,6 +5397,496 @@ button, .btn-jira, .btn-online, .btn-offline, .tab, .alert-item, .jira-card, .st
     font-size: 12px;
     padding: 10px 14px;
   }
+}
+
+/* ==========================================
+   PART 28: 4列カンバン + ドラッグ＆ドロップ [V5]
+   ========================================== */
+
+/* --- レイアウト --- */
+.kanban-board-v5 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 0.6fr 1fr;
+  gap: 12px;
+  width: 100%;
+  min-height: 400px;
+  align-items: start;
+}
+
+.kanban-col {
+  background: #fafafa;
+  border-radius: 8px;
+  border: 1px solid #e8e8e8;
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+  max-height: calc(100vh - 280px);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.kanban-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e8e8e8;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #555;
+  position: sticky;
+  top: 0;
+  background: inherit;
+  z-index: 1;
+}
+
+.kanban-header-icon { font-size: 13px; }
+.kanban-header-title { flex: 1; }
+
+.kanban-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 11px;
+  background: rgba(0,0,0,0.06);
+  color: #666;
+}
+
+.kanban-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* --- 列別アクセントカラー --- */
+.kanban-col-assigned .kanban-header { border-bottom: 2px solid #1976d2; }
+.kanban-col-assigned .kanban-count { background: #e3f2fd; color: #1565c0; }
+
+.kanban-col-inprogress .kanban-header { border-bottom: 2px solid #f57c00; }
+.kanban-col-inprogress .kanban-count { background: #fff3e0; color: #e65100; }
+
+.kanban-col-onhold .kanban-header { border-bottom: 2px solid #9e9e9e; }
+.kanban-col-onhold .kanban-count { background: #f5f5f5; color: #616161; }
+
+.kanban-col-done .kanban-header { border-bottom: 2px solid #2e7d32; }
+.kanban-col-done .kanban-count { background: #e8f5e9; color: #1b5e20; }
+
+/* --- カード --- */
+.kanban-card {
+  position: relative;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: grab;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  user-select: none;
+}
+.kanban-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+}
+.kanban-card:active { cursor: grabbing; }
+
+.kanban-card.urgency-critical {
+  border-left: 3px solid #c62828;
+}
+
+.kanban-card-id {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.kanban-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.kanban-card-urgency {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.urgency-critical { background: #ffebee; color: #c62828; }
+.urgency-high     { background: #fff3e0; color: #e65100; }
+.urgency-medium   { background: #e3f2fd; color: #1565c0; }
+.urgency-low      { background: #f1f8e9; color: #33691e; }
+
+.kanban-card-time { color: #999; font-size: 10px; }
+
+.kanban-card-zone {
+  font-size: 10px;
+  color: #777;
+  margin-top: 3px;
+}
+
+.kanban-card-assignee {
+  font-size: 10px;
+  color: #666;
+  margin-top: 3px;
+}
+.kanban-card-assignee i { color: #999; margin-right: 2px; }
+
+/* --- SLA バー --- */
+.kanban-card-sla { margin-top: 6px; }
+.sla-bar {
+  height: 3px;
+  background: #eee;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.sla-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* --- 完了カード --- */
+.kanban-card-done {
+  opacity: 0.7;
+  cursor: default;
+  background: #f9f9f9;
+}
+.kanban-card-done:hover {
+  transform: none;
+  box-shadow: none;
+}
+.kanban-card-done-icon { color: #2e7d32; }
+
+/* --- ドラッグ状態（ng-class 制御）--- */
+.kanban-card.dragging {
+  opacity: 0.35 !important;
+  transform: rotate(2deg) scale(0.95) !important;
+  box-shadow: none !important;
+}
+
+.kanban-col.drag-over {
+  background: rgba(25, 118, 210, 0.06) !important;
+  border: 2px dashed #1976d2 !important;
+}
+
+/* --- 空列 --- */
+.kanban-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 12px;
+  color: #bbb;
+  font-size: 12px;
+  gap: 6px;
+}
+.kanban-empty i { font-size: 20px; }
+.kanban-col.drag-over .kanban-empty { color: #1976d2; }
+
+/* --- レスポンシブ --- */
+@media (max-width: 1200px) {
+  .kanban-board-v5 { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 768px) {
+  .kanban-board-v5 { grid-template-columns: 1fr; }
+  .kanban-card { cursor: pointer; }
+}
+
+/* ==========================================
+   PART 29: バッチ操作
+   ========================================== */
+
+/* バッチモード切替ボタン */
+.batch-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  color: #555;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.batch-toggle-btn:hover { border-color: #1976d2; color: #1976d2; }
+.batch-toggle-btn.active {
+  background: #1976d2;
+  color: #fff;
+  border-color: #1976d2;
+}
+
+.batch-select-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid #1976d2;
+  border-radius: 6px;
+  background: transparent;
+  color: #1976d2;
+  font-size: 12px;
+  cursor: pointer;
+  margin-left: 4px;
+}
+.batch-select-all-btn:hover { background: rgba(25,118,210,0.08); }
+
+/* カード内チェックボックス */
+.batch-checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  font-size: 18px;
+  color: #999;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.batch-checkbox:hover { color: #1976d2; }
+.batch-selected .batch-checkbox { color: #1976d2; }
+
+/* 選択中カード */
+.kanban-card.batch-selected {
+  outline: 2px solid #1976d2 !important;
+  outline-offset: -2px;
+  background: rgba(25, 118, 210, 0.04) !important;
+}
+
+/* カードを relative にする（チェックボックス配置用） */
+.kanban-card {
+  position: relative;
+}
+
+/* バッチモード時のカード左パディング */
+.kanban-card .batch-checkbox + * {
+  margin-left: 24px;
+}
+
+/* フローティング操作バー */
+.batch-action-bar {
+  position: fixed !important;
+  bottom: 24px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 2100000 !important;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 2px 8px rgba(0,0,0,0.2);
+  animation: batchBarSlideUp 0.3s cubic-bezier(0.21, 1.02, 0.73, 1);
+  pointer-events: auto;
+}
+
+.batch-bar-info {
+  color: #a0c4ff;
+  font-size: 13px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.batch-bar-info strong {
+  color: #fff;
+  font-size: 16px;
+}
+
+.batch-bar-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.batch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.batch-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.batch-btn-assign {
+  background: #1976d2;
+  color: #fff;
+}
+.batch-btn-assign:hover:not(:disabled) { background: #1565c0; }
+
+.batch-btn-progress {
+  background: #f57c00;
+  color: #fff;
+}
+.batch-btn-progress:hover:not(:disabled) { background: #e65100; }
+
+.batch-btn-complete {
+  background: #2e7d32;
+  color: #fff;
+}
+.batch-btn-complete:hover:not(:disabled) { background: #1b5e20; }
+
+.batch-btn-cancel {
+  background: #c62828;
+  color: #fff;
+}
+.batch-btn-cancel:hover:not(:disabled) { background: #b71c1c; }
+
+.batch-bar-close {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  margin-left: 4px;
+}
+.batch-bar-close:hover { color: #fff; }
+
+@keyframes batchBarSlideUp {
+  from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+  to   { transform: translateX(-50%) translateY(0);     opacity: 1; }
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .batch-action-bar {
+    bottom: 8px;
+    left: 8px;
+    right: 8px;
+    transform: none;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .batch-bar-actions { flex-wrap: wrap; }
+  .batch-btn { padding: 6px 10px; font-size: 11px; }
+  @keyframes batchBarSlideUp {
+    from { transform: translateY(100px); opacity: 0; }
+    to   { transform: translateY(0);     opacity: 1; }
+  }
+}
+
+/* ==========================================
+   PART 31: Offline Queue + Zone [V9]
+   ========================================== */
+
+/* --- 接続状態 --- */
+.sys-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2e7d32;
+  margin-right: 4px;
+  animation: statusPulse 2s infinite;
+}
+.sys-status-dot.offline {
+  background: #c62828;
+  animation: none;
+}
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.sys-status.sys-offline {
+  color: #c62828 !important;
+}
+
+/* --- キューバッジ --- */
+.offline-queue-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  margin-left: 8px;
+  background: #ff6f00;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.offline-queue-badge:hover {
+  background: #e65100;
+}
+
+/* --- オフラインバナー --- */
+.offline-banner {
+  width: 100%;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #b71c1c, #c62828);
+  color: #fff;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-align: center;
+  animation: offlinePulse 3s infinite;
+}
+
+@keyframes offlinePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
+/* --- ゾーンセレクト確認状態 --- */
+.zone-select {
+  transition: border-color 0.3s;
+}
+.zone-select.zone-synced {
+  border-color: #2e7d32 !important;
+}
+
+/* --- オフライン時の操作ボタン変化 --- */
+.offline-mode .kanban-card {
+  cursor: default;
+}
+.offline-mode .batch-btn,
+.offline-mode .kanban-card[draggable="true"] {
+  position: relative;
+}
+.offline-mode .batch-btn::after,
+.offline-mode .kanban-card[draggable="true"]::after {
+  content: '⚡';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 9px;
+}
+
+/* --- prefers-reduced-motion --- */
+@media (prefers-reduced-motion: reduce) {
+  .sys-status-dot,
+  .offline-banner {
+    animation: none !important;
+  }
 }</css>
         <data_table>sp_instance</data_table>
         <demo_data/>
@@ -4645,17 +5934,176 @@ button, .btn-jira, .btn-online, .btn-offline, .tab, .alert-item, .jira-card, .st
         }
     };
 
-    // --- 输入清洗 ---
-    function sanitizeInput(inputVal, maxLength) {
-        if (!inputVal) return '';
-        var cleaned = String(inputVal)
-            .replace(/[<>\"'&]/g, '')
-            .replace(/[\r\n]+/g, ' ')
+    	// ==========================================
+    // [V3] 統一サニタイズ関数
+    // ==========================================
+    function sanitizeInput(str) {
+        if (!str || typeof str !== 'string') return '';
+        return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#x27;')
+            .replace(/\//g, '&#x2F;')
             .trim();
-        if (maxLength && cleaned.length > maxLength) {
-            cleaned = cleaned.substring(0, maxLength);
+    }
+
+    // ==========================================
+    // [V3] アクション別バリデーションルール
+    // ==========================================
+    var VALIDATION_RULES = {
+        'change_status': {
+            sys_id:    { required: true,  type: 'sys_id' },
+            new_state: { required: true,  type: 'state' }
+        },
+        'assign_to_me': {
+            sys_id: { required: true, type: 'sys_id' }
+        },
+        'add_comment': {
+            sys_id:  { required: true,  type: 'sys_id' },
+            comment: { required: true,  type: 'text', maxLength: 4000 }
+        },
+        'send_broadcast': {
+            title: { required: true,  type: 'text', maxLength: 200 },
+            body:  { required: false, type: 'text', maxLength: 4000 },
+            level: { required: false, type: 'enum', values: ['info', 'warning', 'critical'] }
+        },
+        'delete_broadcast': {
+            sys_id: { required: true, type: 'sys_id' }
+        },
+        'dispatch': {
+            sys_id:       { required: true,  type: 'sys_id' },
+            volunteer_id: { required: true,  type: 'sys_id' }
+        },
+        'batch_action': {
+            batch_type: { required: true, type: 'enum', values: ['assign_to_me', 'change_status', 'cancel'] },
+            sys_ids:    { required: true, type: 'sys_id_list' }
+        },
+        'specialty': {
+            sys_id:  { required: false, type: 'sys_id' },
+            new_cap: { required: false, type: 'text', maxLength: 100 } // 允许为空，方便取消专长
+        },
+		  'update_zone': {
+      zone: { required: true, type: 'enum', values: ['FAMILY_AREA', 'SINGLE_AREA', 'MEDICAL_AREA', 'STAFF_ROOM', 'FIELD', 'HQ'] }
+  },
+        'inventory_check': {
+            item_code: { required: true, type: 'text', maxLength: 50 }
+        },
+        'submit_sitrep': {
+            summary:   { required: true,  type: 'text', maxLength: 2000 },
+            area_name: { required: false, type: 'text', maxLength: 100 },
+            status:    { required: false, type: 'enum', values: ['green', 'yellow', 'red'] }
         }
-        return cleaned;
+    };
+
+    // ==========================================
+    // [V3] 統一バリデーション関数
+    // 戻り値: { valid: true/false, errors: [], sanitized: {} }
+    // ==========================================
+    function validateActionInput(action, inputData) {
+        var result = { valid: true, errors: [], sanitized: {} };
+        var rules = VALIDATION_RULES[action];
+
+        // ルール未定義のアクション → 検証スキップ（後方互換）
+        if (!rules) {
+            return result;
+        }
+
+        for (var field in rules) {
+            var rule = rules[field];
+            var value = inputData[field];
+
+            // 必須チェック
+            if (rule.required && (value === undefined || value === null || value === '')) {
+                result.valid = false;
+                result.errors.push(field + ' は必須です');
+                continue;
+            }
+
+            // 値がない非必須フィールドはスキップ
+            if (value === undefined || value === null || value === '') {
+                result.sanitized[field] = '';
+                continue;
+            }
+
+            // 型別バリデーション
+            switch (rule.type) {
+                case 'sys_id':
+                    // sys_id は 32文字の hex
+                    if (!/^[a-f0-9]{32}$/.test(String(value))) {
+                        result.valid = false;
+                        result.errors.push(field + ' の形式が不正です');
+                    } else {
+                        result.sanitized[field] = String(value);
+                    }
+                    break;
+
+                case 'sys_id':
+                    // 修改正则，允许大写字母
+                    if (!/^[a-zA-Z0-9]{32}$/.test(String(value))) {
+                        result.valid = false;
+                        result.errors.push(field + ' の形式が不正です');
+                    } else {
+                        result.sanitized[field] = String(value);
+                    }
+                    break;
+                case 'sys_id_list':
+                    var ids = String(value).split(',');
+                    var validIds = [];
+                    for (var i = 0; i < ids.length; i++) {
+                        var id = ids[i].trim();
+                        // 同理修改正则
+                        if (/^[a-zA-Z0-9]{32}$/.test(id)) validIds.push(id);
+                    }
+                    
+                    if (validIds.length === 0) {
+                        result.valid = false;
+                        result.errors.push(field + ' に有効なIDがありません');
+                    } else {
+                        if (hasInvalid) {
+                            result.errors.push(field + ' の一部IDが無効（無視されます）');
+                        }
+                        result.sanitized[field] = validIds.join(',');
+                    }
+                    break;
+
+                case 'state':
+                    // 有効な状態値
+                    var validStates = ['1', '2', '4', '5', '6', '10', '11'];
+                    if (validStates.indexOf(String(value)) === -1) {
+                        result.valid = false;
+                        result.errors.push(field + ' の値が無効です (' + value + ')');
+                    } else {
+                        result.sanitized[field] = String(value);
+                    }
+                    break;
+
+                case 'text':
+                    var strVal = String(value);
+                    if (rule.maxLength && strVal.length > rule.maxLength) {
+                        result.valid = false;
+                        result.errors.push(field + ' は' + rule.maxLength + '文字以内です（現在: ' + strVal.length + '）');
+                    } else {
+                        result.sanitized[field] = sanitizeInput(strVal);
+                    }
+                    break;
+
+                case 'enum':
+                    if (rule.values && rule.values.indexOf(String(value)) === -1) {
+                        result.valid = false;
+                        result.errors.push(field + ' の値が無効です: ' + sanitizeInput(String(value)));
+                    } else {
+                        result.sanitized[field] = String(value);
+                    }
+                    break;
+
+                default:
+                    result.sanitized[field] = sanitizeInput(String(value));
+            }
+        }
+
+        return result;
     }
 
     function validateSysId(sysId) {
@@ -4689,7 +6137,7 @@ button, .btn-jira, .btn-online, .btn-offline, .tab, .alert-item, .jira-card, .st
             return true;
         }
     }
-
+	
     // --- Rate Limiter ---
     var VolRateLimiter = {
         check: function(userId, actionType, windowMinutes, maxCount) {
@@ -4773,22 +6221,43 @@ function checkConcurrency(tableName, sysId, clientModCount) {
     // MODULE 1: 处理前端动作 (Action Handling)
     // ==========================================
     
+	// ==========================================
+    // [V3] 統一バリデーション Gateway (Global)
+    // 这里的 input 验证会拦截所有非法请求
+    // ==========================================
+    if (input && input.action) {
+        var validation = validateActionInput(input.action, input);
+        if (!validation.valid) {
+            data.error = 'バリデーション失敗: ' + validation.errors.join(', ');
+            data.validation_errors = validation.errors;
+            // 验证失败，强制停止后续处理
+            return; 
+        }
+        // 使用清洗后的安全数据覆盖原始 input
+        for (var vKey in validation.sanitized) {
+            input[vKey] = validation.sanitized[vKey];
+        }
+    }
+    // ==========================================
+    // 修复：专长保存逻辑（无记录时自动创建）
+    // ==========================================
     if (input && input.action === 'specialty') {
-        var capGr = new GlideRecord('x_1821654_kokoro_0_volunteer_capability');
-        capGr.addQuery('volunteer', input.target_id); 
+        var targetId = input.sys_id || gs.getUserID();
+        var capGr = new GlideRecord(CONFIG.tables.VOL_CAPABILITY);
+        capGr.addQuery('volunteer', targetId);
         capGr.query();
-        
         if (capGr.next()) {
-            capGr.setValue('specialty', input.new_cap); 
+            capGr.setValue('specialty', input.new_cap);
             capGr.update();
         } else {
+            // 如果该干员是第一次被分配专长，主动在数据库为其创建记录
             capGr.initialize();
-            capGr.setValue('volunteer', input.target_id);
-            capGr.setValue('specialty', input.new_cap); 
+            capGr.setValue('volunteer', targetId);
+            capGr.setValue('specialty', input.new_cap);
+            capGr.setValue('is_available', '1');
+            capGr.setValue('max_concurrent_tasks', 5);
             capGr.insert();
         }
-        gs.addInfoMessage('Capability Saved: ' + input.new_cap);
-        return; 
     }
     
     if (input && input.action === 'assign_task') {
@@ -5015,11 +6484,13 @@ function checkConcurrency(tableName, sysId, clientModCount) {
     if (input && input.action === 'change_status' && input.new_state === '2') {
         var wishGr = new GlideRecord(CONFIG.tables.SILENT_WISH);
         if (wishGr.get(input.sys_id)) {
-            var category = wishGr.getValue('request_category'); 
-            var qty = parseInt(wishGr.getValue('u_quantity')) || 1;
+            var category = wishGr.getValue('request_category');
+            var qty = parseInt(wishGr.getValue('u_quantity')) || parseInt(wishGr.getValue('qty')) || 1;
             if (category) {
                 var invResult = updateInventory(category.toUpperCase(), qty, input.sys_id);
-                if (!invResult.success) {
+                // 判定：如果扣减失败，且失败原因不是"找不到物品代码"，才抛出错误并拦截。
+                // 若原因是"找不到物品代码"，则视为非库存工单（如SOS），直接跳过库存检查继续执行。
+                if (!invResult.success && invResult.message !== '物品コードが見つかりません') {
                     data.error = "在庫チェック失敗: " + invResult.message;
                     return;
                 }
@@ -5240,7 +6711,7 @@ function checkConcurrency(tableName, sysId, clientModCount) {
     }
 	
     // ==========================================
-    // 加载干员 (Volunteer Capability 表)
+    // 修复：加载干员列表（强制防错与实时统计）
     // ==========================================
     function loadVolunteerList() {
         var volunteerList = [];
@@ -5262,37 +6733,60 @@ function checkConcurrency(tableName, sysId, clientModCount) {
         userGr.addQuery('sys_id', 'IN', userIds);
         userGr.addQuery('active', true);
         userGr.query();
-
+        
         while (userGr.next()) {
             var uid = userGr.getUniqueValue();
             var capStr = "General Support";
-            var currentLoad = 0;
             var maxLoad = 5;
-            var isAvailable = false;
+            // ★ 修复点 1：默认将 isAvailable 设为 true。防止新用户因为没记录而永远显示灰点/离线
+            var isAvailable = true; 
             
-            var capGr2 = new GlideRecord('x_1821654_kokoro_0_volunteer_capability');
+            var capGr2 = new GlideRecord(CONFIG.tables.VOL_CAPABILITY);
             capGr2.addQuery('volunteer', uid); 
             capGr2.query();
             if (capGr2.next()) {
                 var specialty = capGr2.getDisplayValue('specialty');
                 var skills = capGr2.getValue('skills');
                 capStr = specialty || skills || "General Support";
-                currentLoad = parseInt(capGr2.getValue('current_task_count')) || 0;
                 maxLoad = parseInt(capGr2.getValue('max_concurrent_tasks')) || 5;
-                isAvailable = (capGr2.getValue('is_available') === '1' || capGr2.getValue('is_available') === 'true');
+                var rawAvail = capGr2.getValue('is_available');
+                isAvailable = (rawAvail === '1' || rawAvail === 'true' || rawAvail === true);
+            }
+
+            // ★ 修复点 2：严格聚合统计正在进行的真实任务
+            var gaLoad = new GlideAggregate(CONFIG.tables.SILENT_WISH);
+            gaLoad.addQuery('assigned_to', uid);
+            gaLoad.addQuery('state', 'IN', '2,6,11'); // 仅统计 对应中(2), 保留(6), 待处理(11)
+            gaLoad.addAggregate('COUNT');
+            gaLoad.query();
+            
+            var currentLoad = 0;
+            if (gaLoad.next()) {
+                currentLoad = parseInt(gaLoad.getAggregate('COUNT')) || 0;
             }
 
             var volStatus = 'OFFLINE';
             var statusClass = 'offline';
+            
             if (isAvailable) {
-                if (currentLoad >= maxLoad) { volStatus = 'OVERLOADED'; statusClass = 'busy'; }
-                else if (currentLoad > 0) { volStatus = 'ENGAGED'; statusClass = 'busy'; }
-                else { volStatus = 'STANDBY'; statusClass = 'online'; }
+                if (currentLoad >= maxLoad && maxLoad > 0) { 
+                    volStatus = 'OVERLOADED'; 
+                    statusClass = 'busy'; 
+                } else if (currentLoad > 0) { 
+                    volStatus = 'ENGAGED'; 
+                    statusClass = 'busy'; // 黄点/橙点
+                } else { 
+                    volStatus = 'STANDBY'; 
+                    statusClass = 'online'; // 绿点
+                }
             }
 
             var photoUrl = "";
-            if (userGr.photo.getDisplayValue()) { photoUrl = userGr.photo.getDisplayValue(); }
+            if (userGr.photo && userGr.photo.getDisplayValue()) { 
+                photoUrl = userGr.photo.getDisplayValue(); 
+            }
 
+            // ★ 修复点 3：确保所有数值均为标准 Int，防止前端读取为 NaN
             volunteerList.push({
                 sys_id: uid,
                 name: userGr.getDisplayValue('name'),
@@ -5302,8 +6796,9 @@ function checkConcurrency(tableName, sysId, clientModCount) {
                 status: volStatus,
                 status_class: statusClass,
                 current_load: currentLoad,
+                open_tasks: currentLoad,
                 max_load: maxLoad,
-                load_percent: Math.round((currentLoad / maxLoad) * 100),
+                load_percent: maxLoad > 0 ? Math.round((currentLoad / maxLoad) * 100) : 0,
                 capability: capStr
             });
         }
@@ -5316,10 +6811,11 @@ function checkConcurrency(tableName, sysId, clientModCount) {
     if (input) {
         // CSRF Gateway
         var volWriteActions = [
-            'change_status', 'assign_to_me', 'add_comment',
-            'toggle_availability', 'update_location', 'update_capacity',
-            'send_broadcast', 'delete_broadcast'
-        ];
+       'change_status', 'assign_to_me', 'add_comment',
+       'toggle_availability', 'update_location', 'update_capacity',
+      'send_broadcast', 'delete_broadcast',
+      'batch_action','update_zone'
+   ];
         if (input.action && volWriteActions.indexOf(input.action) !== -1) {
             if (!validateVolCSRF(input.csrf_token)) {
                 data.error = 'セッションが無効です。ページを再読み込みしてください。';
@@ -5327,18 +6823,149 @@ function checkConcurrency(tableName, sysId, clientModCount) {
                 return;
             }
         }
+			
+			// ==========================================
+        // ACTION: Batch Action（バッチ操作）
+        // ==========================================
+        if (input.action === 'batch_action') {
+            // 入力検証
+            var batchType = input.batch_type;  // 'assign_to_me' | 'change_status' | 'cancel'
+            var batchIds = input.sys_ids;      // カンマ区切りの sys_id 文字列
+            
+            if (!batchType || !batchIds) {
+                data.error = '無効なバッチ操作です';
+                return;
+            }
+            
+            var validBatchTypes = ['assign_to_me', 'change_status', 'cancel'];
+            if (validBatchTypes.indexOf(batchType) === -1) {
+                data.error = '無効な操作タイプです';
+                return;
+            }
+            
+            // Rate Limiting: バッチ全体で1回カウント
+            var batchVolId = gs.getUserID();
+            var batchRateCheck = VolRateLimiter.check(batchVolId, 'BATCH', 1, 5);
+            if (!batchRateCheck.allowed) {
+                data.error = batchRateCheck.message;
+                return;
+            }
+            
+            // sys_id リストをパース (最大20件)
+            var idList = String(batchIds).split(',');
+            if (idList.length > 20) {
+                data.error = '一度に処理できるのは最大20件です';
+                return;
+            }
+            
+            // 各 sys_id を検証
+            for (var bi = 0; bi < idList.length; bi++) {
+                if (!validateSysId(idList[bi].trim())) {
+                    data.error = '無効なIDが含まれています';
+                    return;
+                }
+            }
+            
+            // バッチ処理実行
+            var batchResults = { success: 0, failed: 0, errors: [] };
+            
+            for (var bj = 0; bj < idList.length; bj++) {
+                var bSysId = idList[bj].trim();
+                var bGr = new GlideRecord(CONFIG.tables.SILENT_WISH);
+                
+                if (!bGr.get(bSysId)) {
+                    batchResults.failed++;
+                    batchResults.errors.push(bSysId + ': レコードが見つかりません');
+                    continue;
+                }
+                
+                var bState = String(bGr.getValue('state') || '10');
+                var bUpdateOk = false;
+                
+                try {
+                    if (batchType === 'assign_to_me') {
+                        bGr.setValue('assigned_to', data.user_id);
+                        if (bState === '1' || bState === '10') {
+                            bGr.setValue('state', '11');
+                        }
+                        bUpdateOk = !!bGr.update();
+                        if (bUpdateOk) logProcessEvent(bSysId, 'Batch assigned to ' + data.user_name, data.user_id);
+                        
+                    } else if (batchType === 'change_status' && input.new_state) {
+                        var bNewState = String(input.new_state);
+                        var bValidation = StateValidator.validateTransition(bState, bNewState);
+                        if (!bValidation.valid) {
+                            batchResults.failed++;
+                            batchResults.errors.push(bGr.getValue('number') + ': ' + bValidation.message);
+                            continue;
+                        }
+                        if ((bNewState === '2' || bNewState === '4') && bGr.assigned_to.nil()) {
+                            batchResults.failed++;
+                            batchResults.errors.push(bGr.getValue('number') + ': 担当者未設定');
+                            continue;
+                        }
+                        bGr.setValue('state', bNewState);
+                        if (bNewState === '4') bGr.setValue('u_completed_at', new GlideDateTime());
+                        bUpdateOk = !!bGr.update();
+                        if (bUpdateOk) logProcessEvent(bSysId, 'Batch status → ' + bNewState, data.user_id);
+                        
+                    } else if (batchType === 'cancel') {
+                        var cancelValidation = StateValidator.validateTransition(bState, '5');
+                        if (!cancelValidation.valid) {
+                            batchResults.failed++;
+                            batchResults.errors.push(bGr.getValue('number') + ': ' + cancelValidation.message);
+                            continue;
+                        }
+                        bGr.setValue('state', '5');
+                        bUpdateOk = !!bGr.update();
+                        if (bUpdateOk) logProcessEvent(bSysId, 'Batch cancelled', data.user_id);
+                    }
+                    
+                    if (bUpdateOk) batchResults.success++;
+                    else { batchResults.failed++; batchResults.errors.push(bSysId + ': 更新失敗'); }
+                    
+                } catch (bErr) {
+                    batchResults.failed++;
+                    batchResults.errors.push(bSysId + ': ' + bErr.message);
+                }
+            }
+            
+            // 結果返却
+            data.batch_results = batchResults;
+            data.success = batchResults.success > 0;
+            if (batchResults.success > 0) {
+                VolRateLimiter.record(batchVolId, 'BATCH');
+            }
+            return;
+        } // End of batch_action
 
-        if (input.action === 'update_location' && input.zone) {
+        // ==========================================
+        // [V9] 現在地 (Zone) 更新
+        // ==========================================
+        if (input.action === 'update_zone') {
+            var zoneValue = input.zone;
+            var currentUserId = gs.getUserID();
+
             try {
-                var locVolId = gs.getUserID();
-                var locRateCheck = VolRateLimiter.check(locVolId, 'VOL_STATE', 1, 3);
-                if (!locRateCheck.allowed) { data.error = locRateCheck.message; return; }
-                var assignEngine = new x_1821654_kokoro_0.KokoroAutoAssignment();
-                assignEngine.updateVolunteerLocation(data.user_id, input.zone);
-                data.success = true;
-                data.message = '位置を更新しました';
-                VolRateLimiter.record(locVolId, 'VOL_STATE');
-            } catch (e) { data.error = '位置更新に失敗しました: ' + e.message; }
+                var userGr = new GlideRecord('sys_user');
+                if (userGr.get(currentUserId)) {
+                    userGr.setValue('current_zone', zoneValue);
+                    userGr.update();
+                    logProcessEvent('zone_update', currentUserId, {
+                        zone: zoneValue,
+                        timestamp: new GlideDateTime().toString()
+                    });
+                    data.zone_updated = true;
+                    data.current_zone = zoneValue;
+                } else {
+                    data.error = 'ユーザーが見つかりません';
+                }
+            } catch (e) {
+                gs.getSession().putClientData('shelter_zone', zoneValue);
+                data.zone_updated = true;
+                data.current_zone = zoneValue;
+                data.zone_storage = 'session';
+            }
             return;
         }
 
@@ -5493,9 +7120,9 @@ function checkConcurrency(tableName, sysId, clientModCount) {
             try {
                 var hb = new GlideRecord(CONFIG.tables.HEARTBEAT);
                 hb.initialize();
-                hb.setValue('u_user', data.user_id);
-                hb.setValue('u_timestamp', new GlideDateTime());
-                hb.setValue('u_status', 'Safe');
+                hb.setValue('user', data.user_id);
+                hb.setValue('timestamp', new GlideDateTime());
+                hb.setValue('status', 'Safe');
                 var hbId = hb.insert();
                 data.heartbeat_id = hbId; data.success = true;
                 logProcessEvent(hbId, 'Heartbeat registered', data.user_id);
@@ -5710,6 +7337,18 @@ function checkConcurrency(tableName, sysId, clientModCount) {
         }
     }
 
+    // ==========================================
+    // [V9] 現在地 (Zone) 取得
+    // ==========================================
+    try {
+        var zoneUserGr = new GlideRecord('sys_user');
+        if (zoneUserGr.get(gs.getUserID())) {
+            data.current_zone = zoneUserGr.getValue('current_zone') || '';
+        }
+    } catch (e) {
+        data.current_zone = gs.getSession().getClientData('shelter_zone') || '';
+    }
+
     // ★ [FIX-4] 使用正确的角色筛选加载志愿者
     data.volunteers = loadVolunteerList();
 
@@ -5840,14 +7479,14 @@ function checkConcurrency(tableName, sysId, clientModCount) {
         <sys_created_by>admin</sys_created_by>
         <sys_created_on>2026-01-26 11:41:20</sys_created_on>
         <sys_id>f95e8ba383227210f6b1fb96feaad375</sys_id>
-        <sys_mod_count>466</sys_mod_count>
+        <sys_mod_count>540</sys_mod_count>
         <sys_name>Kokoro Volunteer Dashboard</sys_name>
         <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
         <sys_policy/>
         <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
         <sys_update_name>sp_widget_f95e8ba383227210f6b1fb96feaad375</sys_update_name>
         <sys_updated_by>admin</sys_updated_by>
-        <sys_updated_on>2026-02-16 07:02:34</sys_updated_on>
+        <sys_updated_on>2026-02-20 08:37:39</sys_updated_on>
         <template><![CDATA[<style>
 /* ============================================================
    KOKORO DASHBOARD CSS v9.6 (ULTIMATE FUSED EDITION)
@@ -8499,12 +10138,172 @@ body > div[style*="position:fixed"][style*="left"] {
     background: #a71d2a;
     transform: translateY(-1px);
 }
+
+  /* --- 修复：干员列表卡片与弹窗的 LOAD 进度条样式 --- */
+.stat-row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #666;
+}
+
+.stat-bar-track, .dossier-bar-track {
+    flex-grow: 1;
+    width: 100%;
+    height: 6px;
+    background: #e0e0e0;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.stat-bar-track {
+    margin-left: 10px; /* 与左侧 LOAD 文字拉开间距 */
+}
+
+.dossier-bar-track {
+    margin-top: 10px; /* 弹窗内的进度条间距 */
+}
+
+.stat-bar-fill, .dossier-bar-fill {
+    height: 100%;
+    background: #1a1a1a; /* 默认黑色填充 */
+    border-radius: 3px;
+    transition: width 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.stat-bar-fill.alert, .dossier-bar-fill.alert {
+    background: #cf222e !important; /* 当任务数 >= 3 时，进度条变为红色警告 */
+}
+  /* ==========================================
+   PART 30: Accessibility [V8]
+   ========================================== */
+
+/* --- スキップリンク --- */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 16px;
+  z-index: 9999999;
+  padding: 8px 16px;
+  background: #1a1a2e;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 0 0 6px 6px;
+  text-decoration: none;
+  transition: top 0.2s;
+}
+.skip-link:focus {
+  top: 0;
+  outline: 3px solid #ffab00;
+  outline-offset: 2px;
+}
+
+/* --- sr-only (スクリーンリーダー専用) --- */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* --- フォーカスインジケーター --- */
+/* 全てのインタラクティブ要素に統一的なフォーカスリング */
+.kanban-card:focus,
+.vol-tab:focus,
+.batch-btn:focus,
+.modal-close-btn:focus,
+button:focus,
+a:focus,
+select:focus,
+input:focus,
+textarea:focus {
+  outline: 3px solid #ffab00 !important;
+  outline-offset: 2px !important;
+}
+
+/* フォーカスが :focus-visible のみ（マウスクリック時は非表示） */
+.kanban-card:focus:not(:focus-visible),
+.vol-tab:focus:not(:focus-visible),
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible),
+select:focus:not(:focus-visible) {
+  outline: none !important;
+}
+.kanban-card:focus-visible,
+.vol-tab:focus-visible,
+button:focus-visible,
+a:focus-visible,
+select:focus-visible {
+  outline: 3px solid #ffab00 !important;
+  outline-offset: 2px !important;
+}
+
+/* --- コントラスト補正 (4.5:1 以上) --- */
+
+/* 看板ヘッダーテキスト: #555 on #fafafa = 5.9:1 ✅ */
+
+/* 看板カウント数字 */
+.kanban-col-inprogress .kanban-count {
+  color: #bf360c; /* #e65100 → #bf360c (on #fff3e0: 4.8:1) */
+}
+
+/* urgency ラベル */
+.urgency-medium {
+  color: #0d47a1; /* #1565c0 → #0d47a1 (on #e3f2fd: 7.5:1) */
+}
+.urgency-low {
+  color: #1b5e20; /* #33691e → #1b5e20 (on #f1f8e9: 7.1:1) */
+}
+
+/* 時間テキスト */
+.kanban-card-time {
+  color: #666 !important; /* #999 → #666 (on #fff: 5.7:1) */
+}
+
+/* zone テキスト */
+.kanban-card-zone {
+  color: #555 !important; /* #777 → #555 (on #fff: 7.4:1) */
+}
+
+/* 空列テキスト */
+.kanban-empty {
+  color: #767676 !important; /* #bbb → #767676 (on #fafafa: 4.6:1) */
+}
+
+/* --- prefers-reduced-motion --- */
+@media (prefers-reduced-motion: reduce) {
+  .kanban-card,
+  .kanban-col,
+  .batch-action-bar,
+  .toast-container .toast-item {
+    transition: none !important;
+    animation: none !important;
+  }
+  .kanban-card.dragging {
+    transform: none !important;
+  }
+}
+
+/* --- prefers-color-scheme: dark 準備 --- */
+/* 将来のダークモード対応用プレースホルダー */
+/* @media (prefers-color-scheme: dark) { ... } */
+
 </style>
 <!-- ============================================================
      主容器 — 单一顶层包裹 (FIX 1: 移除重复嵌套容器)
      ============================================================ -->
 <div class="kokoro-volunteer-container">
-  
+<a class="skip-link" href="#main-content">メインコンテンツへスキップ</a>
+<a class="skip-link" href="#tactical-board">タクティカルボードへスキップ</a>
   
 <!-- Toast 通知コンテナ -->
 <div class="toast-container" aria-live="polite" aria-atomic="true">
@@ -8534,6 +10333,13 @@ body > div[style*="position:fixed"][style*="left"] {
             {{c.data.emergencyAlert || '現在、余震警報発令中。安全を確保してください。'}}
         </span>
     </div>
+  <div class="offline-banner" ng-if="!c.isOnline">
+  <i class="fa fa-wifi" aria-hidden="true"></i>
+  OFFLINE_MODE — 操作はローカルキューに保存されます
+  <span ng-if="c.offlineQueueCount > 0">
+    ({{c.offlineQueueCount}}件待ち)
+  </span>
+</div>
 
     <button class="sys-btn-ghost" ng-click="c.goToUserView()">
         [ USER_VIEW ]
@@ -8553,9 +10359,17 @@ body > div[style*="position:fixed"][style*="left"] {
             </div>
         </div>
         <div class="system-status">
-            <div class="status-indicator">
-                <span class="status-dot"></span>
-                <span class="status-text">SYS_ONLINE</span>
+            <div class="status-indicator">              
+              <span class="sys-status" ng-class="{'sys-offline': !c.isOnline}">
+  <span class="sys-status-dot" ng-class="{'offline': !c.isOnline}"></span>
+  {{c.isOnline ? 'SYS_ONLINE' : 'OFFLINE'}}
+</span>
+<span class="offline-queue-badge" ng-if="c.offlineQueueCount > 0"
+      ng-click="c.retryOfflineQueue()"
+      title="{{c.offlineQueueCount}}件の操作がキュー待ち（クリックで再送）">
+  <i class="fa fa-cloud-upload" aria-hidden="true"></i> {{c.offlineQueueCount}}
+</span>
+
             </div>
             <span class="version-tag">v4.1.0-zenless</span>
             <span class="system-time">{{c.currentTime}}</span>
@@ -8563,24 +10377,49 @@ body > div[style*="position:fixed"][style*="left"] {
     </div>
 
     <!-- 导航标签 -->
-    <div class="nav-tabs-custom">
-        <div class="tab" ng-class="{'active': c.view === 'dashboard'}" ng-click="c.view = 'dashboard'">
+    <div class="nav-tabs-custom" role="tablist" aria-label="メインナビゲーション">
+        <button class="tab" role="tab"
+                id="tab-dashboard"
+                aria-selected="{{c.view === 'dashboard'}}"
+                aria-controls="panel-dashboard"
+                ng-class="{'active': c.view === 'dashboard'}" 
+                ng-click="c.view = 'dashboard'"
+                tabindex="{{c.view === 'dashboard' ? '0' : '-1'}}">
             <span class="tab-number">01</span> / OVERVIEW
-        </div>
-        <div class="tab" ng-class="{'active': c.view === 'tactical'}" ng-click="c.view = 'tactical'">
+        </button>
+        <button class="tab" role="tab"
+                id="tab-tactical"
+                aria-selected="{{c.view === 'tactical'}}"
+                aria-controls="panel-tactical"
+                ng-class="{'active': c.view === 'tactical'}" 
+                ng-click="c.view = 'tactical'"
+                tabindex="{{c.view === 'tactical' ? '0' : '-1'}}">
             <span class="tab-number">02</span> / TACTICAL
-        </div>
-        <div class="tab" ng-class="{'active': c.view === 'mine'}" ng-click="c.view = 'mine'">
-    <span class="tab-number">03</span> / OPERATORS ({{c.data.volunteers.length || 0}})
-</div>
-        <div class="tab" ng-class="{'active': c.view === 'comms'}" ng-click="c.view = 'comms'">
-    <span class="tab-number">04</span> / COMMS ({{c.data.announcements.length || 0}})
-</div>
+        </button>
+        <button class="tab" role="tab"
+                id="tab-mine"
+                aria-selected="{{c.view === 'mine'}}"
+                aria-controls="panel-mine"
+                ng-class="{'active': c.view === 'mine'}" 
+                ng-click="c.view = 'mine'"
+                tabindex="{{c.view === 'mine' ? '0' : '-1'}}">
+            <span class="tab-number">03</span> / OPERATORS ({{c.data.volunteers.length || 0}})
+        </button>
+        <button class="tab" role="tab"
+                id="tab-comms"
+                aria-selected="{{c.view === 'comms'}}"
+                aria-controls="panel-comms"
+                ng-class="{'active': c.view === 'comms'}" 
+                ng-click="c.view = 'comms'"
+                tabindex="{{c.view === 'comms' ? '0' : '-1'}}">
+            <span class="tab-number">04</span> / COMMS ({{c.data.announcements.length || 0}})
+        </button>
     </div>
+    
   
   <div class="board-container">
       
-        <div class="view-dashboard" ng-if="c.view === 'dashboard'" style="height:100%; display:flex; flex-direction:column;">
+        <div class="view-dashboard" ng-if="c.view === 'dashboard'" role="tabpanel" id="panel-dashboard" aria-labelledby="tab-dashboard" style="height:100%; display:flex; flex-direction:column;">
 
             <div class="volunteer-status-panel" ng-if="c.data.isVolunteer">
                 <div class="status-row">
@@ -8594,13 +10433,18 @@ body > div[style*="position:fixed"][style*="left"] {
                 <div class="status-row">
                     <i class="fa fa-map-pin"></i>
                     <span>現在地:</span>
-                    <select ng-model="c.volunteerStatus.currentZone" ng-change="c.updateMyLocation(c.volunteerStatus.currentZone)">
-                        <option value="">-- SELECT ZONE --</option>
-                        <option value="Family Area">FAMILY_AREA</option>
-                        <option value="Single Area">SINGLE_AREA</option>
-                        <option value="Medical Area">MEDICAL_AREA</option>
-                        <option value="Staff Room">STAFF_ROOM</option>
-                    </select>
+                    <select ng-model="c.currentZone"
+        ng-change="c.onZoneChange()"
+        aria-label="現在地を選択"
+        class="zone-select">
+  <option value="">— 現在地を選択 —</option>
+  <option value="FAMILY_AREA">ファミリーエリア（家族）</option>
+  <option value="SINGLE_AREA">単身エリア</option>
+  <option value="MEDICAL_AREA">医療・ケアエリア</option>
+  <option value="STAFF_ROOM">スタッフ待機室</option>
+  <option value="FIELD">フィールド（現場）</option>
+  <option value="HQ">本部 (HQ)</option>
+</select>
                 </div>
             </div>
 
@@ -8719,8 +10563,8 @@ body > div[style*="position:fixed"][style*="left"] {
                             <div class="metric-mini-bar"><div class="metric-mini-fill" style="width: 78%"></div></div>
                         </div>
                     </div>
-                   <div class="ticket-card-body" style="flex-grow:1;"></div>
-                 <!-- ╔══════════════════════════════════════════════╗
+                   <div style="flex-grow:1;"></div>
+<!-- ╔══════════════════════════════════════════════╗
      ║  SITREP: TACTICAL BRIEFING PANEL             ║
      ╚══════════════════════════════════════════════╝ -->
 <div class="sitrep-panel">
@@ -8828,7 +10672,7 @@ body > div[style*="position:fixed"][style*="left"] {
 </div>          
 </div>
 
-        <div class="view-tactical" ng-if="c.view === 'tactical'" style="height:100%; display:flex; flex-direction:column;">
+        <div id="tactical-board" class="view-tactical" ng-if="c.view === 'tactical'" role="tabpanel" aria-labelledby="tab-tactical" style="height:100%; display:flex; flex-direction:column;">
             
             <div class="stats-section" style="margin-bottom: 20px;">
                 <div class="section-header">
@@ -8873,19 +10717,39 @@ body > div[style*="position:fixed"][style*="left"] {
                 <div class="section-header">
                     <span class="section-tag">02</span>
                     <span class="section-title">TACTICAL_BOARD</span>
-                    
+                  
+                  
+							<!-- バッチモード切替ボタン -->
+							<button class="batch-toggle-btn" 
+			        ng-click="c.toggleBatchMode()" 
+        ng-class="{'active': c.batchMode}"
+        title="一括操作モード">
+						  <i class="fa" ng-class="c.batchMode ? 'fa-check-square-o' : 'fa-square-o'"></i>
+				  <span ng-if="!c.batchMode">一括選択</span>
+		  <span ng-if="c.batchMode">選択中 ({{c.getSelectedCount()}})</span>
+					</button>
+
+						<!-- バッチモード時: 全選択ボタン -->
+						<button class="batch-select-all-btn" 
+			        ng-if="c.batchMode"
+			        ng-click="c.selectAll()">
+			  <i class="fa fa-check-double"></i> 全選択
+							</button>
                     <div class="tactical-controls" style="margin-left: auto;">
                         <div class="tactical-search">
-                            <i class="fa fa-search"></i>
-                            <input type="text" 
+                            <i class="fa fa-search" aria-hidden="true"></i>
+                            <label for="tactical-search" class="sr-only">工単を検索</label>
+                            <input id="tactical-search" type="text" 
                                    placeholder="SEARCH (ID, LOC, USER)..." 
                                    ng-model="c.tacticalSearchText" 
+                                   aria-label="工単を検索"
                                    ng-change="c.organizeKanban()">
                         </div>
                         
                         <select class="tactical-select" 
-                                ng-model="c.tacticalFilterPriority" 
-                                ng-change="c.organizeKanban()">
+                                 ng-model="c.tacticalFilterPriority" 
+                                 aria-label="優先度でフィルタ"
+                                 ng-change="c.organizeKanban()">
                             <option value="">ALL_PRIORITY</option>
                             <option value="Critical">CRITICAL</option>
                             <option value="High">HIGH</option>
@@ -8908,123 +10772,185 @@ body > div[style*="position:fixed"][style*="left"] {
                         </span>
                     </div>
                 </div>
+              
 
-                <div class="kanban-board-wrapper">
-                    <div class="kanban-board">
-                        
-                        <div class="kanban-column col-todo">
-                            <div class="kanban-header">
-                                <span><i class="fa fa-inbox"></i> BACKLOG</span>
-                                <span class="kanban-count">{{c.kanbanData.todo.length}}</span>
-                            </div>
-                            <div class="kanban-body">
-                                <div class="jira-card" 
-                                     ng-class="'priority-' + item.urgency" 
-                                     ng-repeat="item in c.kanbanData.todo" 
-                                     ng-click="c.openModal(item)">
-                                    <div class="card-top">
-                                        <span class="card-id">{{item.number}}</span>
-                                        <span class="priority-badge" ng-class="'priority-' + item.urgency" style="padding:2px 6px; font-size:10px;">{{item.urgency}}</span>
-                                    </div>
-                                    <div class="card-title" style="font-size:14px;">
-                                        {{c.dict[item.category] || item.category}} <span class="qty-badge">x{{item.quantity}}</span>
-                                    </div>
-                                    <div class="card-loc"><i class="fa fa-map-marker"></i> {{item.zone}}</div>
-                                    <div class="metal-divider" style="margin:8px 0;"></div>
-                                    <div style="font-size:11px; color:#999;">{{item.time_24h}}</div>
-                                </div>
-                                <div class="empty-board" ng-if="c.kanbanData.todo.length === 0" style="padding:20px;">
-                                    <i class="fa fa-check" style="font-size:24px;"></i>
-                                    <p style="font-size:12px;">NO TASKS</p>
-                                </div>
-                            </div>
-                        </div>
+               <!-- ★★★ [V5] 4列看板 + ドラッグ＆ドロップ ★★★ -->
+<div class="kanban-board-v5">
 
-                        <div class="kanban-column col-active">
-                            <div class="kanban-header">
-                                <span><i class="fa fa-spinner fa-spin"></i> ACTIVE OPS</span>
-                                <span class="kanban-count">{{c.kanbanData.active.length}}</span>
-                            </div>
-                            <div class="kanban-body">
-                                <div class="jira-card" 
-                                     ng-class="'priority-' + item.urgency" 
-                                     ng-repeat="item in c.kanbanData.active" 
-                                     ng-click="c.openModal(item)">
-                                    <div class="card-top">
-                                        <span class="card-id">{{item.number}}</span>
-                                        <span class="status-tag status-11">{{c.statusNames[item.state]}}</span>
-                                    </div>
-                                    <div class="card-title" style="font-size:14px;">
-                                        {{c.dict[item.category] || item.category}} <span class="qty-badge">x{{item.quantity}}</span>
-                                    </div>
-                                    <div style="background:rgba(0,0,0,0.05); padding:6px; border-radius:4px; margin-bottom:8px; font-size:12px; display:flex; align-items:center; gap:6px;">
-                                        <div class="avatar-box" style="width:20px; height:20px; font-size:10px;">{{item.assigned_to_name.charAt(0)}}</div>
-                                        <strong>{{item.assigned_to_name}}</strong>
-                                    </div>
-                                    <div class="card-sla" ng-if="item.sla" style="margin:8px 0; padding-top:8px;">
-                                        <div class="sla-bar-container" style="height:4px;">
-                                            <div class="sla-bar" ng-style="{width: item.sla.percentage + '%', background: c.getSLABarColor(item.sla)}"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="kanban-column col-done">
-                            <div class="kanban-header">
-                                <span><i class="fa fa-trophy"></i> COMPLETED</span>
-                                <span class="kanban-count">{{c.kanbanData.done.length}}</span>
-                            </div>
-                            <div class="kanban-body">
-                                <div class="jira-card" 
-                                     ng-repeat="item in c.kanbanData.done" 
-                                     ng-click="c.openModal(item)"
-                                     style="opacity:0.8; border-left-color:var(--color-success);">
-                                    <div class="card-top">
-                                        <span class="card-id" style="text-decoration:line-through;">{{item.number}}</span>
-                                        <i class="fa fa-check-circle" style="color:var(--color-success);"></i>
-                                    </div>
-                                    <div class="card-title" style="font-size:14px; color:#666;">
-                                        {{c.dict[item.category] || item.category}}
-                                    </div>
-                                    <div style="font-size:11px; color:#999;">
-                                        Resolved by: {{item.assigned_to_name}}<br>
-                                        {{item.time_ago}}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="kanban-column col-cancelled" ng-if="c.showCancelledCol">
-                            <div class="kanban-header">
-                                <span><i class="fa fa-ban"></i> CANCELLED</span>
-                                <span class="kanban-count">{{c.kanbanData.cancelled.length}}</span>
-                            </div>
-                            <div class="kanban-body">
-                                <div class="jira-card" 
-                                     ng-repeat="item in c.kanbanData.cancelled" 
-                                     ng-click="c.openModal(item)"
-                                     style="opacity:0.6; filter:grayscale(100%);">
-                                    <div class="card-top">
-                                        <span class="card-id">{{item.number}}</span>
-                                        <span class="status-tag" style="background:#333; color:#fff;">VOID</span>
-                                    </div>
-                                    <div class="card-title" style="font-size:14px; text-decoration:line-through;">
-                                        {{c.dict[item.category] || item.category}}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                    </div>
-                </div>
-            </div>
-
+  <!-- ═══ COL 1: ASSIGNED ═══ -->
+  <div class="kanban-col kanban-col-assigned"
+       role="region"
+       aria-label="ASSIGNED — {{c.kanbanData.assigned.length}} 件"
+       ng-class="{'drag-over': c.isDropTarget('assigned')}"
+       ondragover="event.preventDefault(); angular.element(this).scope().$apply(function(s){ s.c.onDragOver(event, 'assigned'); });"
+       ondragleave="angular.element(this).scope().$apply(function(s){ s.c.onDragLeave('assigned'); });"
+       ondrop="angular.element(this).scope().$apply(function(s){ s.c.onDrop(event, 'assigned'); });">
+    <div class="kanban-header">
+      <span class="kanban-header-icon"><i class="fa fa-inbox"></i></span>
+      <span class="kanban-header-title">ASSIGNED</span>
+      <span class="kanban-count">{{c.kanbanData.assigned.length}}</span>
+    </div>
+    <div class="kanban-body">
+      <div class="kanban-card"
+           role="article"
+           tabindex="0"
+           aria-label="{{item.number}} — {{item.urgency}} — {{item.assigned_to_name || '未割当'}}"
+           ng-keydown="c.onCardKeydown($event, item)"
+           ng-repeat="item in c.kanbanData.assigned track by item.sys_id"
+           draggable="true"
+           ng-class="{'dragging': c.isDragging(item), 'batch-selected': c.selectedItems[item.sys_id], 'urgency-critical': item.urgency==='Critical'}"
+           ondragstart="angular.element(this).scope().$apply(function(s){ s.c.onDragStart(s.item); });"
+           ondragend="angular.element(this).scope().$apply(function(s){ s.c.onDragEnd(); });"
+           ng-click="c.batchMode ? c.toggleSelect(item, $event) : c.openModal(item)">
+        <div class="batch-checkbox" ng-if="c.batchMode" ng-click="c.toggleSelect(item, $event)">
+          <i class="fa" ng-class="c.selectedItems[item.sys_id] ? 'fa-check-square' : 'fa-square-o'"></i>
         </div>
+        <div class="kanban-card-id">{{item.number}}</div>
+        <div class="kanban-card-meta">
+          <span class="kanban-card-urgency urgency-{{item.urgency | lowercase}}">{{item.urgency}}</span>
+          <span class="kanban-card-time">{{item.time_ago || item.created_on}}</span>
+        </div>
+        <div class="kanban-card-zone" ng-if="item.zone">{{item.zone}}</div>
+        <div class="kanban-card-assignee" ng-if="item.assigned_to_name">
+          <i class="fa fa-user"></i> {{item.assigned_to_name}}
+        </div>
+      </div>
+      <div class="kanban-empty" ng-if="c.kanbanData.assigned.length === 0">
+        <i class="fa fa-check"></i><span>未処理なし</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ COL 2: IN_PROGRESS ═══ -->
+  <div class="kanban-col kanban-col-inprogress"
+       role="region"
+       aria-label="IN_PROGRESS — {{c.kanbanData.inprogress.length}} 件"
+       ng-class="{'drag-over': c.isDropTarget('inprogress')}"
+       ondragover="event.preventDefault(); angular.element(this).scope().$apply(function(s){ s.c.onDragOver(event, 'inprogress'); });"
+       ondragleave="angular.element(this).scope().$apply(function(s){ s.c.onDragLeave('inprogress'); });"
+       ondrop="angular.element(this).scope().$apply(function(s){ s.c.onDrop(event, 'inprogress'); });">
+    <div class="kanban-header">
+      <span class="kanban-header-icon"><i class="fa fa-bolt"></i></span>
+      <span class="kanban-header-title">IN_PROGRESS</span>
+      <span class="kanban-count">{{c.kanbanData.inprogress.length}}</span>
+    </div>
+    <div class="kanban-body">
+      <div class="kanban-card"
+           role="article"
+           tabindex="0"
+           aria-label="{{item.number}} — {{item.urgency}} — {{item.assigned_to_name || '未割当'}}"
+           ng-keydown="c.onCardKeydown($event, item)"
+           ng-repeat="item in c.kanbanData.inprogress track by item.sys_id"
+           draggable="true"
+           ng-class="{'dragging': c.isDragging(item), 'batch-selected': c.selectedItems[item.sys_id], 'urgency-critical': item.urgency==='Critical'}"
+           ondragstart="angular.element(this).scope().$apply(function(s){ s.c.onDragStart(s.item); });"
+           ondragend="angular.element(this).scope().$apply(function(s){ s.c.onDragEnd(); });"
+           ng-click="c.batchMode ? c.toggleSelect(item, $event) : c.openModal(item)">
+        <div class="batch-checkbox" ng-if="c.batchMode" ng-click="c.toggleSelect(item, $event)">
+          <i class="fa" ng-class="c.selectedItems[item.sys_id] ? 'fa-check-square' : 'fa-square-o'"></i>
+        </div>
+        <div class="kanban-card-id">{{item.number}}</div>
+        <div class="kanban-card-meta">
+          <span class="kanban-card-urgency urgency-{{item.urgency | lowercase}}">{{item.urgency}}</span>
+          <span class="kanban-card-time">{{item.time_ago || item.created_on}}</span>
+        </div>
+        <div class="kanban-card-zone" ng-if="item.zone">{{item.zone}}</div>
+        <div class="kanban-card-assignee" ng-if="item.assigned_to_name">
+          <i class="fa fa-user"></i> {{item.assigned_to_name}}
+        </div>
+        <div class="kanban-card-sla" ng-if="item.sla && !item.sla.is_stopped">
+          <div class="sla-bar"><div class="sla-fill" ng-style="{'width': item.sla.percentage + '%'}"></div></div>
+        </div>
+      </div>
+      <div class="kanban-empty" ng-if="c.kanbanData.inprogress.length === 0">
+        <span>ここにドロップして開始</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ COL 3: ON_HOLD ═══ -->
+  <div class="kanban-col kanban-col-onhold"
+       role="region"
+       aria-label="ON_HOLD — {{c.kanbanData.onhold.length}} 件"
+       ng-class="{'drag-over': c.isDropTarget('onhold')}"
+       ondragover="event.preventDefault(); angular.element(this).scope().$apply(function(s){ s.c.onDragOver(event, 'onhold'); });"
+       ondragleave="angular.element(this).scope().$apply(function(s){ s.c.onDragLeave('onhold'); });"
+       ondrop="angular.element(this).scope().$apply(function(s){ s.c.onDrop(event, 'onhold'); });">
+    <div class="kanban-header">
+      <span class="kanban-header-icon"><i class="fa fa-pause-circle"></i></span>
+      <span class="kanban-header-title">ON_HOLD</span>
+      <span class="kanban-count">{{c.kanbanData.onhold.length}}</span>
+    </div>
+    <div class="kanban-body">
+      <div class="kanban-card"
+           role="article"
+           tabindex="0"
+           aria-label="{{item.number}} — {{item.urgency}} — {{item.assigned_to_name || '未割当'}}"
+           ng-keydown="c.onCardKeydown($event, item)"
+           ng-repeat="item in c.kanbanData.onhold track by item.sys_id"
+           draggable="true"
+           ng-class="{'dragging': c.isDragging(item), 'batch-selected': c.selectedItems[item.sys_id]}"
+           ondragstart="angular.element(this).scope().$apply(function(s){ s.c.onDragStart(s.item); });"
+           ondragend="angular.element(this).scope().$apply(function(s){ s.c.onDragEnd(); });"
+           ng-click="c.batchMode ? c.toggleSelect(item, $event) : c.openModal(item)">
+        <div class="batch-checkbox" ng-if="c.batchMode" ng-click="c.toggleSelect(item, $event)">
+          <i class="fa" ng-class="c.selectedItems[item.sys_id] ? 'fa-check-square' : 'fa-square-o'"></i>
+        </div>
+        <div class="kanban-card-id">{{item.number}}</div>
+        <div class="kanban-card-meta">
+          <span class="kanban-card-urgency urgency-{{item.urgency | lowercase}}">{{item.urgency}}</span>
+        </div>
+        <div class="kanban-card-assignee" ng-if="item.assigned_to_name">
+          <i class="fa fa-user"></i> {{item.assigned_to_name}}
+        </div>
+      </div>
+      <div class="kanban-empty" ng-if="c.kanbanData.onhold.length === 0">
+        <span>保留なし</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ COL 4: COMPLETED ═══ -->
+  <div class="kanban-col kanban-col-done"
+       role="region"
+       aria-label="COMPLETED — {{c.kanbanData.done.length}} 件"
+       ng-class="{'drag-over': c.isDropTarget('done')}"
+       ondragover="event.preventDefault(); angular.element(this).scope().$apply(function(s){ s.c.onDragOver(event, 'done'); });"
+       ondragleave="angular.element(this).scope().$apply(function(s){ s.c.onDragLeave('done'); });"
+       ondrop="angular.element(this).scope().$apply(function(s){ s.c.onDrop(event, 'done'); });">
+    <div class="kanban-header">
+      <span class="kanban-header-icon"><i class="fa fa-trophy"></i></span>
+      <span class="kanban-header-title">COMPLETED</span>
+      <span class="kanban-count">{{c.kanbanData.done.length}}</span>
+    </div>
+    <div class="kanban-body">
+      <div class="kanban-card kanban-card-done"
+           role="article"
+           tabindex="0"
+           aria-label="{{item.number}} — 完了"
+           ng-keydown="c.onCardKeydown($event, item)"
+           ng-repeat="item in c.kanbanData.done track by item.sys_id"
+           draggable="false"
+           ng-click="c.openModal(item)">
+        <div class="kanban-card-id">{{item.number}}</div>
+        <div class="kanban-card-meta">
+          <span class="kanban-card-done-icon"><i class="fa fa-check-circle"></i></span>
+          <span class="kanban-card-time">{{item.time_ago || item.created_on}}</span>
+        </div>
+      </div>
+      <div class="kanban-empty" ng-if="c.kanbanData.done.length === 0">
+        <span>完了なし</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+              </div> </div>
+<!-- ★★★ [V5] 看板ここまで ★★★ -->
     
         <!-- END: view-dashboard -->
           
-    <div class="view-mine" ng-if="c.view === 'mine'">
+    <div class="view-mine" ng-if="c.view === 'mine'" role="tabpanel" id="panel-mine" aria-labelledby="tab-mine">
     <div class="card-section">
         <div class="section-header">
             <span class="section-tag">03</span>
@@ -9140,7 +11066,7 @@ body > div[style*="position:fixed"][style*="left"] {
     </div>
 </div>
     
-    <div class="view-comms" ng-if="c.view === 'comms'">
+    <div class="view-comms" ng-if="c.view === 'comms'" role="tabpanel" id="panel-comms" aria-labelledby="tab-comms">
 
     <div class="card-section" ng-if="c.data.isVolunteer">
         <div class="section-header">
@@ -9319,234 +11245,12 @@ body > div[style*="position:fixed"][style*="left"] {
         </div>
     </div>
 
+
 <div class="zen-backdrop" ng-class="{'active': c.showSidebar}" ng-click="c.toggleSidebar()"></div>
 
-<script type="text/ng-template" id="volunteerModalTemplate">
-<div class="modal-content kokoro-modal-window">
-  
-  <div class="modal-header-clean">
-    <div class="header-left">
-      <span class="header-badge"><i class="fa fa-truck"></i> RESCUE_REQUEST</span>
-      <span class="header-id">{{item.number}}</span>
-    </div>
-    <button class="header-close" ng-click="cancel()"><i class="fa fa-times"></i></button>
-  </div>
-
-  <div class="modal-body-grid">
-    
-    <div class="body-main">
-      <h2 class="ticket-title">
-          {{c.dict[item.category] || item.category}} - 救援要請
-          <span class="qty-badge-black">x{{item.quantity}}</span>
-      </h2>
-      
-      <div class="action-bar">
-        <div class="dropdown-wrapper">
-          <button class="btn-purple-outline" ng-click="toggleStatusMenu($event)">
-             {{c.statusNames[item.state] || 'OPEN'}} <i class="fa fa-chevron-down"></i>
-          </button>
-          <div class="status-menu" ng-show="statusMenuOpen">
-            <div class="status-item" ng-click="changeStatus(item, '11')" ng-if="item.state != 11 && item.state != 4"><i class="fa fa-user-plus"></i> ASSIGNED</div>
-            <div class="status-item" ng-click="changeStatus(item, '2')" ng-if="item.state == 11"><i class="fa fa-bicycle"></i> IN_PROGRESS</div>
-            <div class="status-item" ng-click="changeStatus(item, '4')" ng-if="item.state == 2"><i class="fa fa-check"></i> COMPLETED</div>
-            <div class="status-item danger" ng-click="changeStatus(item, '5')"><i class="fa fa-ban"></i> CANCELLED</div>
-          </div>
-        </div>
-        
-        <div class="dropdown-wrapper" uib-dropdown dropdown-append-to-body="true">
-    <button type="button" class="btn-normal" uib-dropdown-toggle ng-if="item.state != 4">
-         <i class="fa fa-paper-plane-o"></i> DISPATCH <span class="caret"></span>
-    </button>
-    
-    <ul class="dropdown-menu dropdown-menu-right" uib-dropdown-menu role="menu" 
-        style="background: #1e1e1e; border: 1px solid #444; min-width: 200px; z-index: 10000;">
-        
-        <li role="menuitem">
-            <a href="javascript:void(0)" ng-click="c.assignTask(item.sys_id, c.data.user_id)" 
-               style="color: #fff; padding: 8px 15px; border-bottom: 1px solid #333;">
-               <i class="fa fa-user"></i> Assign to Myself
-            </a>
-        </li>
-        
-        <li class="divider" style="margin: 0; background: #333;"></li>
-        <li role="menuitem" style="padding: 5px 15px; color: #666; font-size: 10px; text-transform:uppercase;">
-            Volunteers
-        </li>
-
-        <li role="menuitem" ng-repeat="vol in c.data.volunteers">
-            <a href="javascript:void(0)" ng-click="c.assignTask(item.sys_id, vol.sys_id)" 
-               style="color: #bbb; padding: 8px 15px; display: flex; justify-content: space-between;">
-               <span>{{vol.name}}</span>
-               <span style="font-size: 10px; background: #333; padding: 1px 4px; border-radius: 3px;">
-                   {{vol.load}}%
-               </span>
-            </a>
-        </li>
-    </ul>
-</div>
-        
-        <button class="action-btn" ng-click="triggerAutoAssign(item)" ng-if="!item.assigned_to_id">
-            <i class="fa fa-magic"></i> AUTO_ASSIGN
-        </button>
-        <button class="action-btn" ng-click="triggerAutoAssign(item)" ng-if="item.assigned_to_id">
-            <i class="fa fa-refresh"></i> REASSIGN
-        </button>
-      </div>
-
-      <div class="desc-box">
-        <div class="desc-section-title"><i class="fa fa-align-left"></i> DESCRIPTION</div>
-        <div class="desc-grid">
-          <div class="desc-item">
-              <div class="desc-icon"><i class="fa fa-map-marker"></i></div>
-              <div><span class="desc-label">LOCATION:</span> {{item.zone}} - {{item.detail_loc}}</div>
-          </div>
-          <div class="desc-item">
-              <div class="desc-icon"><i class="fa fa-cube"></i></div>
-              <div><span class="desc-label">TYPE:</span> {{c.dict[item.category] || item.category}} x {{item.quantity}}</div>
-          </div>
-          <div class="desc-item">
-              <div class="desc-icon"><i class="fa fa-users"></i></div>
-              <div><span class="desc-label">AFFECTED:</span> {{item.affected_count || '不明'}}</div>
-          </div>
-          <div class="desc-item" ng-if="item.remarks">
-              <div class="desc-icon"><i class="fa fa-info-circle"></i></div>
-              <div><span class="desc-label">NOTES:</span> {{item.remarks}}</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="metal-divider"></div>
-
-      <div class="activity-area">
-        <div class="desc-section-title"><i class="fa fa-comments-o"></i> ACTIVITY_LOG</div>
-        
-        <div class="input-wrapper">
-            <textarea class="note-input" 
-                      ng-model="newComment" 
-                      placeholder="Type an internal note..."
-                      ng-keydown="$event.ctrlKey && $event.keyCode === 13 && postComment(item)"></textarea>
-            <div class="input-footer">
-                <button class="submit-btn" 
-                        ng-class="{'ready': newComment}" 
-                        ng-click="postComment(item)">
-                    <i class="fa fa-paper-plane"></i> SUBMIT_LOG
-                </button>
-            </div>
-        </div>
-
-        <div class="history-list">
-            <div ng-repeat="h in item.history track by $index">
-                <div class="log-item type-user" ng-if="!h.text.startsWith('[SLA')">
-                    <div class="log-header">
-                        <div class="log-user"><i class="fa fa-user-circle-o" style="color:var(--accent-primary);"></i> {{h.user}}</div>
-                        <span class="log-time">{{h.date}}</span>
-                    </div>
-                    <div class="log-body">{{h.text}}</div>
-                </div>
-                <div class="log-item type-system" ng-if="h.text.startsWith('[SLA')">
-                    <div class="sys-terminal-box" 
-                         ng-class="{'sla-breach': h.text.indexOf('違反') !== -1 || h.text.indexOf('breached') !== -1, 'sla-warning': h.text.indexOf('警告') !== -1 || h.text.indexOf('risk') !== -1}">
-                        <div class="sys-meta-row"><span><i class="fa fa-terminal"></i> SYSTEM_KERNEL</span><span>{{h.date}}</span></div>
-                        <div class="sys-content">
-                            <span ng-if="h.text.indexOf('違反') !== -1 || h.text.indexOf('breached') !== -1"><strong>[CRITICAL_FAILURE]</strong> </span>
-                            <span ng-if="h.text.indexOf('警告') !== -1 || h.text.indexOf('risk') !== -1"><strong>[WARNING_ALERT]</strong> </span>
-                            {{h.text}}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-      </div>
-
-    </div>
-
-    <div class="body-sidebar">
-      
-      <div class="sidebar-block">
-          <div class="sb-label">STATUS</div>
-          <div class="state-indicator" style="background:#000; color:#fff;">{{c.getStateInfo(item.state).name}}</div>
-      </div>
-
-      <div class="sidebar-block">
-          <div class="sb-label">ASSIGNEE</div>
-          <div class="user-row" ng-if="item.assigned_to_name">
-              <div class="avatar-box">{{item.assigned_to_name.charAt(0)}}</div>
-              <div class="user-name-text">{{item.assigned_to_name}}</div>
-          </div>
-          <div class="user-row" ng-if="!item.assigned_to_name">
-              <div class="avatar-box grey">?</div>
-              <div class="user-name-text" style="color:#999;">UNASSIGNED</div>
-          </div>
-      </div>
-
-      <div class="sidebar-block">
-          <div class="sb-label">REPORTER</div>
-          <div class="user-row">
-              <div class="avatar-box orange">{{item.reporter_name.charAt(0) || '?'}}</div>
-              <div class="user-name-text">{{item.reporter_name || 'System'}}</div>
-          </div>
-      </div>
-
-      <div class="sidebar-block">
-          <div class="sb-label">PRIORITY</div>
-          <div class="priority-btn"><i class="fa fa-arrow-right"></i> {{c.dict[item.urgency] || item.urgency}}</div>
-      </div>
-
-      <div class="sidebar-block">
-          <div class="sb-label">LOCATION</div>
-          <div style="font-weight:800; color:var(--text-primary); font-size:16px;">
-              <i class="fa fa-map-marker" style="color:var(--color-critical); margin-right:10px;"></i>{{item.zone}}
-          </div>
-          <div style="font-size:14px; color:var(--text-tertiary); margin-top:8px;">{{item.detail_loc}}</div>
-      </div>
-
-     <div class="ticket-card-body">
-    <div class="ai-card">
-         <div class="ai-head"><i class="fa fa-bolt ai-pulse"></i> TACTICAL_INSIGHT</div>
-         <div class="ai-text" ng-bind-html="item.trusted_ai"></div>
-    </div>
-</div>
-
-      <div class="sidebar-block" ng-if="item.sla && item.state != 4 && item.state != 5">
-        <div class="sb-label">SLA_TRACKING</div>
-        <div class="sla-progress">
-            <div class="sla-fill" ng-style="{width: item.sla.percentage + '%', background: c.getSLABarColor(item.sla)}"></div>
-        </div>
-        <div class="sla-text">
-            <span>ELAPSED: {{c.formatHours(item.sla.elapsed)}}</span>
-            <span>REMAIN: {{c.formatSLARemaining(item.sla.remaining)}}</span>
-        </div>
-        <div class="sla-badge" ng-class="{'sla-critical': item.sla.is_breached, 'sla-ok': !item.sla.is_breached}">
-            <i class="fa" ng-class="{'fa-check': !item.sla.is_breached, 'fa-exclamation': item.sla.is_breached}"></i> 
-            {{item.sla.is_breached ? 'BREACHED' : 'WITHIN SLA'}}
-        </div>
-      </div>
-
-      <div class="sidebar-block" ng-if="item.state == 4">
-        <div class="sb-label">FINAL_STATUS</div>
-        <div style="background: rgba(52, 199, 89, 0.1); border: 2px solid #34c759; color: #34c759; padding: 12px; text-align: center; border-radius: 4px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px;">
-            <i class="fa fa-trophy"></i> MISSION COMPLETE
-        </div>
-        <div style="text-align: center; font-size: 10px; color: #999; margin-top: 6px; font-family: monospace;">
-            SLA TIMER STOPPED
-        </div>
-      </div>
-
-      <div class="sidebar-block" ng-if="item.state == 5">
-        <div class="sb-label">FINAL_STATUS</div>
-        <div style="background: #f5f5f5; border: 2px solid #ccc; color: #666; padding: 12px; text-align: center; border-radius: 4px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px;">
-            <i class="fa fa-ban"></i> OPERATION CANCELLED
-        </div>
-      </div>
-      </div>
-  </div>
-</div>
-</script>
-
 <style>
-/* --- 1. 模态框 "离家出走" 修复 (解决变量失效/白底/头像丢失) --- */
+/* --- 模态框修复样式 (解决变量失效/白底/头像丢失) --- */
 .modal-content {
-    /* 强制重新定义变量，防止读取不到 */
     --accent-primary: #6200ea;
     --text-primary: #1a1a1a;
     --text-secondary: #555555;
@@ -9562,8 +11266,6 @@ body > div[style*="position:fixed"][style*="left"] {
     font-family: "Rajdhani", "JetBrains Mono", sans-serif !important;
     overflow: visible !important;
 }
-
-/* 修复头部 */
 .modal-header-clean {
     display: flex !important;
     justify-content: space-between !important;
@@ -9572,195 +11274,69 @@ body > div[style*="position:fixed"][style*="left"] {
     background: #f8f9fa !important;
     border-bottom: 1px solid #e9ecef !important;
 }
-.header-badge {
-    background: #000 !important;
-    color: #fff !important;
-    padding: 4px 12px;
-    font-weight: 800;
-    border-radius: 2px;
-}
-.header-close {
-    background: #fff !important;
-    border: 1px solid #ddd !important;
-    width: 36px; height: 36px;
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer;
-}
-.header-close:hover {
-    background: #ff3b30 !important;
-    color: #fff !important;
-    border-color: #ff3b30 !important;
-}
-
-/* 修复头像 (Avatar) - 强制上色 */
-.avatar-box {
-    width: 36px; height: 36px;
-    background-color: #6200ea !important; /* 兜底紫色 */
-    color: #fff !important;
-    display: flex !important;
-    align-items: center; justify-content: center;
-    border-radius: 4px;
-    font-weight: 700;
-    font-size: 16px;
-}
+.header-badge { background: #000 !important; color: #fff !important; padding: 4px 12px; font-weight: 800; border-radius: 2px; }
+.header-close { background: #fff !important; border: 1px solid #ddd !important; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.header-close:hover { background: #ff3b30 !important; color: #fff !important; border-color: #ff3b30 !important; }
+.avatar-box { width: 36px; height: 36px; background-color: #6200ea !important; color: #fff !important; display: flex !important; align-items: center; justify-content: center; border-radius: 4px; font-weight: 700; font-size: 16px; }
 .avatar-box.orange { background-color: #ff9500 !important; }
 .avatar-box.grey { background-color: #e0e0e0 !important; color: #999 !important; }
-
-/* 修复侧边栏 */
-.body-sidebar {
-    background: #fcfcfc !important;
-    border-left: 1px solid #eee !important;
-    padding: 25px !important;
-}
-.sidebar-block {
-    border-bottom: 1px dashed #e0e0e0;
-    padding-bottom: 15px;
-    margin-bottom: 20px;
-}
-.sb-label {
-    color: #999;
-    font-weight: 700;
-    font-size: 11px;
-    margin-bottom: 8px;
-    display: block;
-}
-
-/* --- 2. 评论区美化 (Timeline Data Stream) --- */
-.activity-area {
-    margin-top: 30px;
-    padding-top: 20px;
-    border-top: 2px solid #f0f0f0;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
-
-/* 输入框容器：垂直布局，杜绝重叠 */
-.input-wrapper {
-    display: flex;
-    flex-direction: column !important; /* 关键 */
-    border: 1px solid #e0e0e0;
-    background: #fff;
-    border-radius: 4px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.02);
-}
-.input-wrapper:focus-within {
-    border-color: #000;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-}
-
-.note-input {
-    width: 100%;
-    min-height: 80px;
-    padding: 15px;
-    border: none !important;
-    outline: none !important;
-    font-family: "JetBrains Mono", sans-serif;
-    font-size: 14px;
-    color: #333;
-    resize: vertical;
-    background: transparent;
-}
-
-.input-footer {
-    display: flex;
-    justify-content: flex-end;
-    padding: 10px 15px;
-    background: #f9f9f9;
-    border-top: 1px solid #eee;
-}
-
-.submit-btn {
-    background: #e0e0e0;
-    color: #999;
-    padding: 8px 20px;
-    font-family: "Rajdhani", sans-serif;
-    font-weight: 700;
-    font-size: 13px;
-    border: none;
-    cursor: not-allowed;
-    border-radius: 2px;
-    transition: all 0.2s;
-}
-.submit-btn.ready {
-    background: #1a1a1a;
-    color: #fff;
-    cursor: pointer;
-}
-.submit-btn.ready:hover {
-    background: #000;
-    transform: translateY(-1px);
-}
-
-/* 历史列表 */
-.history-list {
-    max-height: 400px;
-    overflow-y: auto;
-    padding-right: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-/* 用户留言气泡 */
-.log-item.type-user {
-    background: #fff;
-    padding: 0 0 15px 0;
-    border-bottom: 1px solid #f5f5f5;
-}
-.log-header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 6px;
-    font-size: 12px;
-}
+.body-sidebar { background: #fcfcfc !important; border-left: 1px solid #eee !important; padding: 25px !important; }
+.sidebar-block { border-bottom: 1px dashed #e0e0e0; padding-bottom: 15px; margin-bottom: 20px; }
+.sb-label { color: #999; font-weight: 700; font-size: 11px; margin-bottom: 8px; display: block; }
+.activity-area { margin-top: 30px; padding-top: 20px; border-top: 2px solid #f0f0f0; display: flex; flex-direction: column; gap: 20px; }
+.input-wrapper { display: flex; flex-direction: column !important; border: 1px solid #e0e0e0; background: #fff; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
+.input-wrapper:focus-within { border-color: #000; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.note-input { width: 100%; min-height: 80px; padding: 15px; border: none !important; outline: none !important; font-family: "JetBrains Mono", sans-serif; font-size: 14px; color: #333; resize: vertical; background: transparent; }
+.input-footer { display: flex; justify-content: flex-end; padding: 10px 15px; background: #f9f9f9; border-top: 1px solid #eee; }
+.submit-btn { background: #e0e0e0; color: #999; padding: 8px 20px; font-family: "Rajdhani", sans-serif; font-weight: 700; font-size: 13px; border: none; cursor: not-allowed; border-radius: 2px; transition: all 0.2s; }
+.submit-btn.ready { background: #1a1a1a; color: #fff; cursor: pointer; }
+.submit-btn.ready:hover { background: #000; transform: translateY(-1px); }
+.history-list { max-height: 400px; overflow-y: auto; padding-right: 8px; display: flex; flex-direction: column; gap: 15px; }
+.log-item.type-user { background: #fff; padding: 0 0 15px 0; border-bottom: 1px solid #f5f5f5; }
+.log-header { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12px; }
 .log-user { font-weight: 800; color: #1a1a1a; }
 .log-time { color: #999; font-family: monospace; }
 .log-body { font-size: 14px; color: #444; line-height: 1.5; white-space: pre-wrap; }
-
-/* 系统日志 (冷淡风) */
-.log-item.type-system {
-    font-family: "JetBrains Mono", monospace;
-    font-size: 12px;
-}
-.sys-terminal-box {
-    background: #f8f9fa; /* 浅灰底 */
-    border-left: 3px solid #ccc;
-    padding: 10px 14px;
-    color: #555;
-    border-radius: 0 4px 4px 0;
-}
-/* 警告级别线条颜色 */
+.log-item.type-system { font-family: "JetBrains Mono", monospace; font-size: 12px; }
+.sys-terminal-box { background: #f8f9fa; border-left: 3px solid #ccc; padding: 10px 14px; color: #555; border-radius: 0 4px 4px 0; }
 .sys-terminal-box.sla-breach { border-left-color: #d93025; background: rgba(217, 48, 37, 0.03); }
 .sys-terminal-box.sla-warning { border-left-color: #f9ab00; background: rgba(249, 171, 0, 0.03); }
-
-.sys-meta-row {
-    display: flex; justify-content: space-between;
-    border-bottom: 1px dashed #e0e0e0;
-    padding-bottom: 5px; margin-bottom: 5px;
-    font-size: 10px; color: #999; text-transform: uppercase;
-}
-.tag-sla {
-    display: inline-block; padding: 1px 6px; border-radius: 2px;
-    font-weight: 700; font-size: 10px; margin-right: 6px;
-}
+.sys-meta-row { display: flex; justify-content: space-between; border-bottom: 1px dashed #e0e0e0; padding-bottom: 5px; margin-bottom: 5px; font-size: 10px; color: #999; text-transform: uppercase; }
+.tag-sla { display: inline-block; padding: 1px 6px; border-radius: 2px; font-weight: 700; font-size: 10px; margin-right: 6px; }
 .tag-sla.violation { background: #d93025; color: #fff; }
 .tag-sla.warning { background: #f9ab00; color: #fff; }
 </style>
 
+    <div id="sr-live-region"
+     role="status"
+     aria-live="polite"
+     aria-atomic="true"
+     class="sr-only">
+</div>
+
+
+
+<div style="display:none !important;" aria-hidden="true">
 <script type="text/ng-template" id="volunteerModalTemplate">
-<div class="modal-content kokoro-modal-window">
-  
+<div class="modal-content kokoro-modal-window"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="modal-title"
+     ng-keydown="c.onModalKeydown($event)">
+     
+  <h2 id="modal-title" class="sr-only">
+    工単詳細: {{item.number}}
+  </h2>
+
   <div class="modal-header-clean">
     <div class="header-left">
-      <span class="header-badge"><i class="fa fa-truck"></i> RESCUE_REQUEST</span>
+      <span class="header-badge"><i class="fa fa-truck" aria-hidden="true"></i> RESCUE_REQUEST</span>
       <span class="header-id">{{item.number}}</span>
     </div>
-    <button class="header-close" ng-click="cancel()"><i class="fa fa-times"></i></button>
+    <button class="header-close" aria-label="閉じる" ng-click="cancel()"><i class="fa fa-times" aria-hidden="true"></i></button>
   </div>
 
   <div class="modal-body-grid">
-    
     <div class="body-main">
       <h2 class="ticket-title">
           {{c.dict[item.category] || item.category}}
@@ -9781,24 +11357,24 @@ body > div[style*="position:fixed"][style*="left"] {
         </div>
         
         <button class="btn-normal" ng-click="assignToMe(item)" ng-if="item.state != 4">
-    <i class="fa fa-user"></i> ASSIGN TO ME
-</button>
+            <i class="fa fa-user"></i> ASSIGN TO ME
+        </button>
 
-<div class="dropdown-wrapper" ng-if="item.state != 4">
-    <button class="btn-normal" ng-click="showDispatchMenu = !showDispatchMenu">
-    <i class="fa fa-paper-plane-o"></i> DISPATCH <i class="fa fa-chevron-down"></i>
-</button>
-    <div class="status-menu" ng-show="showDispatchMenu" style="max-height:300px; overflow-y:auto;">
-        <div class="status-item" style="padding:5px 15px; color:#999; font-size:10px; cursor:default; border-bottom:1px solid #eee;">
-            VOLUNTEERS
+        <div class="dropdown-wrapper" ng-if="item.state != 4">
+            <button class="btn-normal" ng-click="showDispatchMenu = !showDispatchMenu">
+                <i class="fa fa-paper-plane-o"></i> DISPATCH <i class="fa fa-chevron-down"></i>
+            </button>
+            <div class="status-menu" ng-show="showDispatchMenu" style="max-height:300px; overflow-y:auto;">
+                <div class="status-item" style="padding:5px 15px; color:#999; font-size:10px; cursor:default; border-bottom:1px solid #eee;">
+                    VOLUNTEERS
+                </div>
+                <div class="status-item" ng-repeat="vol in c.data.volunteers" 
+                     ng-click="$event.stopPropagation(); c.assignTask(item.sys_id, vol.sys_id); showDispatchMenu=false; item.assigned_to_name=vol.name; item.assigned_to_id=vol.sys_id">
+                    <span>{{vol.name}}</span>
+                    <span style="float:right; font-size:10px; color:#999;">{{vol.load_percent}}%</span>
+                </div>
+            </div>
         </div>
-        <div class="status-item" ng-repeat="vol in c.data.volunteers" 
-     ng-click="$event.stopPropagation(); c.assignTask(item.sys_id, vol.sys_id); showDispatchMenu=false; item.assigned_to_name=vol.name; item.assigned_to_id=vol.sys_id">
-    <span>{{vol.name}}</span>
-    <span style="float:right; font-size:10px; color:#999;">{{vol.load}}%</span>
-</div>
-    </div>
-</div>
         
         <button class="action-btn" ng-click="triggerAutoAssign(item)" ng-if="!item.assigned_to_id">
             <i class="fa fa-magic"></i> AUTO_ASSIGN
@@ -9827,11 +11403,13 @@ body > div[style*="position:fixed"][style*="left"] {
         <div class="desc-section-title">
             <i class="fa fa-history"></i> ACTIVITY_LOG / 履歴
         </div>
-        
         <div class="input-wrapper">
-            <textarea class="note-input" 
+            <label for="comment-input" class="sr-only">内部メモ</label>
+            <textarea id="comment-input"
+                      class="note-input" 
                       ng-model="newComment" 
                       placeholder="内部メモを入力してください... (Ctrl+Enter で送信)"
+                      aria-label="内部メモを入力"
                       ng-keydown="$event.ctrlKey && $event.keyCode === 13 && postComment(item)"></textarea>
             <div class="input-footer">
                 <button class="submit-btn" 
@@ -9845,13 +11423,9 @@ body > div[style*="position:fixed"][style*="left"] {
 
         <div class="history-list">
             <div ng-repeat="h in item.history track by $index">
-                
                 <div class="log-item type-user" ng-if="!h.text.startsWith('[SLA')">
                     <div class="log-header">
-                        <div class="log-user">
-                            <i class="fa fa-user-circle" style="color:#333; margin-right:6px;"></i> 
-                            {{h.user}}
-                        </div>
+                        <div class="log-user"><i class="fa fa-user-circle" style="color:#333; margin-right:6px;"></i> {{h.user}}</div>
                         <span class="log-time">{{h.date}}</span>
                     </div>
                     <div class="log-body">{{h.text}}</div>
@@ -9870,19 +11444,16 @@ body > div[style*="position:fixed"][style*="left"] {
                         <div class="sys-content">
                             <span class="tag-sla violation" ng-if="h.text.indexOf('違反') !== -1 || h.text.indexOf('breached') !== -1">SLA違反</span>
                             <span class="tag-sla warning" ng-if="h.text.indexOf('警告') !== -1 || h.text.indexOf('risk') !== -1">SLA警告</span>
-                            
                             {{h.text.replace('[SLA違反]', '').replace('[SLA警告]', '').replace('[SLA违反]', '').replace('[WARNING_ALERT]', '').replace('[CRITICAL_FAILURE]', '')}}
                         </div>
                     </div>
                 </div>
-
             </div>
         </div>
       </div>
-      </div>
+    </div>
 
     <div class="body-sidebar">
-      
       <div class="sidebar-block">
           <div class="sb-label">STATUS</div>
           <div class="state-indicator" style="background:#000; color:#fff;">{{c.getStateInfo(item.state).name}}</div>
@@ -9922,11 +11493,11 @@ body > div[style*="position:fixed"][style*="left"] {
       </div>
 
       <div class="ticket-card-body">
-    <div class="ai-card">
-         <div class="ai-head"><i class="fa fa-bolt ai-pulse"></i> TACTICAL_INSIGHT</div>
-         <div class="ai-text" ng-bind-html="item.trusted_ai"></div>
-    </div>
-</div>
+        <div class="ai-card">
+             <div class="ai-head"><i class="fa fa-bolt ai-pulse"></i> TACTICAL_INSIGHT</div>
+             <div class="ai-text" ng-bind-html="item.trusted_ai"></div>
+        </div>
+      </div>
 
       <div class="sidebar-block" ng-if="item.sla">
         <div class="sb-label">SLA TRACKING</div>
@@ -9937,11 +11508,12 @@ body > div[style*="position:fixed"][style*="left"] {
             {{item.sla.is_breached ? 'BREACHED' : 'WITHIN SLA'}}
         </div>
       </div>
-
     </div>
   </div>
 </div>
 </script>
-]]></template>
+</div>
+
+</div> ]]></template>
     </sp_widget>
 </record_update>

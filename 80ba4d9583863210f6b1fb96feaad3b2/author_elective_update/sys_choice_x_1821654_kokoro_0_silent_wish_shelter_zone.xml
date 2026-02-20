@@ -23,16 +23,16 @@
             <label>ファミリーエリア（家族）</label>
             <language>en</language>
             <name>x_1821654_kokoro_0_silent_wish</name>
-            <sequence>0</sequence>
+            <sequence>10</sequence>
             <synonyms/>
             <sys_created_by>admin</sys_created_by>
             <sys_created_on>2025-12-25 07:28:25</sys_created_on>
             <sys_domain>global</sys_domain>
             <sys_domain_path>/</sys_domain_path>
-            <sys_mod_count>1</sys_mod_count>
+            <sys_mod_count>3</sys_mod_count>
             <sys_updated_by>admin</sys_updated_by>
-            <sys_updated_on>2026-01-19 00:48:28</sys_updated_on>
-            <value>a</value>
+            <sys_updated_on>2026-02-20 08:36:14</sys_updated_on>
+            <value>FAMILY_AREA</value>
         </sys_choice>
         <sys_choice action="INSERT_OR_UPDATE">
             <dependent_value/>
@@ -42,16 +42,16 @@
             <label>単身エリア</label>
             <language>en</language>
             <name>x_1821654_kokoro_0_silent_wish</name>
-            <sequence>1</sequence>
+            <sequence>20</sequence>
             <synonyms/>
             <sys_created_by>admin</sys_created_by>
             <sys_created_on>2025-12-25 07:28:25</sys_created_on>
             <sys_domain>global</sys_domain>
             <sys_domain_path>/</sys_domain_path>
-            <sys_mod_count>1</sys_mod_count>
+            <sys_mod_count>3</sys_mod_count>
             <sys_updated_by>admin</sys_updated_by>
-            <sys_updated_on>2026-01-19 00:48:29</sys_updated_on>
-            <value>b</value>
+            <sys_updated_on>2026-02-20 08:36:18</sys_updated_on>
+            <value>SINGLE_AREA</value>
         </sys_choice>
         <sys_choice action="INSERT_OR_UPDATE">
             <dependent_value/>
@@ -61,16 +61,73 @@
             <label>医療・ケアエリア</label>
             <language>en</language>
             <name>x_1821654_kokoro_0_silent_wish</name>
-            <sequence>2</sequence>
+            <sequence>30</sequence>
             <synonyms/>
             <sys_created_by>admin</sys_created_by>
             <sys_created_on>2025-12-25 07:28:25</sys_created_on>
             <sys_domain>global</sys_domain>
             <sys_domain_path>/</sys_domain_path>
-            <sys_mod_count>1</sys_mod_count>
+            <sys_mod_count>3</sys_mod_count>
             <sys_updated_by>admin</sys_updated_by>
-            <sys_updated_on>2026-01-19 00:48:29</sys_updated_on>
-            <value>c</value>
+            <sys_updated_on>2026-02-20 08:36:25</sys_updated_on>
+            <value>MEDICAL_AREA</value>
+        </sys_choice>
+        <sys_choice action="INSERT_OR_UPDATE">
+            <dependent_value/>
+            <element>shelter_zone</element>
+            <hint/>
+            <inactive>false</inactive>
+            <label>スタッフ待機室</label>
+            <language>en</language>
+            <name>x_1821654_kokoro_0_silent_wish</name>
+            <sequence>40</sequence>
+            <synonyms/>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-02-20 08:34:49</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_mod_count>3</sys_mod_count>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-02-20 08:36:29</sys_updated_on>
+            <value>STAFF_ROOM</value>
+        </sys_choice>
+        <sys_choice action="INSERT_OR_UPDATE">
+            <dependent_value/>
+            <element>shelter_zone</element>
+            <hint/>
+            <inactive>false</inactive>
+            <label>フィールド(現場)</label>
+            <language>en</language>
+            <name>x_1821654_kokoro_0_silent_wish</name>
+            <sequence>50</sequence>
+            <synonyms/>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-02-20 08:35:31</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_mod_count>2</sys_mod_count>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-02-20 08:36:31</sys_updated_on>
+            <value>FIELD</value>
+        </sys_choice>
+        <sys_choice action="INSERT_OR_UPDATE">
+            <dependent_value/>
+            <element>shelter_zone</element>
+            <hint/>
+            <inactive>false</inactive>
+            <label>本部(HQ)</label>
+            <language>en</language>
+            <name>x_1821654_kokoro_0_silent_wish</name>
+            <sequence>60</sequence>
+            <synonyms/>
+            <sys_created_by>admin</sys_created_by>
+            <sys_created_on>2026-02-20 08:35:48</sys_created_on>
+            <sys_domain>global</sys_domain>
+            <sys_domain_path>/</sys_domain_path>
+            <sys_mod_count>2</sys_mod_count>
+            <sys_updated_by>admin</sys_updated_by>
+            <sys_updated_on>2026-02-20 08:36:34</sys_updated_on>
+            <value>HQ</value>
         </sys_choice>
     </sys_choice>
 </record_update>
