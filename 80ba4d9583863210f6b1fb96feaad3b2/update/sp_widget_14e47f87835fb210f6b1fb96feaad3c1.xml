@@ -1,0 +1,1657 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sp_widget">
+    <sp_widget action="INSERT_OR_UPDATE">
+        <category>custom</category>
+        <client_script><![CDATA[api.controller = function($scope, $timeout, $window, spUtil) {
+    var c = this;
+
+    // ==========================================
+    // 状态初始化
+    // ==========================================
+    c.step = 0;        // 0=着陆页, 1=表单, 5=成功, 9=履历
+    c.submitting = false;
+    c.hb_sending = false;
+    c.sos_sending = false;
+    c.ticket_number = '';
+    c.ticket_sys_id = null;
+    c.guest_token = '';
+
+    // ==========================================
+// 表单数据结构 — 修改后
+// ==========================================
+c.form = {
+    location: '',          // 大按钮选择
+    detail_loc: '',        // 展开区（任意）
+    severity: '',          // 3选1: safe/struggling/critical
+    affected_count: '1',   // 展开区（任意，默认1人）
+    contact: '',           // 展开区（任意）
+    remarks: '',           // 展开区（任意）
+    needs: {               // 多选对象
+        water: false,
+        food: false,
+        medical: false,
+        injury: false,
+        baby: false,
+        power: false,
+        care: false,
+        other: false
+    }
+};
+
+c.showDetails = false; // 展开区默认收起
+
+// 辅助函数: 是否选了至少一个need
+c.hasAnyNeed = function() {
+    var n = c.form.needs;
+    return n.water || n.food || n.medical || n.injury ||
+           n.baby || n.power || n.care || n.other;
+};
+
+// 辅助函数: 将needs对象转为标签字符串和主分类
+function _buildNeedsTags() {
+    var tags = [];
+    var n = c.form.needs;
+    if (n.water)   tags.push('water');
+    if (n.food)    tags.push('food');
+    if (n.medical) tags.push('medical');
+    if (n.injury)  tags.push('injury');
+    if (n.baby)    tags.push('baby');
+    if (n.power)   tags.push('power');
+    if (n.care)    tags.push('care');
+    if (n.other)   tags.push('other');
+    return tags;
+}
+
+function _getPrimaryCategory(tags) {
+    // 优先级: injury > medical > baby > care > water > food > power > other
+    var priority = ['injury', 'medical', 'baby', 'care', 'water', 'food', 'power', 'other'];
+    for (var i = 0; i < priority.length; i++) {
+        if (tags.indexOf(priority[i]) !== -1) return priority[i];
+    }
+    return 'other';
+}
+
+function _severityToUrgency(severity) {
+    // 受灾者自报 → 初始urgency映射
+    var map = {
+        'safe': 'Low',
+        'struggling': 'Medium',
+        'critical': 'Critical'
+    };
+    return map[severity] || 'Medium';
+}
+
+// ==========================================
+// 提交 — 修改后
+// ==========================================
+c.submitRequest = function() {
+    if (!c.form.location) return;
+    if (!c.hasAnyNeed()) return;
+    if (!c.form.severity) return;
+
+    c.submitting = true;
+
+    var tags = _buildNeedsTags();
+    var primaryCat = _getPrimaryCategory(tags);
+    var urgency = _severityToUrgency(c.form.severity);
+
+    // 需要标签的日语映射（用于wish_content描述）
+    var labelMap = {
+        water: ']]>💧<![CDATA[水', food: ']]>🍱<![CDATA[食料', medical: ']]>💊<![CDATA[薬',
+        injury: ']]>🩹<![CDATA[怪我', baby: ']]>👶<![CDATA[乳幼児用品', power: ']]>🔋<![CDATA[電源',
+        care: ']]>🧓<![CDATA[介助', other: '❓その他'
+    };
+    var needsDisplay = tags.map(function(t) { return labelMap[t] || t; }).join(', ');
+
+    c.server.get({
+        action: 'submit_record',
+        // 必填（受灾者选择）
+        location: c.form.location,
+        category: primaryCat,
+        needs_tags: tags.join(','),
+        self_reported_severity: c.form.severity,
+        urgency: urgency,
+        // 任意（展开区）
+        detail_loc: c.form.detail_loc || '',
+        affected_count: c.form.affected_count || '1',
+        contact: c.form.contact || '',
+        remarks: c.form.remarks || '',
+        // 系统
+        guest_token: c.guest_token || '',
+        quantity: 1  // 受灾者不再填数量，默认1
+    }).then(function(r) {
+        $scope.$evalAsync(function() {
+            c.submitting = false;
+            if (r && r.data && r.data.success) {
+                c.ticket_number = r.data.ticketNumber;
+                c.ticket_sys_id = r.data.newRecordID;
+                if (r.data.my_requests) c.data.my_requests = r.data.my_requests;
+                c.step = 5;
+                if (c.ticket_sys_id) {
+                    _initWatcher(c.ticket_sys_id);
+                }
+                spUtil.addInfoMessage('リクエストを送信しました');
+            } else {
+                spUtil.addErrorMessage((r && r.data && r.data.error) || '送信失敗');
+            }
+        });
+    }).catch(function() {
+        $scope.$evalAsync(function() {
+            c.submitting = false;
+            spUtil.addErrorMessage('通信エラー');
+        });
+    });
+};
+
+    // ==========================================
+    // 游客初始化
+    // ==========================================
+    if (c.data.is_guest) {
+        var savedToken = '';
+        try {
+            savedToken = $window.localStorage.getItem('kokoro_guest_token') || '';
+        } catch (e) {}
+
+        c.server.get({
+            action: 'guest_init',
+            guest_token: savedToken
+        }).then(function(r) {
+            if (r && r.data && r.data.success && r.data.guest_token) {
+                c.guest_token = r.data.guest_token;
+                try {
+                    $window.localStorage.setItem('kokoro_guest_token', c.guest_token);
+                } catch (e) {}
+
+                // 游客初始化后加载历史
+                $timeout(function() {
+                    c.server.get({
+                        action: 'get_my_history',
+                        guest_token: c.guest_token
+                    }).then(function(hr) {
+                        if (hr && hr.data && hr.data.my_requests) {
+                            c.data.my_requests = hr.data.my_requests;
+                        }
+                    });
+                }, 300);
+            }
+        });
+    }
+
+    c.goToLogin = function() {
+        $window.location.href = '/login.do?sysparm_goto_url=' +
+            encodeURIComponent($window.location.href);
+    };
+
+    // ==========================================
+    // 惊群防护：ジッター付き心跳送信
+    // ==========================================
+    //
+    // 原理：当灾害发动时，上千人可能同时点"无事を伝える"。
+    // 如果所有请求在同一毫秒打到ServiceNow，Semaphore会瞬间耗尽。
+    //
+    // 解决方案：
+    //   1. 客户端在0~3秒内随机延迟发送（ジッター）
+    //   2. 30秒冷却期防止连续点击
+    //   3. 失败时指数退避重试
+    //   4. 服务端有全局限流（10秒100次）作为最后防线
+    //
+    var _hbLastSent = 0;       // 上次发送时间戳
+    var _hbCooldown = 30000;   // 30秒冷却
+
+    c.sendHeartbeat = function() {
+        if (c.hb_sending) return;
+
+        var now = Date.now();
+        if (now - _hbLastSent < _hbCooldown) {
+            spUtil.addInfoMessage('30秒以内に再送信できません');
+            return;
+        }
+
+        c.hb_sending = true;
+
+        // ジッター：0~3000ms のランダム遅延
+        var jitter = Math.floor(Math.random() * 3000);
+
+        $timeout(function() {
+            _sendHeartbeatWithRetry(0);
+        }, jitter);
+    };
+
+    function _sendHeartbeatWithRetry(attempt) {
+        c.server.get({
+            action: 'register_heartbeat',
+            guest_token: c.guest_token || ''
+        }).then(function(r) {
+            $scope.$evalAsync(function() {
+                c.hb_sending = false;
+                _hbLastSent = Date.now();
+
+                if (r && r.data && r.data.success) {
+                    spUtil.addInfoMessage('✅ 無事を報告しました');
+                } else if (r && r.data && r.data.error) {
+                    // 服务端返回限流错误 → 重试
+                    if (attempt < 2 && r.data.error.indexOf('繁忙') !== -1) {
+                        c.hb_sending = true;
+                        var backoff = 2000 * Math.pow(2, attempt);
+                        $timeout(function() {
+                            _sendHeartbeatWithRetry(attempt + 1);
+                        }, backoff + Math.floor(Math.random() * 1000));
+                    } else {
+                        spUtil.addErrorMessage(r.data.error);
+                    }
+                }
+            });
+        }).catch(function() {
+            $scope.$evalAsync(function() {
+                if (attempt < 2) {
+                    // 网络错误 → 重试
+                    var backoff = 2000 * Math.pow(2, attempt);
+                    $timeout(function() {
+                        _sendHeartbeatWithRetry(attempt + 1);
+                    }, backoff);
+                } else {
+                    c.hb_sending = false;
+                    spUtil.addErrorMessage('通信エラー。再度お試しください。');
+                }
+            });
+        });
+    }
+
+    // ==========================================
+    // 支援リクエスト — 開始
+    // ==========================================
+    c.startRequest = function() {
+        // 后台静默发心跳（不阻塞UI）
+        c.server.get({
+            action: 'register_heartbeat',
+            guest_token: c.guest_token || ''
+        });
+
+        c.step = 1; // 直接进入表单
+    };
+
+    // ==========================================
+    // SOS紧急送信
+    // ==========================================
+    c.triggerSOS = function() {
+        if (c.sos_sending) return;
+        c.sos_sending = true;
+
+        // 获取GPS（5秒超时）
+        _getGPS().then(function(loc) {
+            var sosData = {
+                action: 'submit_sos',
+                urgency: 'Critical',
+                category: 'Other',
+                quantity: 1,
+                affected_count: '1',
+                remarks: '【一键SOS】緊急救助要請',
+                guest_token: c.guest_token || ''
+            };
+
+            if (loc) {
+                sosData.detail_loc = 'GPS: ' + loc.lat.toFixed(6) + ', ' + loc.lng.toFixed(6) +
+                    ' (精度' + loc.accuracy + 'm)';
+                sosData.gps_lat = loc.lat;
+                sosData.gps_lng = loc.lng;
+            } else {
+                sosData.detail_loc = '位置不明';
+            }
+
+            // 附加安全設定中的医疗信息
+            if (c.data.emergency_email) sosData.contact = c.data.emergency_email;
+            if (c.data.medical_info) sosData.remarks += '\n【医療】' + c.data.medical_info;
+            if (c.data.blood_type) sosData.remarks += '\n【血液型】' + c.data.blood_type;
+
+            c.server.get(sosData).then(function(r) {
+                $scope.$evalAsync(function() {
+                    c.sos_sending = false;
+
+                    if (r && r.data && r.data.success) {
+                        c.ticket_number = r.data.ticketNumber;
+                        c.ticket_sys_id = r.data.newRecordID;
+
+                        c.form.location = 'SOS';
+                        c.form.detail_loc = sosData.detail_loc;
+                        c.form.category = 'Other';
+                        c.form.urgency = 'Critical';
+
+                        if (r.data.my_requests) c.data.my_requests = r.data.my_requests;
+                        if (c.ticket_sys_id) _initWatcher(c.ticket_sys_id);
+
+                        c.step = 5;
+                        spUtil.addInfoMessage(']]>🆘<![CDATA[ SOSを送信しました！');
+                    } else {
+                        spUtil.addErrorMessage('SOS送信失敗');
+                    }
+                });
+            }).catch(function() {
+                $scope.$evalAsync(function() {
+                    c.sos_sending = false;
+                    spUtil.addErrorMessage('通信エラー');
+                });
+            });
+        });
+    };
+
+    // GPS取得（Promise）
+    function _getGPS() {
+        return new Promise(function(resolve) {
+            if (!navigator.geolocation) { resolve(null); return; }
+            var tid = setTimeout(function() { resolve(null); }, 5000);
+            navigator.geolocation.getCurrentPosition(
+                function(pos) {
+                    clearTimeout(tid);
+                    resolve({
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude,
+                        accuracy: Math.round(pos.coords.accuracy)
+                    });
+                },
+                function() { clearTimeout(tid); resolve(null); },
+                { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
+            );
+        });
+    }
+
+    // ==========================================
+    // 实时监听（RecordWatch）
+    // ==========================================
+    function _initWatcher(sysId) {
+        spUtil.recordWatch($scope,
+            'x_1821654_kokoro_0_silent_wish',
+            'sys_id=' + sysId,
+            function(name, watchData) {
+                if (!watchData || !watchData.record) return;
+                $timeout(function() {
+                    if (watchData.record.state) {
+                        var stVal = parseInt(watchData.record.state.value);
+                        var info = c.statusDetails[stVal];
+                        if (info) {
+                            spUtil.addInfoMessage(info.icon + ' ' + info.title);
+                        }
+                    }
+                });
+            }
+        );
+    }
+
+    // ==========================================
+    // 履历相关
+    // ==========================================
+    c.viewTicket = function(item) {
+        c.ticket_number = item.number;
+        c.ticket_sys_id = item.sys_id;
+        c.form.location = item.location;
+        c.form.detail_loc = item.detail_loc;
+        c.form.category = item.category;
+        c.form.urgency = item.urgency;
+        c.form.quantity = item.quantity;
+        if (item.sys_id) _initWatcher(item.sys_id);
+        c.step = 5;
+        c.from_history = true; // 建立溯源标识
+    };
+
+    // ==========================================
+    // 重置
+    // ==========================================
+    c.reset = function() {
+        c.step = 0;
+        c.from_history = false; // 清除溯源标识
+        c.ticket_number = '';
+        c.ticket_sys_id = null;
+        c.submitting = false;
+        c.form = {
+            location: '', detail_loc: '', category: '',
+            quantity: 1, affected_count: '1', urgency: '',
+            contact: '', remarks: ''
+        };
+    };
+};]]></client_script>
+        <controller_as>c</controller_as>
+        <css>/* ============================================================
+   KOKORO DISASTER MODE — CSS
+   设计原则：白底 + 高对比度 + 最短路径 + WCAG 2.1 AA
+   总量目标：&lt; 8KB（约150行）
+   ============================================================ */
+
+/* ServiceNow 默认元素隐藏 */
+html body nav.navbar,
+html body .navbar,
+html body .sp-page-header,
+html body header,
+html body footer {
+    display: none !important;
+}
+html body { padding-top: 0 !important; }
+
+.kokoro-disaster {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                 "M PLUS Rounded 1c", "Hiragino Kaku Gothic ProN", sans-serif;
+    position: absolute;           /* ★ fixed → absolute */
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #ffffff;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    color: #212121;
+}
+
+/* 游客横幅 */
+.d-guest-bar {
+    background: #fff3e0;
+    color: #e65100;
+    padding: 8px 16px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.d-guest-bar a {
+    color: #1565c0;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: underline;
+    margin-left: auto;
+}
+
+/* ------------------------------------------
+   着陆页
+   ------------------------------------------ */
+.d-landing {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 40px 24px;
+}
+
+.d-header {
+    text-align: center;
+    margin-bottom: 36px;
+}
+
+.d-header h1 {
+    font-size: 1.5rem;
+    color: #c62828;
+    font-weight: 900;
+    margin: 0 0 8px 0;
+}
+
+.d-header h1 i {
+    animation: hb-pulse 2s infinite;
+}
+
+@keyframes hb-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.d-header p {
+    font-size: 1rem;
+    color: #555;
+    margin: 0;
+}
+
+/* 主要动作按钮 */
+.d-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+    max-width: 380px;
+    margin-bottom: 24px;
+}
+
+.d-btn {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 24px;
+    border-radius: 16px;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    width: 100%;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.d-btn:active { transform: scale(0.97); }
+.d-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.d-btn div { display: flex; flex-direction: column; gap: 2px; }
+.d-btn strong { font-size: 1.1rem; }
+.d-btn small { font-size: 0.8rem; opacity: 0.8; }
+
+.d-btn-primary {
+    background: #c62828;
+    color: white;
+    box-shadow: 0 6px 20px rgba(198, 40, 40, 0.25);
+}
+.d-btn-primary:hover:not(:disabled) {
+    box-shadow: 0 8px 28px rgba(198, 40, 40, 0.35);
+}
+
+.d-btn-secondary {
+    background: #fafafa;
+    color: #333;
+    border: 2px solid #e0e0e0;
+}
+.d-btn-secondary:hover:not(:disabled) {
+    border-color: #c62828;
+    background: #fff5f5;
+}
+
+/* SOS */
+.d-sos-btn {
+    background: transparent;
+    color: #c62828;
+    border: 2px solid #e0e0e0;
+    border-radius: 24px;
+    padding: 10px 28px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s;
+    margin-bottom: 16px;
+}
+.d-sos-btn:hover:not(:disabled) {
+    background: #c62828;
+    color: white;
+    border-color: #c62828;
+}
+
+/* 履历入口 */
+.d-history-btn {
+    background: none;
+    border: none;
+    color: #757575;
+    font-size: 0.85rem;
+    cursor: pointer;
+    font-family: inherit;
+    padding: 8px;
+}
+.d-history-btn:hover { color: #333; }
+
+/* ------------------------------------------
+   表单页
+   ------------------------------------------ */
+.d-form-page {
+    min-height: 100vh;
+    background: #fafafa;
+}
+
+.d-form-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    background: white;
+    border-bottom: 1px solid #e0e0e0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.d-back {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: #f5f5f5;
+    border: none;
+    font-size: 1.1rem;
+    color: #333;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.d-form-header h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #333;
+}
+
+.d-form-body {
+    padding: 20px;
+    max-width: 520px;
+    margin: 0 auto;
+}
+
+.d-label {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #333;
+    margin: 16px 0 6px 0;
+}
+
+.d-label .required { color: #c62828; }
+
+.d-input,
+.d-textarea {
+    width: 100%;
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 1rem;
+    color: #212121;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+    -webkit-appearance: none;
+}
+
+.d-input:focus,
+.d-textarea:focus {
+    border-color: #c62828;
+    box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.1);
+}
+
+select.d-input {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpolyline points='6,9 12,15 18,9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 18px;
+    padding-right: 40px;
+}
+
+.d-textarea { min-height: 80px; resize: vertical; }
+
+.d-row { display: flex; gap: 12px; }
+.d-half { flex: 1; }
+
+.critical-select {
+    background-color: #ffebee !important;
+    border-color: #ef9a9a !important;
+    color: #c62828 !important;
+}
+
+.d-submit-btn {
+    width: 100%;
+    height: 56px;
+    margin-top: 24px;
+    background: #c62828;
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-size: 1.1rem;
+    font-weight: 800;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+.d-submit-btn:hover:not(:disabled) {
+    background: #b71c1c;
+}
+.d-submit-btn:disabled { opacity: 0.5; }
+
+/* ------------------------------------------
+   成功页
+   ------------------------------------------ */
+.d-success-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.d-success-card {
+    background: white;
+    border-radius: 20px;
+    padding: 32px 28px;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+    width: 100%;
+    max-width: 420px;
+}
+
+.d-success-icon { font-size: 3rem; margin-bottom: 12px; }
+
+.d-success-card h2 {
+    font-size: 1.4rem;
+    color: #333;
+    margin: 0 0 8px 0;
+}
+
+.d-ticket-id {
+    font-family: 'Courier New', monospace;
+    color: #999;
+    font-weight: 600;
+    margin-bottom: 20px;
+}
+
+.d-summary {
+    background: #f5f5f5;
+    border-radius: 12px;
+    padding: 16px;
+    text-align: left;
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+    line-height: 1.8;
+}
+
+.d-summary strong { color: #555; margin-right: 4px; }
+
+/* ------------------------------------------
+   履历页
+   ------------------------------------------ */
+.d-history-page {
+    min-height: 100vh;
+    background: #fafafa;
+}
+
+.d-history-list {
+    padding: 12px;
+}
+
+.d-history-item {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    border: 1px solid #f0f0f0;
+    transition: background 0.15s;
+}
+.d-history-item:hover { background: #f9f9f9; }
+
+.d-h-cat { font-weight: 700; color: #333; font-size: 0.95rem; }
+.d-h-time { font-size: 0.78rem; color: #999; }
+.d-h-state {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 10px;
+    background: #e8eaf6;
+    color: #3f51b5;
+}
+
+/* ------------------------------------------
+   高对比度模式
+   ------------------------------------------ */
+@media (prefers-contrast: high) {
+    .d-input, .d-textarea { border-width: 3px !important; border-color: #000 !important; }
+    .d-submit-btn { border: 3px solid #000 !important; }
+    .d-sos-btn { border-width: 3px !important; }
+}
+
+/* 动画削减 */
+@media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition-duration: 0.01ms !important; }
+}
+
+/* 手机适配 */
+@media (max-width: 480px) {
+    .d-landing { padding: 30px 16px; }
+    .d-btn { padding: 16px 18px; }
+    .d-btn strong { font-size: 1rem; }
+    .d-form-body { padding: 16px; }
+}
+
+.has-admin-bar .kokoro-user-container {
+      top: 42px !important;
+      height: calc(100vh - 42px) !important;
+  }
+
+/* ---- 问题区块 ---- */
+.d-question {
+    margin-bottom: 24px;
+}
+
+.d-q-label {
+    display: block;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #333;
+    margin-bottom: 10px;
+}
+.d-q-label small {
+    font-weight: 400;
+    font-size: 0.8rem;
+    color: #999;
+}
+
+/* ---- Chip按钮网格 ---- */
+.d-chip-grid {
+    display: grid;
+    gap: 10px;
+}
+.d-chip-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+.d-chip-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+.d-chip {
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 14px;
+    padding: 14px 12px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #333;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: center;
+    transition: all 0.15s;
+    -webkit-appearance: none;
+    line-height: 1.3;
+}
+
+.d-chip:active { transform: scale(0.96); }
+
+.d-chip-active {
+    background: #e3f2fd !important;
+    border-color: #1976d2 !important;
+    color: #1565c0 !important;
+    box-shadow: 0 2px 8px rgba(25, 118, 210, 0.2);
+}
+
+/* 紧急度chip特殊样式 */
+.severity-safe.d-chip-active {
+    background: #e8f5e9 !important;
+    border-color: #4caf50 !important;
+    color: #2e7d32 !important;
+}
+.severity-struggling.d-chip-active {
+    background: #fff3e0 !important;
+    border-color: #ff9800 !important;
+    color: #e65100 !important;
+}
+.severity-critical.d-chip-active {
+    background: #ffebee !important;
+    border-color: #f44336 !important;
+    color: #c62828 !important;
+    animation: critical-glow 1.5s infinite;
+}
+@keyframes critical-glow {
+    0%, 100% { box-shadow: 0 0 0 rgba(244, 67, 54, 0); }
+    50% { box-shadow: 0 0 16px rgba(244, 67, 54, 0.3); }
+}
+
+/* 小尺寸chip（人数等） */
+.d-chip-sm {
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #333;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: center;
+    transition: all 0.15s;
+}
+.d-chip-sm.d-chip-active {
+    background: #e3f2fd;
+    border-color: #1976d2;
+    color: #1565c0;
+}
+
+/* ---- 展开区 ---- */
+.d-expand-section {
+    margin: 20px 0;
+}
+
+.d-expand-toggle {
+    background: none;
+    border: none;
+    color: #757575;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    padding: 8px 0;
+    width: 100%;
+    text-align: left;
+}
+.d-expand-toggle:hover { color: #333; }
+
+.d-expand-body {
+    padding-top: 12px;
+}
+
+.d-detail-label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #555;
+    margin: 14px 0 6px 0;
+}
+
+/* ---- 验证提示 ---- */
+.d-validation-hint {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 12px;
+    text-align: center;
+}
+.d-validation-hint small {
+    font-size: 0.78rem;
+    color: #999;
+}
+
+/* ---- 手机适配 ---- */
+@media (max-width: 360px) {
+    .d-chip-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+    .d-chip-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .d-chip { padding: 12px 8px; font-size: 0.85rem; }
+}</css>
+        <data_table>sp_instance</data_table>
+        <demo_data/>
+        <description/>
+        <docs/>
+        <field_list/>
+        <has_preview>false</has_preview>
+        <id>kokoro_user_disaster</id>
+        <internal>false</internal>
+        <link><![CDATA[function link(scope, element, attrs, controller) {  }]]></link>
+        <name>Kokoro Disaster Mode</name>
+        <option_schema/>
+        <public>true</public>
+        <roles/>
+        <script><![CDATA[(function() {
+    // ============================================================
+    // KOKORO DISASTER MODE — Server Script (精简版)
+    // 仅包含: 提交/SOS/心跳/历史/游客初始化
+    //
+    // 不包含的功能（由平时Widget处理）:
+    //   ✗ 好友系统（守护の輪）
+    //   ✗ 遗言功能
+    //   ✗ 志愿者操作
+    //   ✗ 设置面板
+    //   ✗ 史莱姆相关
+    // ============================================================
+
+    var CONFIG = {
+        tables: {
+            SILENT_WISH: 'x_1821654_kokoro_0_silent_wish',
+            USER_PROFILE: 'x_1821654_kokoro_0_x_kokoro_user_profile',
+            HEARTBEAT: 'x_1821654_kokoro_0_x_1821654_kokoro_0_heartbeat',
+            EMERGENCY_MESSAGE: 'x_1821654_kokoro_0_emergency_message',
+            PROCESS_EVENT: 'x_1821654_kokoro_0_process_event',
+            GUEST_TOKEN: 'x_1821654_kokoro_0_guest_token'
+        },
+        wishStates: {
+            SUBMITTED: '10',
+            COMPLETED: '4',
+            CANCELLED: '5'
+        }
+    };
+
+    // ------------------------------------------
+    // 身份识别
+    // ------------------------------------------
+    data.user_id = gs.getUserID();
+    data.user_name = gs.getUserDisplayName();
+
+    // 优先使用Router传入的is_guest
+    if (options && options.from_router) {
+        data.is_guest = !!options.is_guest;
+    } else {
+        data.is_guest = !gs.isLoggedIn() ||
+            gs.getUserName() === 'guest' ||
+            data.user_id === '5136503cc611227c00566377a6ee91f3';
+    }
+
+    data.auth_mode = data.is_guest ? 'guest' : 'authenticated';
+    data.guest_token = '';
+    data.system_mode = 'disaster_active';
+    data.my_requests = [];
+
+    // 加载用户资料（认证用户 — 用于SOS时附加医疗信息）
+    if (!data.is_guest) {
+        try {
+            var prof = new GlideRecord(CONFIG.tables.USER_PROFILE);
+            prof.addQuery('user', data.user_id);
+            prof.setLimit(1);
+            prof.query();
+            if (prof.next()) {
+                data.emergency_email = prof.getValue('emergency_contact_email') || '';
+                data.medical_info = prof.getValue('medical_conditions') || '';
+                data.blood_type = prof.getValue('blood_type') || '';
+            }
+        } catch (e) {}
+    }
+
+    // ------------------------------------------
+    // 工具函数
+    // ------------------------------------------
+    function sanitizeInput(val, maxLen) {
+        if (!val) return '';
+        var s = String(val)
+            .replace(/[<>\"'&]/g, '')
+            .replace(/[\r\n]+/g, ' ')
+            .trim();
+        return maxLen ? s.substring(0, maxLen) : s;
+    }
+
+    function validateSysId(id) {
+        return id && /^[a-f0-9]{32}$/.test(String(id));
+    }
+
+    function generateGuestToken() {
+        var token = gs.generateGUID();
+        try {
+            var gt = new GlideRecord(CONFIG.tables.GUEST_TOKEN);
+            gt.initialize();
+            gt.setValue('token', token);
+            gt.setValue('created_at', new GlideDateTime());
+            var exp = new GlideDateTime();
+            exp.addSeconds(72 * 3600); // 72小时过期
+            gt.setValue('expires_at', exp);
+            gt.setValue('is_active', true);
+            if (gt.insert()) return token;
+        } catch (e) {}
+        return null;
+    }
+
+    function validateGuestToken(token) {
+        if (!token) return { valid: false };
+        try {
+            var gt = new GlideRecord(CONFIG.tables.GUEST_TOKEN);
+            gt.addQuery('token', token);
+            gt.addQuery('is_active', true);
+            gt.addQuery('expires_at', '>', new GlideDateTime());
+            gt.setLimit(1);
+            gt.query();
+            if (gt.next()) {
+                return {
+                    valid: true,
+                    sys_id: gt.getUniqueValue(),
+                    token: token
+                };
+            }
+        } catch (e) {}
+        return { valid: false };
+    }
+
+    function buildTaskItem(gr) {
+        var item = {
+            sys_id: gr.getUniqueValue(),
+            number: gr.getValue('number') || '',
+            category: gr.getValue('request_category') || '',
+            category_display: gr.getDisplayValue('request_category') || '',
+            detail_loc: gr.getValue('precise_location') || '',
+            urgency: gr.getValue('urgency') || 'Medium',
+            state: parseInt(gr.getValue('state')) || 10,
+            state_label: gr.getDisplayValue('state') || '',
+            quantity: parseInt(gr.getValue('qty')) || 1,
+            location: gr.getValue('shelter_zone') || '',
+            remarks: gr.getValue('wish_content') || ''
+        };
+        var created = new GlideDateTime(gr.sys_created_on);
+        var now = new GlideDateTime();
+        var mins = Math.floor(
+            Math.abs(now.getNumericValue() - created.getNumericValue()) / 60000
+        );
+        if (mins < 60) item.time_ago = mins + '分前';
+        else if (mins < 1440) item.time_ago = Math.floor(mins / 60) + '時間前';
+        else item.time_ago = Math.floor(mins / 1440) + '日前';
+        return item;
+    }
+
+    function getMyRequests(userId, guestToken) {
+        var list = [];
+        try {
+            var gr = new GlideRecord(CONFIG.tables.SILENT_WISH);
+            if (guestToken) {
+                gr.addQuery('guest_token', guestToken);
+            } else if (userId) {
+                gr.addQuery('opened_by', userId);
+            } else {
+                return list;
+            }
+            gr.orderByDesc('sys_created_on');
+            gr.setLimit(20);
+            gr.query();
+            while (gr.next()) {
+                list.push(buildTaskItem(gr));
+            }
+        } catch (e) {}
+        return list;
+    }
+
+    // ------------------------------------------
+    // 惊群效应防护：全局并发限制
+    // ------------------------------------------
+    function checkGlobalThrottle(actionType, windowSec, maxCount) {
+        try {
+            var start = new GlideDateTime();
+            start.addSeconds(-windowSec);
+            var ga = new GlideAggregate(CONFIG.tables.PROCESS_EVENT);
+            ga.addQuery('activity', 'STARTSWITH', 'RATE:' + actionType);
+            ga.addQuery('timestamp', '>=', start);
+            ga.addAggregate('COUNT');
+            ga.query();
+            var count = 0;
+            if (ga.next()) {
+                count = parseInt(ga.getAggregate('COUNT')) || 0;
+            }
+            if (count >= maxCount) {
+                return {
+                    allowed: false,
+                    message: 'サーバーが混雑しています。数秒後にもう一度お試しください。'
+                };
+            }
+        } catch (e) {
+            // エラー時は通す（可用性優先）
+        }
+        return { allowed: true };
+    }
+
+    function recordRate(identifier, actionType) {
+        try {
+            var pe = new GlideRecord(CONFIG.tables.PROCESS_EVENT);
+            pe.initialize();
+            pe.setValue('user', identifier);
+            pe.setValue('activity', 'RATE:' + actionType);
+            pe.setValue('timestamp', new GlideDateTime());
+            pe.insert();
+        } catch (e) {}
+    }
+
+    // ------------------------------------------
+    // CSRF Token（初始加载时生成）
+    // ------------------------------------------
+    if (!input) {
+        data.csrf_token = gs.generateGUID();
+        var sess = gs.getSession();
+        sess.putClientData('kokoro_csrf', data.csrf_token);
+    }
+
+    // ------------------------------------------
+    // INPUT 处理
+    // ------------------------------------------
+    if (input) {
+
+        // === 游客初始化 ===
+        if (input.action === 'guest_init') {
+            try {
+                if (input.guest_token) {
+                    var v = validateGuestToken(input.guest_token);
+                    if (v.valid) {
+                        data.guest_token = input.guest_token;
+                        data.success = true;
+                    } else {
+                        data.guest_token = generateGuestToken();
+                        data.success = true;
+                    }
+                } else {
+                    data.guest_token = generateGuestToken();
+                    data.success = true;
+                }
+            } catch (e) {
+                data.error = '初期化に失敗しました';
+            }
+            return;
+        }
+
+        // === 心跳注册（含惊群防护） ===
+        if (input.action === 'register_heartbeat') {
+            try {
+                // 全局限流：10秒内最多100次心跳
+                var gCheck = checkGlobalThrottle('HEARTBEAT', 10, 100);
+                if (!gCheck.allowed) {
+                    data.error = gCheck.message;
+                    return;
+                }
+
+                var hb = new GlideRecord(CONFIG.tables.HEARTBEAT);
+                hb.initialize();
+                hb.setValue('u_timestamp', new GlideDateTime());
+                hb.setValue('u_status', 'Safe');
+
+                if (data.is_guest && input.guest_token) {
+                    hb.setValue('guest_token', input.guest_token);
+                    hb.setValue('u_source', 'disaster_guest');
+                } else {
+                    hb.setValue('u_user', data.user_id);
+                    hb.setValue('u_source', 'disaster_auth');
+                }
+
+                var hbId = hb.insert();
+                data.heartbeat_id = hbId;
+                data.success = true;
+
+                recordRate(
+                    data.is_guest ? (input.guest_token || 'g') : data.user_id,
+                    'HEARTBEAT'
+                );
+            } catch (e) {
+                data.error = 'ハートビート登録に失敗しました';
+            }
+            return;
+        }
+
+        // submit_record — 修改后
+if (input.action === 'submit_record') {
+    try {
+        var gCheckS = checkGlobalThrottle('SUBMIT', 10, 50);
+        if (!gCheckS.allowed) { data.error = gCheckS.message; return; }
+
+        var gr = new GlideRecord(CONFIG.tables.SILENT_WISH);
+        gr.initialize();
+        gr.setValue('opened_by', gs.getUserID());
+
+        if (data.is_guest && input.guest_token) {
+            gr.setValue('guest_token', input.guest_token);
+        }
+
+        gr.setValue('state', CONFIG.wishStates.SUBMITTED);
+
+        // ---- 受灾者填写的字段 ----
+        gr.setValue('shelter_zone', sanitizeInput(input.location, 100));
+        gr.setValue('request_category', sanitizeInput(input.category, 50));
+        gr.setValue('needs_tags', sanitizeInput(input.needs_tags, 500));
+        gr.setValue('self_reported_severity', sanitizeInput(input.self_reported_severity, 20));
+        gr.setValue('urgency', sanitizeInput(input.urgency, 20));
+
+        // ---- 任意字段 ----
+        gr.setValue('precise_location', sanitizeInput(input.detail_loc, 200));
+        gr.setValue('affected_count', sanitizeInput(input.affected_count, 10));
+        gr.setValue('contact_info', sanitizeInput(input.contact, 200));
+        gr.setValue('additional_comments', sanitizeInput(input.remarks, 1000));
+        gr.setValue('qty', 1); // 受灾者不填数量
+
+        // ---- 自动生成的描述 ----
+        var needsText = String(input.needs_tags || '').replace(/,/g, ', ');
+        var severityMap = { 'safe': ']]>😌<![CDATA[大丈夫', 'struggling': ']]>😰<![CDATA[困っている', 'critical': ']]>😱<![CDATA[限界' };
+        var sevDisplay = severityMap[input.self_reported_severity] || '';
+
+        var desc = '【場所】' + sanitizeInput(input.location, 100);
+        if (input.detail_loc) desc += ' - ' + sanitizeInput(input.detail_loc, 200);
+        desc += '\n【困りごと】' + needsText;
+        desc += '\n【状況】' + sevDisplay;
+        if (input.affected_count && input.affected_count !== '1') {
+            desc += '\n【人数】' + input.affected_count;
+        }
+        gr.setValue('wish_content', desc);
+
+        var sysId = gr.insert();
+        if (sysId) {
+            data.ticketNumber = gr.getValue('number');
+            data.newRecordID = sysId;
+            data.success = true;
+            data.my_requests = getMyRequests(data.user_id, data.guest_token);
+            recordRate(data.is_guest ? (input.guest_token || 'g') : data.user_id, 'SUBMIT');
+        } else {
+            data.error = '提出失敗';
+        }
+    } catch (e) {
+        data.error = 'システムエラー';
+    }
+    return;
+}
+
+        // === SOS紧急提交 ===
+        if (input.action === 'submit_sos') {
+            try {
+                var sg = new GlideRecord(CONFIG.tables.SILENT_WISH);
+                sg.initialize();
+                sg.setValue('opened_by', gs.getUserID());
+
+                if (data.is_guest && input.guest_token) {
+                    sg.setValue('guest_token', input.guest_token);
+                }
+
+                sg.setValue('state', CONFIG.wishStates.SUBMITTED);
+                sg.setValue('shelter_zone', 'SOS');
+                sg.setValue('precise_location', sanitizeInput(input.detail_loc, 500));
+                sg.setValue('request_category', 'Other');
+                sg.setValue('qty', 1);
+                sg.setValue('urgency', 'Critical');
+
+                if (input.gps_lat && input.gps_lng) {
+                    // 如果你已经在表中添加了gps字段，取消以下注释：
+                    // sg.setValue('gps_latitude', String(input.gps_lat));
+                    // sg.setValue('gps_longitude', String(input.gps_lng));
+                }
+
+                var sosDesc = ']]>🆘<![CDATA[【緊急SOS】' +
+                    '\n【位置】' + sanitizeInput(input.detail_loc, 500) +
+                    '\n【備考】' + sanitizeInput(input.remarks, 1000);
+                sg.setValue('wish_content', sosDesc);
+
+                var sosSysId = sg.insert();
+                if (sosSysId) {
+                    data.ticketNumber = sg.getValue('number');
+                    data.newRecordID = sosSysId;
+                    data.success = true;
+                    data.my_requests = getMyRequests(data.user_id, data.guest_token);
+                }
+            } catch (e) {
+                data.error = 'SOS送信に失敗しました';
+            }
+            return;
+        }
+
+        // === 获取历史记录 ===
+        if (input.action === 'get_my_history') {
+            data.my_requests = getMyRequests(
+                data.user_id,
+                input.guest_token || data.guest_token
+            );
+            data.success = true;
+            return;
+        }
+    }
+
+    // ------------------------------------------
+    // 默认加载：历史记录
+    // ------------------------------------------
+    if (data.user_id || data.guest_token) {
+        data.my_requests = getMyRequests(data.user_id, data.guest_token);
+    }
+})();]]></script>
+        <servicenow>false</servicenow>
+        <sys_class_name>sp_widget</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-03-03 07:56:52</sys_created_on>
+        <sys_id>14e47f87835fb210f6b1fb96feaad3c1</sys_id>
+        <sys_mod_count>15</sys_mod_count>
+        <sys_name>Kokoro Disaster Mode</sys_name>
+        <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
+        <sys_update_name>sp_widget_14e47f87835fb210f6b1fb96feaad3c1</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-03-05 02:56:33</sys_updated_on>
+        <template><![CDATA[<div class="kokoro-disaster" role="application" aria-label="Kokoro緊急支援" lang="ja">
+
+  <!-- 游客横幅 -->
+  <div class="d-guest-bar" ng-if="c.data.is_guest">
+    <i class="fa fa-user-secret"></i>
+    <span>ゲストモード</span>
+    <a ng-click="c.goToLogin()">ログイン</a>
+  </div>
+
+  <!-- ============================== -->
+  <!-- 着陆页：双按钮直出               -->
+  <!-- ============================== -->
+  <div class="d-landing" ng-if="c.step === 0">
+
+    <div class="d-header">
+      <h1><i class="fa fa-heartbeat"></i> KOKORO 避難支援</h1>
+      <p ng-if="c.data.user_name && !c.data.is_guest">{{c.data.user_name}} さん</p>
+    </div>
+
+    <div class="d-actions">
+      <!-- 主按钮: 支援请求 -->
+      <button class="d-btn d-btn-primary" ng-click="c.startRequest()"
+              aria-label="支援リクエストを作成">
+        <i class="fa fa-plus-circle fa-2x"></i>
+        <div>
+          <strong>支援を求める</strong>
+          <small>水・食料・医療など</small>
+        </div>
+      </button>
+
+      <!-- 副按钮: 生存确认 -->
+      <button class="d-btn d-btn-secondary" ng-click="c.sendHeartbeat()"
+              ng-disabled="c.hb_sending"
+              aria-label="生存確認を送信">
+        <i class="fa fa-heart fa-2x" ng-if="!c.hb_sending"></i>
+        <i class="fa fa-spinner fa-spin fa-2x" ng-if="c.hb_sending"></i>
+        <div>
+          <strong>無事を伝える</strong>
+          <small>生存確認を送信</small>
+        </div>
+      </button>
+    </div>
+
+    <!-- SOS -->
+    <button class="d-sos-btn" ng-click="c.triggerSOS()" ng-disabled="c.sos_sending">
+      <span ng-if="!c.sos_sending">]]>🆘<![CDATA[ 緊急SOS</span>
+      <span ng-if="c.sos_sending"><i class="fa fa-spinner fa-spin"></i> 送信中...</span>
+    </button>
+
+    <!-- 履历入口 -->
+    <button class="d-history-btn" ng-click="c.step = 9"
+            ng-if="c.data.my_requests.length > 0">
+      <i class="fa fa-history"></i> 履歴 ({{c.data.my_requests.length}})
+    </button>
+  </div>
+
+  <!-- ============================== -->
+<!-- 灾害求助表单 — 重设计版         -->
+<!-- 设计原则: 全点击，30秒完成       -->
+<!-- ============================== -->
+<div class="d-form-page" ng-if="c.step === 1">
+
+  <div class="d-form-header">
+    <button class="d-back" ng-click="c.step = 0">
+      <i class="fa fa-arrow-left"></i>
+    </button>
+    <h2>支援リクエスト</h2>
+  </div>
+
+  <div class="d-form-body">
+
+    <!-- ======== 第1问: 你在哪 ======== -->
+    <div class="d-question">
+      <label class="d-q-label">]]>📍<![CDATA[ 今どこにいますか？</label>
+      <div class="d-chip-grid cols-2">
+        <button class="d-chip"
+                ng-class="{'d-chip-active': c.form.location === 'family_area'}"
+                ng-click="c.form.location = 'family_area'">
+          ]]>🏠<![CDATA[ ファミリー
+        </button>
+        <button class="d-chip"
+                ng-class="{'d-chip-active': c.form.location === 'general_area'}"
+                ng-click="c.form.location = 'general_area'">
+          ]]>🏢<![CDATA[ 一般エリア
+        </button>
+        <button class="d-chip"
+                ng-class="{'d-chip-active': c.form.location === 'medical_area'}"
+                ng-click="c.form.location = 'medical_area'">
+          ]]>🏥<![CDATA[ 医療エリア
+        </button>
+        <button class="d-chip"
+                ng-class="{'d-chip-active': c.form.location === 'other'}"
+                ng-click="c.form.location = 'other'">
+          ]]>📍<![CDATA[ その他
+        </button>
+      </div>
+    </div>
+
+    <!-- ======== 第2问: 你需要什么 ======== -->
+    <div class="d-question">
+      <label class="d-q-label">]]>🆘<![CDATA[ 何に困っていますか？<small>（複数OK）</small></label>
+      <div class="d-chip-grid cols-2">
+        <button class="d-chip"
+                ng-class="{'d-chip-active': c.form.needs.water}"
+                ng-click="c.form.needs.water = !c.form.needs.water">
+          ]]>💧<![CDATA[ 水がない
+        </button>
+        <button class="d-chip"
+                ng-class="{'d-chip-active': c.form.needs.food}"
+                ng-click="c.form.needs.food = !c.form.needs.food">
+          ]]>🍱<![CDATA[ 食べ物がない
+        </button>
+        <button class="d-chip"
+                ng-class="{'d-chip-active': c.form.needs.medical}"
+                ng-click="c.form.needs.medical = !c.form.needs.medical">
+          ]]>💊<![CDATA[ 薬が必要
+        </button>
+        <button class="d-chip"
+                ng-class="{'d-chip-active': c.form.needs.injury}"
+                ng-click="c.form.needs.injury = !c.form.needs.injury">
+          ]]>🩹<![CDATA[ 怪我をした
+        </button>
+        <button class="d-chip"
+                ng-class="{'d-chip-active': c.form.needs.baby}"
+                ng-click="c.form.needs.baby = !c.form.needs.baby">
+          ]]>👶<![CDATA[ 赤ちゃん用品
+        </button>
+        <button class="d-chip"
+                ng-class="{'d-chip-active': c.form.needs.power}"
+                ng-click="c.form.needs.power = !c.form.needs.power">
+          ]]>🔋<![CDATA[ 充電したい
+        </button>
+        <button class="d-chip"
+                ng-class="{'d-chip-active': c.form.needs.care}"
+                ng-click="c.form.needs.care = !c.form.needs.care">
+          ]]>🧓<![CDATA[ 介助が必要
+        </button>
+        <button class="d-chip"
+                ng-class="{'d-chip-active': c.form.needs.other}"
+                ng-click="c.form.needs.other = !c.form.needs.other">
+          ❓ その他
+        </button>
+      </div>
+    </div>
+
+    <!-- ======== 第3问: 你现在的状况 ======== -->
+    <div class="d-question">
+      <label class="d-q-label">⚡ 今の状況は？</label>
+      <div class="d-chip-grid cols-3">
+        <button class="d-chip severity-safe"
+                ng-class="{'d-chip-active': c.form.severity === 'safe'}"
+                ng-click="c.form.severity = 'safe'">
+          ]]>😌<![CDATA[ 大丈夫
+        </button>
+        <button class="d-chip severity-struggling"
+                ng-class="{'d-chip-active': c.form.severity === 'struggling'}"
+                ng-click="c.form.severity = 'struggling'">
+          ]]>😰<![CDATA[ 困ってる
+        </button>
+        <button class="d-chip severity-critical"
+                ng-class="{'d-chip-active': c.form.severity === 'critical'}"
+                ng-click="c.form.severity = 'critical'">
+          ]]>😱<![CDATA[ 限界です
+        </button>
+      </div>
+    </div>
+
+    <!-- ======== 展开区域: 详细信息（任意） ======== -->
+    <div class="d-expand-section">
+      <button class="d-expand-toggle" ng-click="c.showDetails = !c.showDetails">
+        <span ng-if="!c.showDetails">▼ もっと詳しく（任意）</span>
+        <span ng-if="c.showDetails">▲ 閉じる</span>
+      </button>
+
+      <div class="d-expand-body" ng-if="c.showDetails">
+        <label class="d-detail-label">場所の詳細</label>
+        <input class="d-input" type="text" ng-model="c.form.detail_loc"
+               placeholder="例: 体育館の入口近く">
+
+        <label class="d-detail-label">人数</label>
+        <div class="d-chip-grid cols-3">
+          <button class="d-chip-sm"
+                  ng-class="{'d-chip-active': c.form.affected_count === '1'}"
+                  ng-click="c.form.affected_count = '1'">1人</button>
+          <button class="d-chip-sm"
+                  ng-class="{'d-chip-active': c.form.affected_count === '2-4'}"
+                  ng-click="c.form.affected_count = '2-4'">2-4人</button>
+          <button class="d-chip-sm"
+                  ng-class="{'d-chip-active': c.form.affected_count === '5+'}"
+                  ng-click="c.form.affected_count = '5+'">5人+</button>
+        </div>
+
+        <label class="d-detail-label">連絡先</label>
+        <input class="d-input" type="text" ng-model="c.form.contact"
+               placeholder="電話番号 or Email">
+
+        <label class="d-detail-label">備考</label>
+        <textarea class="d-textarea" ng-model="c.form.remarks" rows="2"
+                  placeholder="アレルギー、持病、特別な事情..."></textarea>
+      </div>
+    </div>
+
+    <!-- ======== 送信ボタン ======== -->
+    <button class="d-submit-btn"
+            ng-click="c.submitRequest()"
+            ng-disabled="c.submitting || !c.form.location || !c.hasAnyNeed() || !c.form.severity">
+      <span ng-if="!c.submitting">送信する</span>
+      <span ng-if="c.submitting"><i class="fa fa-spinner fa-spin"></i> 送信中...</span>
+    </button>
+
+    <!-- 验证提示 -->
+    <div class="d-validation-hint"
+         ng-if="!c.form.location || !c.hasAnyNeed() || !c.form.severity">
+      <small ng-if="!c.form.location">]]>📍<![CDATA[ エリアを選んでください</small>
+      <small ng-if="!c.hasAnyNeed()">]]>🆘<![CDATA[ 困りごとを1つ以上選んでください</small>
+      <small ng-if="!c.form.severity">⚡ 状況を選んでください</small>
+    </div>
+  </div>
+</div>
+
+  <!-- ============================== -->
+  <!-- 成功页                          -->
+  <!-- ============================== -->
+  <div class="d-success-page" ng-if="c.step === 5">
+    <div class="d-success-card">
+      <div class="d-success-icon">✅</div>
+      <h2>承知いたしました</h2>
+      <p class="d-ticket-id">ID: {{c.ticket_number}}</p>
+
+      <div class="d-summary">
+        <div><strong>場所:</strong> {{c.form.location}} - {{c.form.detail_loc}}</div>
+        <div><strong>内容:</strong> {{c.form.category}} x{{c.form.quantity}}</div>
+        <div><strong>緊急度:</strong> {{c.form.urgency}}</div>
+      </div>
+
+      <button class="d-btn d-btn-secondary" ng-click="c.reset()" style="width:100%;" ng-if="!c.from_history">
+        <i class="fa fa-plus"></i>
+        <div><strong>新しいリクエスト</strong></div>
+      </button>
+
+      <button class="d-btn d-btn-secondary" ng-click="c.step = 9; c.from_history = false" style="width:100%;" ng-if="c.from_history">
+        <i class="fa fa-arrow-left"></i>
+        <div><strong>履歴に戻る</strong></div>
+      </button>
+    </div>
+  </div>
+
+  <!-- ============================== -->
+  <!-- 履历页                          -->
+  <!-- ============================== -->
+  <div class="d-history-page" ng-if="c.step === 9">
+    <div class="d-form-header">
+      <button class="d-back" ng-click="c.step = 0">
+        <i class="fa fa-arrow-left"></i>
+      </button>
+      <h2>申請履歴</h2>
+    </div>
+
+    <div class="d-history-list">
+      <div class="d-history-item" ng-repeat="item in c.data.my_requests"
+           ng-click="c.viewTicket(item)">
+        <div class="d-h-cat">{{item.category_display || item.category}}</div>
+        <div class="d-h-time">{{item.time_ago}}</div>
+        <div class="d-h-state">{{item.state_label}}</div>
+      </div>
+
+      <div ng-if="c.data.my_requests.length === 0"
+           style="text-align:center;padding:40px;color:#999;">
+        まだ履歴がありません
+      </div>
+    </div>
+  </div>
+
+</div>]]></template>
+    </sp_widget>
+    <sys_es_latest_script action="INSERT_OR_UPDATE">
+        <id>14e47f87835fb210f6b1fb96feaad3c1</id>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-03-03 07:56:52</sys_created_on>
+        <sys_id>10e47f87835fb210f6b1fb96feaad3c4</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-03-03 07:56:52</sys_updated_on>
+        <table>sp_widget</table>
+        <use_es_latest>true</use_es_latest>
+    </sys_es_latest_script>
+</record_update>

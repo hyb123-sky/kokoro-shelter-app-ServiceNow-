@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?><database>
     <element db_object_id="02f743bb83023210f6b1fb96feaad3e6" label="Kokoro Inventory" max_length="40" name="x_1821654_kokoro_0_kokoro_inventory" type="collection">
+        <element label="Daily Reminder" max_length="40" name="daily_reminder" type="boolean"/>
         <element label="warning Threshold" max_length="40" name="warning_threshold" type="integer"/>
         <element label="Item_code" max_length="40" name="item_code" type="string"/>
         <element label="stock Quantity" max_length="40" name="stock_quantity" type="integer"/>

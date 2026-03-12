@@ -25,6 +25,7 @@
             </choice>
         </element>
         <element label="Emergency contact 2 phone" max_length="20" name="emergency_contact_2_phone" type="string"/>
+        <element label="Daily Reminder" max_length="40" name="daily_reminder" type="boolean"/>
         <element label="Emergency contact 1 name" max_length="100" name="emergency_contact_1_name" type="string"/>
         <element label="Medical conditions" max_length="1000" name="medical_conditions" type="string"/>
         <element label="Emergency contact 2 email" max_length="100" name="emergency_contact_2_email" type="string"/>

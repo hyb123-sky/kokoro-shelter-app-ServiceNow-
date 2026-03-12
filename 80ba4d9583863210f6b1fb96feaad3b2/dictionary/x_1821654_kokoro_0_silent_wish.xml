@@ -5,13 +5,22 @@
         <element label="Affected Count" max_length="40" name="u_affected_count" type="integer"/>
         <element label="Geocode Status" max_length="5000" name="geocode_status" type="string"/>
         <element label="longitude" max_length="40" name="longitude" type="float"/>
-        <element label="GPS Latitude" max_length="40" name="gps_latitude" type="string"/>
+        <element choice="1" label="Self Reported Serverity" max_length="40" name="self_reported_serverity" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="困っている" value="struggling"/>
+                <element inactive_on_update="false" label="大丈夫" value="safe"/>
+                <element inactive_on_update="false" label="限界" value="critical"/>
+            </choice>
+        </element>
+        <element label="GPS Latitude" max_length="50" name="gps_latitude" type="string"/>
+        <element default="true" label="active" max_length="40" name="active" type="boolean"/>
         <element label="担当ボランティア" max_length="32" name="assigned_to" reference="sys_user" type="reference"/>
         <element label="到着予定じ時刻" max_length="255" name="u_eta" type="glide_date_time"/>
         <element choice="3" label="Shelter Zone" max_length="40" name="shelter_zone" type="choice">
             <choice>
                 <element inactive_on_update="false" label="スタッフ待機室" sequence="40" value="STAFF_ROOM"/>
                 <element inactive_on_update="false" label="医療・ケアエリア" sequence="30" value="MEDICAL_AREA"/>
+                <element inactive_on_update="false" label="その他" sequence="70" value="OTHER_AREA"/>
                 <element inactive_on_update="false" label="フィールド(現場)" sequence="50" value="FIELD"/>
                 <element inactive_on_update="false" label="本部(HQ)" sequence="60" value="HQ"/>
                 <element inactive_on_update="false" label="ファミリーエリア（家族）" sequence="10" value="FAMILY_AREA"/>
@@ -20,12 +29,14 @@
         </element>
         <element choice="3" label="Request  Category" max_length="40" name="request_category" type="choice">
             <choice>
-                <element inactive_on_update="false" label="電源・充電" sequence="4" value="Power"/>
-                <element inactive_on_update="false" label="その他" sequence="5" value="Other"/>
+                <element inactive_on_update="false" label="電源・充電" sequence="5" value="Power"/>
+                <element inactive_on_update="false" label="その他" sequence="7" value="Other"/>
                 <element inactive_on_update="false" label="食料" sequence="1" value="Food"/>
                 <element inactive_on_update="false" label="お水" sequence="0" value="Water"/>
                 <element inactive_on_update="false" label="医療・薬" sequence="2" value="Medical"/>
-                <element inactive_on_update="false" label="乳幼児用品" sequence="3" value="Baby"/>
+                <element inactive_on_update="false" label="介助・介護" sequence="6" value="care"/>
+                <element inactive_on_update="false" label="乳幼児用品" sequence="4" value="Baby"/>
+                <element inactive_on_update="false" label="ケガ・救護" sequence="3" value="injury"/>
             </choice>
         </element>
         <element display="true" label="Wish Content" max_length="1000" name="wish_content" type="string"/>
@@ -62,7 +73,15 @@
         <element default="1" label="Qty" max_length="255" name="qty" type="integer"/>
         <element label="Mood Color" max_length="40" name="mood_color" type="string"/>
         <element label="Contact Info" max_length="80" name="u_contact_info" type="string"/>
+        <element label="Needs Tags" max_length="500" name="needs_tags" type="string"/>
         <element label="Additional comments" max_length="4000" name="additional_comments" type="journal_input"/>
+        <element choice="1" label="Affected Count" max_length="40" name="affected_count" type="choice">
+            <choice>
+                <element inactive_on_update="false" label="1" value="1"/>
+                <element inactive_on_update="false" label="5＋" value="5＋"/>
+                <element inactive_on_update="false" label="2-4" value="2-4"/>
+            </choice>
+        </element>
         <element choice="3" label="Urgency" max_length="40" name="urgency" type="choice">
             <choice>
                 <element inactive_on_update="false" label="急ぎません" sequence="0" value="Low"/>

@@ -280,7 +280,7 @@ c.goToLogin = function() {
     if (prevStatus !== 'critical' && update.status === 'critical') {
         NotificationManager.show(
             '⚠️ ' + friend.display_name,
-            '長時間応答がありません。安否を確認してください。',
+            '長時間応答がありません。安全を確認してください。',
             'critical'
         );
     }
@@ -316,6 +316,109 @@ c.goToLogin = function() {
     c.toggleMenu = function() {
         c.showMenu = !c.showMenu;
     };
+	
+	// ==========================================
+    // 使い方ガイド（Onboarding Tour） - 像素级精准重构版
+    // ==========================================
+    c.tour_active = false;
+    c.current_tour_step = 0;
+    c.tour_x = 0; c.tour_y = 0; c.tour_radius = 0;
+    c.bubble_x = 0; c.bubble_y = 0;
+
+    c.tour_steps = [
+        { anchor: '#the-slime', title: '生存確認', content: 'こころちゃんをタップして、あなたの無事を知らせましょう。', position: 'bottom' },
+        { anchor: '.sos-btn', title: '緊急SOS', content: '一刻を争う場合は、このボタンで即座に救助要請を送れます。', position: 'top' },
+        { anchor: '.kokoro-menu-btn', title: 'メニュー', content: '履歴・守護の輪・安全設定はこちらに集約されています。', position: 'bottom' }
+    ];
+
+    // 动态生成绝对像素硬截断的遮罩，彻底消除渐变模糊
+    c.getTourOverlayStyle = function() {
+        if (!c.tour_active) return { 'display': 'none' };
+        var r = c.tour_radius;
+        var r_edge = r + 1; // 仅 1px 的物理边缘过滤，保证绝对清晰
+        return {
+            'background': 'radial-gradient(circle at ' + c.tour_x + 'px ' + c.tour_y + 'px, transparent ' + r + 'px, rgba(93, 64, 55, 0.7) ' + r_edge + 'px)'
+        };
+    };
+
+    c.getTourBubbleStyle = function() {
+        return {
+            'top': c.bubble_y + 'px',
+            'left': c.bubble_x + 'px'
+        };
+    };
+
+    function updateTourPosition() {
+        if (!c.tour_active) return;
+        var step = c.tour_steps[c.current_tour_step];
+        if (!step) return;
+        
+        var el = document.querySelector(step.anchor);
+        var winW = $window.innerWidth;
+        var winH = $window.innerHeight;
+        var bubbleW = 250; // 气泡的固定物理宽度
+        var bubbleH = 140; // 气泡的预估物理高度
+
+        if (!el) {
+            // DOM 未挂载时的屏幕居中安全降级
+            c.tour_x = Math.round(winW / 2);
+            c.tour_y = Math.round(winH / 2);
+            c.tour_radius = 0;
+            c.bubble_x = Math.round((winW - bubbleW) / 2);
+            c.bubble_y = Math.round(winH / 2 + 20);
+        } else {
+            var rect = el.getBoundingClientRect();
+            // 强制 Math.round 消除亚像素导致的边缘模糊
+            c.tour_x = Math.round(rect.left + rect.width / 2);
+            c.tour_y = Math.round(rect.top + rect.height / 2);
+            c.tour_radius = Math.round(Math.max(rect.width, rect.height) / 1.5 + 15);
+            
+            c.bubble_x = Math.round(Math.max(15, Math.min(winW - bubbleW - 15, c.tour_x - bubbleW / 2)));
+            
+            // 动态物理碰撞检测：如果气泡超出版边，强制翻转位置
+            if (step.position === 'top') {
+                c.bubble_y = c.tour_y - c.tour_radius - bubbleH - 15;
+                if (c.bubble_y < 15) c.bubble_y = c.tour_y + c.tour_radius + 20; 
+            } else {
+                c.bubble_y = c.tour_y + c.tour_radius + 20;
+                if (c.bubble_y + bubbleH > winH) c.bubble_y = c.tour_y - c.tour_radius - bubbleH - 15; 
+            }
+        }
+    }
+
+    c.startTour = function($event) {
+        if ($event) $event.stopPropagation();
+        c.showMenu = false;
+        if (c.step !== 0) {
+            if (typeof NotificationManager !== 'undefined') {
+                NotificationManager.show('ガイド開始不可', 'メイン画面でのみガイドを開始できます', 'warning');
+            } else {
+                showError('メイン画面でのみガイドを開始できます');
+            }
+            return;
+        }
+        
+        c.tour_active = true;
+        c.current_tour_step = 0;
+        // 强制触发脏值检查与坐标更新
+        $timeout(function() {
+            updateTourPosition();
+        }, 150);
+    };
+
+    c.nextTourStep = function($event) {
+        if ($event) $event.stopPropagation();
+        if (c.current_tour_step !== (c.tour_steps.length - 1)) {
+            c.current_tour_step++;
+            $timeout(updateTourPosition, 50);
+        } else {
+            c.tour_active = false;
+        }
+    };
+
+    $window.addEventListener('resize', function() {
+        if (c.tour_active) $timeout(updateTourPosition, 100);
+    });
 
     // 状态初始化
     var CONFIG = {
@@ -350,11 +453,78 @@ c.goToLogin = function() {
     c.data.user_name = c.data.user_name || "お客様";
 
     c.temp_settings = {
-        email: c.data.emergency_email || "",
-        medical_info: c.data.medical_info || "",
-        blood_type: c.data.blood_type || "",
-        will: c.data.saved_will || ""
-    };
+            email: c.data.emergency_email || "",
+            medical_info: c.data.medical_info || "",
+            blood_type: c.data.blood_type || "",
+            will: c.data.saved_will || "",
+            daily_reminder: c.data.daily_reminder !== false
+        };
+	
+	
+	// ==========================================
+// ★ タップ式フォーム — データ構造
+// ==========================================
+c.form = {
+    location: '',
+    detail_loc: '',
+    severity: '',
+    affected_count: '1',
+    contact: '',
+    remarks: '',
+    needs: {
+        water: false, food: false, medical: false, injury: false,
+        baby: false, power: false, care: false, other: false
+    }
+};
+c.showDetails = false;
+
+c.hasAnyNeed = function() {
+    var n = c.form.needs;
+    return n.water || n.food || n.medical || n.injury ||
+           n.baby || n.power || n.care || n.other;
+};
+
+// エリア選択 → 自動で次のステップへ
+c.selectLocation = function(loc) {
+    c.form.location = loc;
+    if (c.step < 2) {
+        $timeout(function() { c.step = 2; }, 200);
+    }
+};
+
+// 困りごとトグル → 選択があれば次のステップへ
+c.toggleNeed = function(key) {
+    c.form.needs[key] = !c.form.needs[key];
+    if (c.hasAnyNeed() && c.step < 3) {
+        $timeout(function() { c.step = 3; }, 200);
+    }
+};
+
+function _buildNeedsTags() {
+    var tags = [];
+    var n = c.form.needs;
+    if (n.water)   tags.push('water');
+    if (n.food)    tags.push('food');
+    if (n.medical) tags.push('medical');
+    if (n.injury)  tags.push('injury');
+    if (n.baby)    tags.push('baby');
+    if (n.power)   tags.push('power');
+    if (n.care)    tags.push('care');
+    if (n.other)   tags.push('other');
+    return tags;
+}
+
+function _getPrimaryCategory(tags) {
+    var priority = ['injury', 'medical', 'baby', 'care', 'water', 'food', 'power', 'other'];
+    for (var i = 0; i < priority.length; i++) {
+        if (tags.indexOf(priority[i]) !== -1) return priority[i];
+    }
+    return 'other';
+}
+
+function _severityToUrgency(severity) {
+    return { 'safe': 'Low', 'struggling': 'Medium', 'critical': 'Critical' }[severity] || 'Medium';
+}
 
     c.dict = {
     'Water': '飲料水',
@@ -443,7 +613,6 @@ c.goToLogin = function() {
     c.goToVolunteerView = function() {
         $window.location.href = '?id=kokoro_volunteer';
     };
-
     // ==========================================
     // 眼睛跟随鼠标
     // ==========================================
@@ -990,6 +1159,70 @@ c.triggerSOS = function() {
         c.is_editing = true;
         c.status_message = "内容修正中...";
     };
+	
+	// ==========================================
+// ★ タップ式フォーム — 送信
+// ==========================================
+c.submitRequest = function() {
+    if (!c.form.location || !c.hasAnyNeed() || !c.form.severity) return;
+
+    c.submitting = true;
+
+    var tags = _buildNeedsTags();
+    var primaryCat = _getPrimaryCategory(tags);
+    var urgency = _severityToUrgency(c.form.severity);
+
+    var locationMap = {
+        'family_area': 'Family Area',
+        'general_area': 'Single Area',
+        'medical_area': 'Medical Area',
+        'other': 'Other'
+    };
+
+    safeServerGet({
+        action: 'submit_record',
+        location: locationMap[c.form.location] || c.form.location,
+        category: primaryCat,
+        needs_tags: tags.join(','),
+        self_reported_severity: c.form.severity,
+        urgency: urgency,
+        detail_loc: c.form.detail_loc || '',
+        affected_count: c.form.affected_count || '1',
+        contact: c.form.contact || '',
+        remarks: c.form.remarks || '',
+        guest_token: c.guest_token || '',
+        quantity: 1
+    }).then(function(r) {
+        if (!handleServerResponse(r, function(data) {
+            c.ticket_number = data.ticketNumber;
+            c.ticket_sys_id = data.newRecordID || null;
+            if (data.my_requests) c.data.my_requests = data.my_requests;
+
+            updateVisualState(CONFIG.states.SUBMITTED);
+            if (c.ticket_sys_id) initRecordWatcher(c.ticket_sys_id);
+
+            // 写真がある場合はアップロード
+            if (c.fileData && c.ticket_sys_id) {
+                uploadFile(c.ticket_sys_id);  // 既存関数（内部でfinishSubmitを呼ぶ）
+            } else {
+                c.step = 5;
+            }
+
+            showSuccess('リクエストを送信しました');
+            NotificationManager.show(
+                ']]>📨<![CDATA[ リクエスト送信完了',
+                'ID: ' + c.ticket_number,
+                'success'
+            );
+        })) {
+            // エラー時
+        }
+        c.submitting = false;
+    }).catch(function() {
+        c.submitting = false;
+        showError('通信エラー');
+    });
+};
 
     // ==========================================
     // 提交表单 (修正版)
@@ -1202,28 +1435,41 @@ if (stateInfo) {
     // 重置
     // ==========================================
     c.reset = function() {
-        c.step = 0;
-        c.data.category = "";
-        c.data.remarks = "";
-        c.data.quantity = "";
-        c.data.urgency = "";
-        c.data.detail_loc = "";
-        c.data.location = "";
-        c.data.affected_count = "";
-        c.is_editing = false;
-        c.ticket_number = "";
-        c.assigned_to = null;
-        c.ticket_sys_id = null;
-        c.files = null;
-        c.fileData = null;
-        c.show_will_input = false;
-        c.digital_will = "";
-        c.current_state_val = 0;
-        c.status_message = "待機中...";
+    c.step = 0;
+    c.is_editing = false;
+    c.ticket_number = "";
+    c.assigned_to = null;
+    c.ticket_sys_id = null;
+    c.files = null;
+    c.fileData = null;
+    c.show_will_input = false;
+    c.digital_will = "";
+    c.current_state_val = 0;
+    c.status_message = "待機中...";
+    c.showDetails = false;
 
-        var slime = document.getElementById('the-slime');
-        if (slime) slime.classList.remove('happy-slime');
+    // タップ式フォーム
+    c.form = {
+        location: '', detail_loc: '', severity: '',
+        affected_count: '1', contact: '', remarks: '',
+        needs: {
+            water: false, food: false, medical: false, injury: false,
+            baby: false, power: false, care: false, other: false
+        }
     };
+
+    // 旧フォーム互換
+    c.data.category = "";
+    c.data.remarks = "";
+    c.data.quantity = "";
+    c.data.urgency = "";
+    c.data.detail_loc = "";
+    c.data.location = "";
+    c.data.affected_count = "";
+
+    var slime = document.getElementById('the-slime');
+    if (slime) slime.classList.remove('happy-slime');
+};
 
     // ==========================================
     // 设置面板
@@ -1242,23 +1488,26 @@ if (stateInfo) {
 };
 
     c.saveSettings = function() {
-        if (!c.temp_settings.email || c.temp_settings.email.trim() === '') {
-            showError('メールアドレスを入力してください');
-            return;
-        }
-        var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(c.temp_settings.email)) {
-            showError('有効なメールアドレスを入力してください');
-            return;
-        }
-        c.saving = true;
+    c.email_error = '';
+    if (!c.temp_settings.email || c.temp_settings.email.trim() === '') {
+        c.email_error = 'メールアドレスを入力してください';
+        return;
+    }
+    var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(c.temp_settings.email)) {
+        c.email_error = '有効なメールアドレス形式で入力してください（例：name@example.com）';
+        return;
+    }
+    c.saving = true;
         safeServerGet({
-    action: 'save_settings',
+            action: 'save_settings',
             email: c.temp_settings.email,
             medical_info: c.temp_settings.medical_info,
             blood_type: c.temp_settings.blood_type,
-            will: c.temp_settings.will
+            will: c.temp_settings.will,
+            daily_reminder: c.temp_settings.daily_reminder
         }).then(function(response) {
+            c.data.daily_reminder = c.temp_settings.daily_reminder;
             c.saving = false;
             if (handleServerResponse(response, function() {
                     c.data.emergency_email = c.temp_settings.email;
@@ -1289,13 +1538,22 @@ c.toggleHistory = function() {
                 action: 'get_my_history',
                 guest_token: c.guest_token || ''
             }).then(function(r) {
-                if (r && r.data && r.data.my_requests) {
-                    // 直接赋值，Angular会自动检测
-                    c.data.my_requests = r.data.my_requests;
-                    console.log('✅ 历史记录已加载，数量:', c.data.my_requests.length);
-                } else {
-                    console.warn('⚠️ 未收到历史记录数据');
-                }
+               if (r && r.data && r.data.my_requests) {
+                                // 直接赋值，Angular会自动检测
+                                c.data.my_requests = r.data.my_requests;
+                                console.log('✅ 历史记录已加载，数量:', c.data.my_requests.length);
+
+                                // ★ 未完了の工単をリアルタイム監視 (直近10件のみ監視)
+                                var activeItems = c.data.my_requests.filter(function(item) {
+                                    return item.state != 4 && item.state != 5 && item.sys_id;
+                                }).slice(0, 10);
+                                
+                                activeItems.forEach(function(item) {
+                                    initRecordWatcher(item.sys_id);
+                                });
+                            } else {
+                                console.warn('⚠️ 未收到历史记录数据');
+                            }
             }).catch(function(error) {
                 console.error('❌ 加载历史记录失败:', error);
             });
@@ -1395,6 +1653,19 @@ c.verifyFriendCode = function() {
         }));
     });
 };
+
+// ★ 初期ロード時にも未完了工単を監視開始 (直近10件のみ監視)
+$timeout(function() {
+    if (c.data.my_requests && c.data.my_requests.length > 0) {
+        var activeItems = c.data.my_requests.filter(function(item) {
+            return item.state != 4 && item.state != 5 && item.sys_id;
+        }).slice(0, 10);
+        
+        activeItems.forEach(function(item) {
+            initRecordWatcher(item.sys_id);
+        });
+    }
+}, 1000);
 	
 $scope.$on('$destroy', function() {
     $window.removeEventListener('mousemove', handleMouseMove);
@@ -4462,6 +4733,400 @@ textarea.glass-input {
     animation: none !important;
     display: none;
   }
+}
+
+/* 只在有管理员栏时偏移 */
+.has-admin-bar .kokoro-user-container {
+    top: 42px !important;
+    height: calc(100vh - 42px) !important;
+}
+
+/* ========================================== */
+/* ★ タップ式チップボタン（平時モード用）      */
+/* 既存のstep-cardの中に配置するスタイル        */
+/* ========================================== */
+
+.chip-grid {
+    display: grid;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.chip-grid.cols-2 {
+    grid-template-columns: 1fr 1fr;
+}
+
+.chip-grid.cols-3 {
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
+.chip-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px 10px;
+    border: 2px solid #e8d5d5;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.85);
+    font-size: 14px;
+    font-weight: 600;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+    min-height: 50px;
+    line-height: 1.3;
+}
+
+.chip-btn:hover {
+    border-color: #e91e63;
+    background: rgba(233, 30, 99, 0.05);
+}
+
+.chip-btn:focus-visible {
+    outline: 3px solid #e91e63;
+    outline-offset: 2px;
+}
+
+.chip-btn.chip-active {
+    border-color: #e91e63;
+    background: rgba(233, 30, 99, 0.1);
+    color: #c2185b;
+    box-shadow: 0 2px 10px rgba(233, 30, 99, 0.15);
+}
+
+/* 小チップ（人数選択） */
+.chip-btn-sm {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 8px;
+    border: 2px solid #e8d5d5;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.85);
+    font-size: 13px;
+    font-weight: 600;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.chip-btn-sm:focus-visible {
+    outline: 3px solid #e91e63;
+    outline-offset: 2px;
+}
+
+.chip-btn-sm.chip-active {
+    border-color: #e91e63;
+    background: rgba(233, 30, 99, 0.1);
+    color: #c2185b;
+}
+
+/* 状況の色分け */
+.chip-severity-safe.chip-active {
+    border-color: #43a047 !important;
+    background: rgba(67, 160, 71, 0.1) !important;
+    color: #2e7d32 !important;
+}
+
+.chip-severity-struggling.chip-active {
+    border-color: #ff9800 !important;
+    background: rgba(255, 152, 0, 0.1) !important;
+    color: #e65100 !important;
+}
+
+.chip-severity-critical.chip-active {
+    border-color: #f44336 !important;
+    background: rgba(244, 67, 54, 0.1) !important;
+    color: #c62828 !important;
+}
+
+/* 展開セクション */
+.expand-section {
+    margin-top: 20px;
+}
+
+.expand-toggle {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    background: none;
+    color: #999;
+    font-size: 13px;
+    cursor: pointer;
+    text-align: center;
+}
+
+.expand-toggle:focus-visible {
+    outline: 2px solid #e91e63;
+    border-radius: 6px;
+}
+
+.expand-body {
+    padding: 12px 0;
+}
+
+.detail-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #888;
+    margin: 14px 0 5px 0;
+    letter-spacing: 0.5px;
+}
+
+.detail-label:first-child {
+    margin-top: 0;
+}
+
+/* ヒントテキスト */
+.hint-text {
+    font-weight: 400;
+    color: #bbb;
+    font-size: 12px;
+}
+
+/* バリデーションヒント */
+.validation-hint {
+    text-align: center;
+    padding: 10px 0 0 0;
+}
+
+.validation-hint small {
+    display: block;
+    margin: 3px 0;
+    font-size: 12px;
+    color: #c2185b;
+}
+
+/* ★ 通知トーストが管理者バーに隠れない */
+.notification-stack {
+    position: fixed;
+    top: 50px !important;
+    right: 16px;
+    z-index: 10000 !important;
+    max-width: 380px;
+    width: calc(100% - 32px);
+}
+
+/* ★ ネットワーク復帰バーも管理者バーの下に */
+.network-status-bar {
+    top: 40px !important;
+    z-index: 9999 !important;
+}
+
+.field-error {
+    color: #c62828;
+    font-size: 0.78rem;
+    margin-top: 4px;
+    display: block;
+}
+.input-error {
+    border-color: #c62828 !important;
+    box-shadow: 0 0 0 2px rgba(198, 40, 40, 0.15) !important;
+}
+
+/* 通知トグルスイッチ */
+.toggle-group {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    margin: 8px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+.toggle-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+}
+.toggle-label {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #333;
+}
+.toggle-desc {
+    font-size: 0.75rem;
+    color: #999;
+}
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 28px;
+    flex-shrink: 0;
+    margin-left: 12px;
+}
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #ccc;
+    border-radius: 28px;
+    transition: all 0.3s;
+}
+.toggle-slider::before {
+    content: "";
+    position: absolute;
+    height: 22px;
+    width: 22px;
+    left: 3px;
+    bottom: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: all 0.3s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.toggle-switch input:checked + .toggle-slider {
+    background: #e91e63;
+}
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(20px);
+}
+
+/* ==========================================
+   Onboarding Tour - 架构稳定版
+   ========================================== */
+.kokoro-tour-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    z-index: 1000001;
+    /* 背景色由 JS 动态注入，默认透明 */
+    background: transparent;
+    backdrop-filter: blur(1px);
+    pointer-events: auto;
+    /* 背景重绘的平滑补间 */
+    transition: background 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.tour-bubble {
+    /* 核心修复：强制使用 fixed，阻断任何父级偏移量的干扰 */
+    position: fixed;
+    width: 250px;
+    padding: 22px;
+    background: #ffffff;
+    border-radius: 20px;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.25);
+    z-index: 1000002;
+    border: 2px solid rgba(236, 64, 122, 0.15);
+    animation: tourFloat 3.5s ease-in-out infinite;
+    /* 加入坐标移动的硬件加速过渡，让气泡在锚点间平滑飞行 */
+    transition: top 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), 
+                left 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.tour-bubble h4 {
+    color: #ec407a;
+    font-weight: 800;
+    margin: 0 0 10px 0;
+    font-size: 1.05rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tour-bubble p {
+    color: #5d4037;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.tour-actions {
+    margin-top: 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tour-progress {
+    font-size: 0.8rem;
+    color: #90a4ae;
+    font-weight: 800;
+}
+
+.tour-next-btn {
+    background: linear-gradient(135deg, #ec407a, #f48fb1);
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 14px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(236, 64, 122, 0.25);
+}
+
+.tour-next-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(236, 64, 122, 0.35);
+}
+
+@keyframes tourFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+/* ==========================================
+   安全设定表单修复 (防御 Bootstrap 污染)
+   ========================================== */
+.settings-card .input-group {
+    display: block !important; /* 强制打破 Bootstrap 的 display: table 束缚 */
+    width: 100% !important;
+    margin-bottom: 22px;
+    text-align: left;
+}
+
+.settings-card .input-group label {
+    display: block;
+    font-weight: 700;
+    color: #5d4037;
+    margin-bottom: 10px;
+    font-size: 1rem;
+}
+
+.settings-card .glass-input {
+    display: block !important; 
+    width: 100% !important; /* 强制填满容器 */
+    background: #fff;
+    border: 2px solid #e0e0e0;
+    border-radius: 14px;
+    padding: 16px 18px;
+    font-size: 1.05rem;
+    color: #333;
+    outline: none;
+    font-family: inherit;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+.settings-card .glass-input:focus {
+    border-color: #ec407a;
+    box-shadow: 0 0 0 4px rgba(236, 64, 122, 0.12);
+}
+
+.settings-card select.glass-input {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ec407a' stroke-width='2'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 18px;
+    padding-right: 44px;
+}
+
+.settings-card textarea.glass-input {
+    min-height: 90px;
+    resize: vertical;
 }</css>
         <data_table>sp_instance</data_table>
         <demo_data/>
@@ -4469,10 +5134,10 @@ textarea.glass-input {
         <docs/>
         <field_list/>
         <has_preview>false</has_preview>
-        <id>kokoro_user</id>
+        <id>kokoro_user_peacetime</id>
         <internal>false</internal>
         <link><![CDATA[function link(scope, element, attrs, controller) {  }]]></link>
-        <name>Kokoro User</name>
+        <name>Kokoro User Peacetime</name>
         <option_schema/>
         <public>true</public>
         <roles/>
@@ -4851,6 +5516,8 @@ var RateLimiter = {
                 data.emergency_email = grProfile.getValue('emergency_contact_email') || "";
                 data.medical_info = grProfile.getValue('medical_conditions') || "";
                 data.blood_type = grProfile.getValue('blood_type') || "";
+                // 处理 NULL 值情况，默认视为开启
+                data.daily_reminder = grProfile.getValue('daily_reminder') != 'false';
             }
         } catch (e) {
             gs.error("[Kokoro] Profile load error: " + e.message);
@@ -5545,6 +6212,7 @@ if (input) {
                     grUp.setValue('emergency_contact_email', sanitizeInput(input.email, 100));
                     grUp.setValue('medical_conditions', sanitizeInput(input.medical_info, 1000));
                     grUp.setValue('blood_type', sanitizeInput(input.blood_type, 20));
+                    grUp.setValue('daily_reminder', input.daily_reminder === true || input.daily_reminder === 'true');
                     successProfile = (grUp.update() != null);
                 } else {
                     grUp.initialize();
@@ -5552,6 +6220,7 @@ if (input) {
                     grUp.setValue('emergency_contact_email', sanitizeInput(input.email, 100));
                     grUp.setValue('medical_conditions', sanitizeInput(input.medical_info, 1000));
                     grUp.setValue('blood_type', sanitizeInput(input.blood_type, 20));
+                    grUp.setValue('daily_reminder', input.daily_reminder === true || input.daily_reminder === 'true');
                     successProfile = (grUp.insert() != null);
                 }
 
@@ -5883,18 +6552,19 @@ if (input.urgency === 'Critical') {
 
         // 注册心跳
         if (input.action === 'register_heartbeat') {
-            try {
-							// Rate Limit: 1分钟内最多2次
+    try {
+        // Rate Limit: 1分钟内最多2次
         var regHbIdentifier = data.is_guest ? (input.guest_token || 'guest') : data.user_id;
-var regHbRateCheck = RateLimiter.check(regHbIdentifier, 'HEARTBEAT', 1, 2);
+        var regHbRateCheck = RateLimiter.check(regHbIdentifier, 'HEARTBEAT', 1, 2);
         if (!regHbRateCheck.allowed) {
-    data.error = regHbRateCheck.message;
+            data.error = regHbRateCheck.message;
             return;
         }
-                var hbReg = new GlideRecord(CONFIG.tables.HEARTBEAT);
-                hbReg.initialize();
-                hbReg.setValue('u_timestamp', new GlideDateTime());
-                hbReg.setValue('u_status', 'Safe');
+        var hbReg = new GlideRecord(CONFIG.tables.HEARTBEAT);
+        hbReg.initialize();
+        hbReg.setValue('u_timestamp', new GlideDateTime());
+        hbReg.setValue('u_status', 'Safe');
+        hbReg.setValue('state', 'submitted');  // ★ FIX: heartbeat表のstateを正しく設定
 
                 if (data.is_guest && input.guest_token) {
                     hbReg.setValue('guest_token', input.guest_token);
@@ -6580,14 +7250,14 @@ if (input.action === 'send_friend_request' && input.friend_id) {
         <sys_created_by>admin</sys_created_by>
         <sys_created_on>2026-01-26 11:35:13</sys_created_on>
         <sys_id>8e1c03ef83ee3210f6b1fb96feaad3bb</sys_id>
-        <sys_mod_count>177</sys_mod_count>
-        <sys_name>Kokoro User</sys_name>
+        <sys_mod_count>231</sys_mod_count>
+        <sys_name>Kokoro User Peacetime</sys_name>
         <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
         <sys_policy/>
         <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
         <sys_update_name>sp_widget_8e1c03ef83ee3210f6b1fb96feaad3bb</sys_update_name>
         <sys_updated_by>admin</sys_updated_by>
-        <sys_updated_on>2026-02-13 08:39:40</sys_updated_on>
+        <sys_updated_on>2026-03-10 07:02:19</sys_updated_on>
         <template><![CDATA[<div class="kokoro-user-container" role="application" aria-label="Kokoro避難所支援システム" lang="ja">
   <!-- 应用内通知 -->
   <div class="notification-stack" aria-live="polite" role="log">
@@ -6681,7 +7351,7 @@ if (input.action === 'send_friend_request' && input.friend_id) {
     <div class="menu-item" ng-click="c.toggleGuardianCircle()" 
      ng-class="{'locked-item': c.is_guest}"
      role="menuitem" tabindex="0"
-     aria-label="守護の輪 - 友達の安否確認"
+     aria-label="守護の輪 - 友達の安全確認"
      ng-keydown="($event.keyCode === 13 || $event.keyCode === 32) && c.toggleGuardianCircle()">
       <div class="icon-box">
         <i class="fa fa-users" ng-if="!c.is_guest"></i>
@@ -6706,6 +7376,14 @@ if (input.action === 'send_friend_request' && input.friend_id) {
         <span class="menu-title">安全設定</span>
         <span class="menu-sub">Settings</span>
       </div>
+    </div>
+    
+    <div class="menu-item" ng-click="c.startTour($event)">
+        <div class="icon-box"><i class="fa fa-magic"></i></div>
+        <div class="text-box">
+            <span class="menu-title">使い方ガイド</span>
+            <span class="menu-sub">Onboarding Tour</span>
+        </div>
     </div>
 
     <div class="menu-item highlight" ng-if="c.data.is_volunteer" ng-click="c.goToVolunteerView()"
@@ -6734,11 +7412,24 @@ if (input.action === 'send_friend_request' && input.friend_id) {
         ここはあなたの「命のブラックボックス」です。<br>
         万一の際（24時間応答なし）、システムが自動的に使用する情報を登録します。
       </div>
+      
+      <div class="toggle-group">
+        <div class="toggle-info">
+          <span class="toggle-label">]]>🔔<![CDATA[ 毎日の安全確認リマインダー</span>
+          <span class="toggle-desc">24時間応答がない場合、緊急連絡先にメール通知を送信します</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" ng-model="c.temp_settings.daily_reminder">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
 
       <div class="input-group">
-        <label><i class="fa fa-envelope" style="color:#e91e63;"></i> 緊急連絡先 (Email)</label>
-        <input type="email" class="glass-input" ng-model="c.temp_settings.email" placeholder="例：partner@example.com">
-      </div>
+  <label><i class="fa fa-envelope" style="color:#e91e63;"></i> 緊急連絡先 (Email)</label>
+  <input type="email" class="glass-input" ng-model="c.temp_settings.email" placeholder="例：partner@example.com"
+         ng-class="{'input-error': c.email_error}">
+  <small class="field-error" ng-if="c.email_error">{{c.email_error}}</small>
+</div>
 
       <div class="input-group">
         <label><i class="fa fa-tint" style="color:#e53935;"></i> 血液型 (Blood Type)</label>
@@ -7179,175 +7870,314 @@ if (input.action === 'send_friend_request' && input.friend_id) {
     </div>
   </div>
 
-  <div class="form-stage" ng-if="c.step > 0">
+ <!-- ============================== -->
+  <!-- 支援リクエスト — タップ式フォーム -->
+  <!-- ============================== -->
+  <div class="form-stage" ng-if="c.step > 0" role="form" aria-label="支援リクエストフォーム">
+
+    <!-- ヘッダー + プログレスバー -->
     <div class="floating-header" ng-if="c.step < 5">
-      <h2 class="form-title"><i class="fa fa-heartbeat"></i> 支援リクエスト</h2>
-      <div class="progress-indicator" role="progressbar" 
-     aria-label="入力進捗" 
-     aria-valuenow="{{c.step}}" 
-     aria-valuemin="1" 
-     aria-valuemax="4">
+      <h2 class="form-title"><i class="fa fa-heartbeat" aria-hidden="true"></i> 支援リクエスト</h2>
+      <div class="progress-indicator" role="progressbar"
+           aria-label="入力進捗"
+           aria-valuenow="{{c.step}}"
+           aria-valuemin="1"
+           aria-valuemax="3">
         <span class="progress-step" ng-class="{'active': c.step >= 1}">1</span>
         <span class="progress-line" ng-class="{'active': c.step >= 2}"></span>
         <span class="progress-step" ng-class="{'active': c.step >= 2}">2</span>
         <span class="progress-line" ng-class="{'active': c.step >= 3}"></span>
         <span class="progress-step" ng-class="{'active': c.step >= 3}">3</span>
-        <span class="progress-line" ng-class="{'active': c.step >= 4}"></span>
-        <span class="progress-step" ng-class="{'active': c.step >= 4}">4</span>
       </div>
     </div>
-    
+
     <div class="form-wrapper" ng-if="c.step < 5">
-      <div class="step-card" ng-if="c.step >= 1">
-        <label class="big-label">1. いらっしゃるエリア</label>
-        <div class="input-wrapper">
-          <select class="big-input" ng-model="c.data.location" ng-change="c.onLocationChange()"
-        aria-label="避難エリアを選択"
-        aria-required="true">
-            <option value="" disabled selected>タップして選択...</option>
-            <option value="Family Area">]]>🧸<![CDATA[ファミリーエリア (家族)</option>
-            <option value="Single Area">]]>🔑<![CDATA[単身エリア (一人)</option>
-            <option value="Medical Area">]]>🩺<![CDATA[医療・ケアエリア</option>
-          </select>
-          <i class="fa fa-chevron-down select-arrow"></i>
+
+      <!-- ======== 第1問: エリア ======== -->
+      <div class="step-card" role="radiogroup" aria-labelledby="q1-label">
+        <label class="big-label" id="q1-label">1. 今どこにいますか？</label>
+        <div class="chip-grid cols-2">
+          <button class="chip-btn"
+                  ng-class="{'chip-active': c.form.location === 'family_area'}"
+                  ng-click="c.selectLocation('family_area')"
+                  role="radio"
+                  aria-checked="{{c.form.location === 'family_area'}}"
+                  aria-label="ファミリーエリア"
+                  tabindex="0">
+            ]]>🏠<![CDATA[ ファミリー
+          </button>
+          <button class="chip-btn"
+                  ng-class="{'chip-active': c.form.location === 'general_area'}"
+                  ng-click="c.selectLocation('general_area')"
+                  role="radio"
+                  aria-checked="{{c.form.location === 'general_area'}}"
+                  aria-label="一般エリア"
+                  tabindex="0">
+            ]]>🏢<![CDATA[ 一般エリア
+          </button>
+          <button class="chip-btn"
+                  ng-class="{'chip-active': c.form.location === 'medical_area'}"
+                  ng-click="c.selectLocation('medical_area')"
+                  role="radio"
+                  aria-checked="{{c.form.location === 'medical_area'}}"
+                  aria-label="医療エリア"
+                  tabindex="0">
+            ]]>🏥<![CDATA[ 医療エリア
+          </button>
+          <button class="chip-btn"
+                  ng-class="{'chip-active': c.form.location === 'other'}"
+                  ng-click="c.selectLocation('other')"
+                  role="radio"
+                  aria-checked="{{c.form.location === 'other'}}"
+                  aria-label="その他のエリア"
+                  tabindex="0">
+            ]]>📍<![CDATA[ その他
+          </button>
         </div>
       </div>
 
-      <div class="step-card" ng-if="c.step >= 2">
-        <label class="big-label">2. 詳細な場所 (部屋番号など)</label>
-        <input type="text" class="big-input" ng-model="c.data.detail_loc" placeholder="例：101号室、体育館の右側..." ng-change="c.checkDetail()"
-       aria-label="詳細な場所を入力"
-       aria-required="true">
+      <!-- ======== 第2問: 困りごと ======== -->
+      <div class="step-card" ng-if="c.step >= 2" role="group" aria-labelledby="q2-label">
+        <label class="big-label" id="q2-label">2. 何に困っていますか？<small class="hint-text">（複数OK）</small></label>
+        <div class="chip-grid cols-2">
+          <button class="chip-btn"
+                  ng-class="{'chip-active': c.form.needs.water}"
+                  ng-click="c.toggleNeed('water')"
+                  role="checkbox"
+                  aria-checked="{{c.form.needs.water}}"
+                  aria-label="水がない"
+                  tabindex="0">
+            ]]>💧<![CDATA[ 水がない
+          </button>
+          <button class="chip-btn"
+                  ng-class="{'chip-active': c.form.needs.food}"
+                  ng-click="c.toggleNeed('food')"
+                  role="checkbox"
+                  aria-checked="{{c.form.needs.food}}"
+                  aria-label="食べ物がない"
+                  tabindex="0">
+            ]]>🍱<![CDATA[ 食べ物がない
+          </button>
+          <button class="chip-btn"
+                  ng-class="{'chip-active': c.form.needs.medical}"
+                  ng-click="c.toggleNeed('medical')"
+                  role="checkbox"
+                  aria-checked="{{c.form.needs.medical}}"
+                  aria-label="薬が必要"
+                  tabindex="0">
+            ]]>💊<![CDATA[ 薬が必要
+          </button>
+          <button class="chip-btn"
+                  ng-class="{'chip-active': c.form.needs.injury}"
+                  ng-click="c.toggleNeed('injury')"
+                  role="checkbox"
+                  aria-checked="{{c.form.needs.injury}}"
+                  aria-label="怪我をした"
+                  tabindex="0">
+            ]]>🩹<![CDATA[ 怪我をした
+          </button>
+          <button class="chip-btn"
+                  ng-class="{'chip-active': c.form.needs.baby}"
+                  ng-click="c.toggleNeed('baby')"
+                  role="checkbox"
+                  aria-checked="{{c.form.needs.baby}}"
+                  aria-label="赤ちゃん用品が必要"
+                  tabindex="0">
+            ]]>👶<![CDATA[ 赤ちゃん用品
+          </button>
+          <button class="chip-btn"
+                  ng-class="{'chip-active': c.form.needs.power}"
+                  ng-click="c.toggleNeed('power')"
+                  role="checkbox"
+                  aria-checked="{{c.form.needs.power}}"
+                  aria-label="充電したい"
+                  tabindex="0">
+            ]]>🔋<![CDATA[ 充電したい
+          </button>
+          <button class="chip-btn"
+                  ng-class="{'chip-active': c.form.needs.care}"
+                  ng-click="c.toggleNeed('care')"
+                  role="checkbox"
+                  aria-checked="{{c.form.needs.care}}"
+                  aria-label="介助が必要"
+                  tabindex="0">
+            ]]>🧓<![CDATA[ 介助が必要
+          </button>
+          <button class="chip-btn"
+                  ng-class="{'chip-active': c.form.needs.other}"
+                  ng-click="c.toggleNeed('other')"
+                  role="checkbox"
+                  aria-checked="{{c.form.needs.other}}"
+                  aria-label="その他の困りごと"
+                  tabindex="0">
+            ❓ その他
+          </button>
+        </div>
       </div>
 
-      <div class="step-card" ng-if="c.step >= 3">
-        <label class="big-label">3. 必要な支援</label>
-        <div class="input-wrapper mb-3">
-          <select class="big-input" ng-model="c.data.category" ng-change="c.checkInput()"
-        aria-label="必要な支援の種類を選択"
-        aria-required="true">
-            <option value="" disabled selected>何が必要ですか？</option>
-            <option value="Water">]]>💧<![CDATA[飲料水 (Water)</option>
-            <option value="Food">]]>🍱<![CDATA[食料 (Food)</option>
-            <option value="Medical">]]>💊<![CDATA[医療・薬 (Medical)</option>
-            <option value="Baby">]]>👶<![CDATA[乳幼児用品 (Baby)</option>
-            <option value="Power">]]>🔋<![CDATA[電源・充電 (Power)</option>
-            <option value="Other">]]>📦<![CDATA[その他 (Other)</option>
-          </select>
-          <i class="fa fa-chevron-down select-arrow"></i>
+      <!-- ======== 第3問: 状況 + 詳細 + 送信 ======== -->
+      <div class="step-card" ng-if="c.step >= 3" role="radiogroup" aria-labelledby="q3-label">
+        <label class="big-label" id="q3-label">3. 今の状況は？</label>
+        <div class="chip-grid cols-3">
+          <button class="chip-btn chip-severity-safe"
+                  ng-class="{'chip-active': c.form.severity === 'safe'}"
+                  ng-click="c.form.severity = 'safe'"
+                  role="radio"
+                  aria-checked="{{c.form.severity === 'safe'}}"
+                  aria-label="大丈夫"
+                  tabindex="0">
+            ]]>😌<![CDATA[ 大丈夫
+          </button>
+          <button class="chip-btn chip-severity-struggling"
+                  ng-class="{'chip-active': c.form.severity === 'struggling'}"
+                  ng-click="c.form.severity = 'struggling'"
+                  role="radio"
+                  aria-checked="{{c.form.severity === 'struggling'}}"
+                  aria-label="困っている"
+                  tabindex="0">
+            ]]>😰<![CDATA[ 困ってる
+          </button>
+          <button class="chip-btn chip-severity-critical"
+                  ng-class="{'chip-active': c.form.severity === 'critical'}"
+                  ng-click="c.form.severity = 'critical'"
+                  role="radio"
+                  aria-checked="{{c.form.severity === 'critical'}}"
+                  aria-label="限界です"
+                  tabindex="0">
+            ]]>😱<![CDATA[ 限界です
+          </button>
         </div>
 
-        <div class="flex-row">
-          <div class="half-col">
-            <input type="number" class="big-input" ng-model="c.data.quantity" placeholder="数量" ng-change="c.checkInput()" style="text-align:center;"
-       aria-label="必要数量"
-       aria-required="true"
-       min="1">
+        <!-- 詳細（折りたたみ） -->
+        <div class="expand-section">
+          <button class="expand-toggle"
+                  ng-click="c.showDetails = !c.showDetails"
+                  aria-expanded="{{c.showDetails}}"
+                  aria-controls="detail-panel">
+            <span ng-if="!c.showDetails">▼ もっと詳しく（任意）</span>
+            <span ng-if="c.showDetails">▲ 閉じる</span>
+          </button>
+
+          <div id="detail-panel" class="expand-body" ng-if="c.showDetails" role="region" aria-label="追加情報">
+            <label class="detail-label" for="detail-loc">場所の詳細</label>
+            <input id="detail-loc" class="big-input" type="text"
+                   ng-model="c.form.detail_loc"
+                   placeholder="例: 体育館の入口近く、101号室"
+                   aria-label="詳細な場所">
+
+            <label class="detail-label">人数</label>
+            <div class="chip-grid cols-3">
+              <button class="chip-btn-sm"
+                      ng-class="{'chip-active': c.form.affected_count === '1'}"
+                      ng-click="c.form.affected_count = '1'"
+                      aria-label="1人">1人</button>
+              <button class="chip-btn-sm"
+                      ng-class="{'chip-active': c.form.affected_count === '2-4'}"
+                      ng-click="c.form.affected_count = '2-4'"
+                      aria-label="2から4人">2-4人</button>
+              <button class="chip-btn-sm"
+                      ng-class="{'chip-active': c.form.affected_count === '5+'}"
+                      ng-click="c.form.affected_count = '5+'"
+                      aria-label="5人以上">5人+</button>
+            </div>
+
+            <label class="detail-label" for="detail-contact">連絡先</label>
+            <input id="detail-contact" class="big-input" type="text"
+                   ng-model="c.form.contact"
+                   placeholder="電話番号 or Email"
+                   aria-label="連絡先">
+
+            <label class="detail-label" for="detail-remarks">備考</label>
+            <textarea id="detail-remarks" class="glass-textarea"
+                      ng-model="c.form.remarks" rows="2"
+                      placeholder="アレルギー、持病、特別な事情..."
+                      aria-label="備考"></textarea>
           </div>
-          <div class="half-col input-wrapper">
-            <select class="big-input" ng-model="c.data.affected_count" ng-change="c.checkInput()" style="text-align:center;"
-        aria-label="対象人数を選択">
-              <option value="" disabled selected>人数</option>
-              <option value="1">1人</option>
-              <option value="2-4">2-4人</option>
-              <option value="5+">5人+</option>
-            </select>
+        </div>
+
+        <!-- バリデーションヒント -->
+        <div class="validation-hint" role="status" aria-live="polite"
+             ng-if="!c.form.location || !c.hasAnyNeed() || !c.form.severity">
+          <small ng-if="!c.form.location"><i class="fa fa-exclamation-circle" aria-hidden="true"></i> エリアを選んでください</small>
+          <small ng-if="!c.hasAnyNeed()"><i class="fa fa-exclamation-circle" aria-hidden="true"></i> 困りごとを1つ以上選んでください</small>
+          <small ng-if="!c.form.severity"><i class="fa fa-exclamation-circle" aria-hidden="true"></i> 状況を選んでください</small>
+        </div>
+        
+        <!-- 写真添付 -->
+        <div class="photo-section" ng-if="c.step >= 3">
+          <div ng-if="c.fileData" style="text-align: center; margin: 16px 0;">
+            <div style="position: relative; display: inline-block;">
+              <img ng-src="{{c.fileData}}"
+                   style="height: 170px; border-radius: 18px; border: 4px solid #fff; box-shadow: 0 10px 28px rgba(0,0,0,0.15);"
+                   alt="添付写真プレビュー" />
+              <div ng-click="c.clearFile()"
+                   style="position: absolute; top: -14px; right: -14px; background: #ff5252; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.2); cursor: pointer; border: 3px solid #fff;"
+                   role="button"
+                   aria-label="添付写真を削除">
+                <i class="fa fa-times" style="font-size:18px;" aria-hidden="true"></i>
+              </div>
+            </div>
+            <div style="color: #43a047; font-weight: 800; font-size: 0.95rem; margin-top: 12px;">写真が添付されました</div>
           </div>
         </div>
 
-        <div class="input-wrapper mb-3" style="margin-top: 15px;">
-           <input type="text" class="big-input" ng-model="c.data.contact" placeholder="連絡先 (電話番号/Email)..." ng-change="c.checkInput()"
-       aria-label="連絡先を入力">
+        <!-- 送信ボタン -->
+        <div class="action-row" ng-if="c.step >= 3">
+          <label class="big-attach-btn"
+                 role="button"
+                 tabindex="0"
+                 aria-label="写真を添付">
+            <input type="file" style="display: none;"
+                   onchange="angular.element(this).scope().c.uploadFiles(this.files)"
+                   accept="image/jpeg,image/png,image/gif,image/webp" />
+            <i class="fa fa-camera" aria-hidden="true"></i>
+          </label>
+          <button class="big-submit-btn"
+                  ng-click="c.submitRequest()"
+                  ng-disabled="c.submitting || !c.form.location || !c.hasAnyNeed() || !c.form.severity"
+                  aria-label="支援リクエストを送信"
+                  aria-busy="{{c.submitting}}">
+            <span ng-if="!c.submitting">願いを送る</span>
+            <span ng-if="c.submitting"><i class="fa fa-spinner fa-spin" aria-hidden="true"></i> 送信中...</span>
+          </button>
         </div>
-
-        <div class="input-wrapper mb-3">
-          <select class="big-input" ng-model="c.data.urgency" ng-change="c.checkInput()" ng-class="{'critical-bg': c.data.urgency === 'Critical'}"
-        aria-label="緊急度を選択"
-        aria-required="true">
-            <option value="" disabled selected>緊急度は？</option>
-            <option value="Low">]]>🐢<![CDATA[急ぎません</option>
-            <option value="Medium">]]>🚶<![CDATA[普通 (なるべく早く)</option>
-            <option value="High">]]>🏃<![CDATA[困っています (早急に)</option>
-            <option value="Critical">]]>🆘<![CDATA[限界です/今すぐ</option>
-          </select>
-          <i class="fa fa-chevron-down select-arrow"></i>
-        </div>
-        <textarea class="glass-textarea" ng-model="c.data.remarks" placeholder="備考 (アレルギーなど)..."
-          aria-label="備考やアレルギー情報を入力"></textarea>
-      </div>
-      
-      <div ng-if="c.fileData" style="text-align: center; margin-bottom: 26px;">
-        <div style="position: relative; display: inline-block;">
-          <img ng-src="{{c.fileData}}" style="height: 170px; border-radius: 18px; border: 4px solid #fff; box-shadow: 0 10px 28px rgba(0,0,0,0.15);" />
-          <div ng-click="c.clearFile()" style="position: absolute; top: -14px; right: -14px; background: #ff5252; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.2); cursor: pointer; border: 3px solid #fff;">
-            <i class="fa fa-times" style="font-size:18px;"></i>
-          </div>
-        </div>
-        <div style="color: #43a047; font-weight: 800; font-size: 0.95rem; margin-top: 12px;">写真が添付されました</div>
-      </div>
-      <div class="action-row" ng-if="c.step >= 4">
-        <label class="big-attach-btn">
-          <input type="file" style="display: none;" onchange="angular.element(this).scope().c.uploadFiles(this.files)"/>
-          <i class="fa fa-camera"></i>
-        </label>
-        <button class="big-submit-btn" ng-click="c.submitWish()"
-        aria-label="支援リクエストを送信"
-        aria-busy="{{c.submitting}}">
-          <span ng-if="!c.is_editing && !c.submitting">願いを送る</span>
-          <span ng-if="c.is_editing && !c.submitting">内容を更新</span>
-          <span ng-if="c.submitting"><i class="fa fa-spinner fa-spin"></i> 送信中...</span>
-        </button>
       </div>
     </div>
 
-    <div class="success-card" ng-if="c.step === 5">
-      <div class="status-tracker">
+    <!-- ============================== -->
+    <!-- 成功ページ                      -->
+    <!-- ============================== -->
+    <div class="success-card" ng-if="c.step === 5" role="status" aria-label="送信完了">
+      <div class="status-tracker" aria-label="対応進捗">
         <div class="status-step" ng-class="{'active': c.visual_step >= 0}">
-            <div class="icon">]]>📨<![CDATA[</div><div class="text">提出</div>
+          <div class="icon" aria-hidden="true">]]>📨<![CDATA[</div><div class="text">提出</div>
         </div>
-        
         <div class="line" ng-class="{'active': c.visual_step >= 1}"></div>
-        
         <div class="status-step" ng-class="{'active': c.visual_step >= 1}">
-            <div class="icon">]]>👀<![CDATA[</div><div class="text">確認</div>
+          <div class="icon" aria-hidden="true">]]>👀<![CDATA[</div><div class="text">確認</div>
         </div>
-        
         <div class="line" ng-class="{'active': c.visual_step >= 2}"></div>
-        
         <div class="status-step" ng-class="{'active': c.visual_step >= 2}">
-            <div class="icon">]]>🙋<![CDATA[</div><div class="text">担当</div>
+          <div class="icon" aria-hidden="true">]]>🙋<![CDATA[</div><div class="text">担当</div>
         </div>
-        
         <div class="line" ng-class="{'active': c.visual_step >= 3}"></div>
-        
         <div class="status-step" ng-class="{'active': c.visual_step >= 3}">
-            <div class="icon">]]>🏃<![CDATA[</div><div class="text">配送</div>
+          <div class="icon" aria-hidden="true">]]>🏃<![CDATA[</div><div class="text">配送</div>
         </div>
-        
         <div class="line" ng-class="{'active': c.visual_step >= 4}"></div>
-        
         <div class="status-step" ng-class="{'active': c.visual_step >= 4}">
-            <div class="icon">✅</div><div class="text">完了</div>
+          <div class="icon" aria-hidden="true">✅</div><div class="text">完了</div>
         </div>
-        </div>
+      </div>
 
-      
       <h2 class="success-title">承知いたしました</h2>
       <p class="ticket-id">ID: {{c.ticket_number}}</p>
-      
-      <div class="summary-card">
-        <div class="row-item"><strong>場所:</strong> {{c.dict[c.data.location]}} - {{c.data.detail_loc}}</div>
-        <div class="row-item"><strong>内容:</strong> {{c.dict[c.data.category]}} <span class="badge">x{{c.data.quantity}}</span></div>
-        <div class="row-item" ng-if="c.data.contact"><strong>連絡先:</strong> {{c.data.contact}}</div>
-        <div class="row-item"><strong>緊急度:</strong> <span ng-class="{'text-crit': c.data.urgency==='Critical'}">{{c.dict[c.data.urgency]}}</span></div>
-        <div class="row-item" ng-if="c.data.remarks"><small style="color:#888;">{{c.data.remarks}}</small></div>
-      </div>
 
-      <div class="live-status-pill"><span class="pulse-dot"></span> {{c.status_message}}</div>
+      <div class="live-status-pill" aria-live="polite"><span class="pulse-dot" aria-hidden="true"></span> {{c.status_message}}</div>
 
       <div class="status-detail-card" ng-if="c.statusDetails[c.current_state_val]">
         <div class="status-header">
-          <span class="status-icon">{{c.statusDetails[c.current_state_val].icon}}</span>
+          <span class="status-icon" aria-hidden="true">{{c.statusDetails[c.current_state_val].icon}}</span>
           <h3 class="status-title">{{c.statusDetails[c.current_state_val].title}}</h3>
         </div>
         <p class="status-desc">{{c.statusDetails[c.current_state_val].desc}}</p>
@@ -7355,8 +8185,9 @@ if (input.action === 'send_friend_request' && input.friend_id) {
       </div>
 
       <div class="btn-group">
-        <button class="edit-btn" ng-click="c.editMode()" ng-if="c.current_state_val === 1 || c.current_state_val === 10">修正する</button>
-        <button class="big-reset-btn" ng-click="c.reset()">新しいリクエスト</button>
+        <button class="big-reset-btn" ng-click="c.reset()" aria-label="新しいリクエストを作成">
+          新しいリクエスト
+        </button>
       </div>
     </div>
   </div>
@@ -7367,7 +8198,36 @@ if (input.action === 'send_friend_request' && input.friend_id) {
       <p>送信中...</p>
       <small>データを暗号化して転送しています</small>
     </div>
-  </div>
-</div>]]></template>
+</div>
+
+<div class="kokoro-tour-overlay"
+     ng-if="c.tour_active"
+     ng-style="c.getTourOverlayStyle()"
+     ng-click="c.nextTourStep($event)"
+     role="dialog"
+     aria-modal="true">
+
+    <div class="tour-bubble"
+         ng-if="c.tour_active"
+         ng-style="c.getTourBubbleStyle()"
+         ng-click="$event.stopPropagation()">
+      
+      <div class="tour-content">
+        <h4><i class="fa fa-magic"></i> {{c.tour_steps[c.current_tour_step].title}}</h4>
+        <p>{{c.tour_steps[c.current_tour_step].content}}</p>
+      </div>
+
+      <div class="tour-actions">
+        <span class="tour-progress">{{c.current_tour_step + 1}} / {{c.tour_steps.length}}</span>
+        <button class="tour-next-btn" ng-click="c.nextTourStep($event)">
+            <span ng-if="c.current_tour_step !== (c.tour_steps.length - 1)">次へ</span>
+            <span ng-if="c.current_tour_step === (c.tour_steps.length - 1)">分かった!</span>
+        </button>
+      </div>
+    </div>
+</div>
+</div>
+
+]]></template>
     </sp_widget>
 </record_update>

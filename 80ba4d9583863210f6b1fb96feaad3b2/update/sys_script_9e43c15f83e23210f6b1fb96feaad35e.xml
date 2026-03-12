@@ -31,46 +31,35 @@
         <role_conditions/>
         <script><![CDATA[(function executeRule(current, previous) {
 
-    // 1. 初始化验证器 (如果 Script Include 没配好，则使用后备逻辑)
-    var validator;
-    try {
-        validator = new StateTransitionValidator();
-    } catch (e) {
-        validator = null;
-    }
-
-    var fromState = previous.state.toString();
-    var toState = current.state.toString();
+    // 摒弃容易引发隐式类型转换的 .toString()，强制采用安全的 .getValue() 获取底层真实字符串数值
+    var fromState = previous.getValue('state') || '';
+    var toState = current.getValue('state') || '';
 
     // 如果状态没变，直接返回
     if (fromState === toState) return;
 
-    // 2. 定义允许的转换 (使用文本值匹配您之前创建的 Choice List)
-    // 请确保这些值(draft, submitted等)与您在 Choice List 的 'Value' 列完全一致
+    // 如果旧状态为空（新建后首次update），允许通过
+    if (!fromState || fromState === '') return;
+
+    // 字典映射关系: 1(下書き), 10(提出済み), 11(担当者決定), 2(配送中), 4(完了), 5(キャンセル), 6(保留中)
     var allowedTransitions = {
-        'draft':       ['submitted', 'Cancelled'],
-        'submitted':   ['draft', 'assigned', 'Cancelled'],
-        'assigned':    ['submitted', 'In Progress', 'Cancelled', 'On Hold'],
-        'In Progress': ['Completed', 'Cancelled', 'On Hold'],
-        'Completed':   [], 
-        'Cancelled':   [], 
-        'On Hold':     ['assigned', 'In Progress', 'Cancelled']
+        '1':  ['10', '5'],
+        '10': ['1', '11', '5'],
+        '11': ['10', '2', '5', '6'],
+        '2':  ['4', '5', '6'],
+        '4':  [], 
+        '5':  [], 
+        '6':  ['11', '2', '5']
     };
 
-    // 3. 检查转换是否允许
-    // 优先使用 Validator 类，如果没有则使用上面的本地配置
-    var isAllowed = false;
-    if (validator) {
-        var check = validator.validateTransition(fromState, toState, current);
-        isAllowed = check.valid;
-    } else {
-        var allowed = allowedTransitions[fromState] || [];
-        isAllowed = (allowed.indexOf(toState) !== -1);
-    }
+    var allowed = allowedTransitions[fromState] || [];
+    var isAllowed = (allowed.indexOf(toState) !== -1);
 
     if (!isAllowed) {
-        current.state = previous.state; // 回滚状态
-        gs.addErrorMessage('Status transition not allowed: ' + fromState + ' -> ' + toState);
+        // 植入探针：强制输出错误日志至系统日志，捕获拦截现场的真实变量
+        gs.error('[Kokoro State Audit] 拦截阻断! 尝试越级流转: fromState=[' + fromState + '] -> toState=[' + toState + '], 记录: ' + current.getUniqueValue());
+        
+        current.state = previous.getValue('state'); // 回滚状态
         current.setAbortAction(true);
         return;
     }
@@ -79,23 +68,20 @@
     try {
         var pe = new GlideRecord('x_1821654_kokoro_0_process_event');
         pe.initialize();
-        // 确保字段名带有 u_ 前缀 (这是自定义表的标准)
-        pe.setValue('u_case_id', current.getUniqueValue());
-        pe.setValue('u_activity', 'State Change: ' + fromState + ' -> ' + toState);
-        pe.setValue('u_user', gs.getUserID());
-        // pe.setValue('u_timestamp', new GlideDateTime()); // 系统会自动记录 sys_created_on
+        pe.setValue('case_id', current.getUniqueValue());
+        pe.setValue('activity', 'State Change: ' + fromState + ' -> ' + toState);
+        pe.setValue('user', gs.getUserID());
         pe.insert();
     } catch (e) {
         gs.warn('[Kokoro] Process event logging failed: ' + e.message);
     }
 
     // 5. 更新当前记录的审计字段
-    // 确保您在 Silent Wish 表中已经创建了这两个字段
-    if (current.isValidField('u_state_changed_on')) {
-        current.setValue('u_state_changed_on', new GlideDateTime());
+    if (current.isValidField('state_changed_on')) {
+        current.setValue('state_changed_on', new GlideDateTime());
     }
-    if (current.isValidField('u_state_changed_by')) {
-        current.setValue('u_state_changed_by', gs.getUserID());
+    if (current.isValidField('state_changed_by')) {
+        current.setValue('state_changed_by', gs.getUserID());
     }
 
 })(current, previous);]]></script>
@@ -105,7 +91,7 @@
         <sys_domain>global</sys_domain>
         <sys_domain_path>/</sys_domain_path>
         <sys_id>9e43c15f83e23210f6b1fb96feaad35e</sys_id>
-        <sys_mod_count>0</sys_mod_count>
+        <sys_mod_count>5</sys_mod_count>
         <sys_name>Kokoro Silent Wish State Audit</sys_name>
         <sys_overrides/>
         <sys_package display_value="Kokoro Shelter" source="x_1821654_kokoro_0">80ba4d9583863210f6b1fb96feaad3b2</sys_package>
@@ -113,7 +99,7 @@
         <sys_scope display_value="Kokoro Shelter">80ba4d9583863210f6b1fb96feaad3b2</sys_scope>
         <sys_update_name>sys_script_9e43c15f83e23210f6b1fb96feaad35e</sys_update_name>
         <sys_updated_by>admin</sys_updated_by>
-        <sys_updated_on>2026-01-25 07:02:07</sys_updated_on>
+        <sys_updated_on>2026-03-10 01:32:24</sys_updated_on>
         <template/>
         <when>before</when>
     </sys_script>
